@@ -28,6 +28,8 @@ public final class VeloraViewModel {
     public var scanThroughput: Double = 0
     public var cancelScanRequested: Bool = false
     public var scanStatusMessage: String = "Ready"
+    private var pendingSearchWorkItem: DispatchWorkItem?
+    private var lastExecutedQuery: String?
 
     public init() {
         self.engine = VeloraEngine()
@@ -139,26 +141,47 @@ public final class VeloraViewModel {
         }
     }
 
-    public func performSearch(query: String) {
-        self.searchQuery = query
+    public func performSearch(query: String, debounce: Bool = false) {
+        pendingSearchWorkItem?.cancel()
+
+        if self.searchQuery != query {
+            self.searchQuery = query
+        }
+
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
+            self.lastExecutedQuery = ""
             self.searchResults = []
             self.isSearching = false
             self.refreshTableItems()
             return
         }
 
+        if lastExecutedQuery == trimmed && !searchResults.isEmpty {
+            return
+        }
+
         self.isSearching = true
-        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+
+        let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            let hits = self.engine.search(queryStr: query, maxResults: 300)
+            let hits = self.engine.search(queryStr: trimmed, maxResults: 300)
             DispatchQueue.main.async {
+                guard self.searchQuery.trimmingCharacters(in: .whitespaces) == trimmed else { return }
+                self.lastExecutedQuery = trimmed
                 self.searchResults = hits
                 self.displayedItems = hits
                 self.currentFolderTotalSize = hits.reduce(0) { $0 + $1.sizeBytes }
                 self.isSearching = false
             }
+        }
+
+        self.pendingSearchWorkItem = workItem
+
+        if debounce {
+            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.15, execute: workItem)
+        } else {
+            DispatchQueue.global(qos: .userInteractive).async(execute: workItem)
         }
     }
 
@@ -176,6 +199,8 @@ public final class VeloraViewModel {
             let home = FileManager.default.homeDirectoryForCurrentUser.path
             currentPath = home
             pathStack = [home]
+            currentSunburst = nil
+            sectorStack = []
         }
         refreshTableItems()
     }
@@ -190,6 +215,9 @@ public final class VeloraViewModel {
            let sector = findSector(byPath: path, in: root) {
             currentSunburst = sector
             sectorStack = [sector]
+        } else {
+            currentSunburst = nil
+            sectorStack = []
         }
         refreshTableItems()
     }
@@ -200,6 +228,7 @@ public final class VeloraViewModel {
         } else {
             pathStack.append(path)
             currentPath = path
+            currentSunburst = nil
             refreshTableItems()
         }
     }
@@ -221,8 +250,11 @@ public final class VeloraViewModel {
         if sectorStack.count > 1 {
             sectorStack.removeLast()
             currentSunburst = sectorStack.last
+        } else {
+            currentSunburst = nil
+            sectorStack = []
         }
-        currentPath = pathStack.last ?? currentSunburst?.path ?? FileManager.default.homeDirectoryForCurrentUser.path
+        currentPath = pathStack.last ?? FileManager.default.homeDirectoryForCurrentUser.path
         refreshTableItems()
     }
 
@@ -240,13 +272,35 @@ public final class VeloraViewModel {
                     name: child.name,
                     path: child.path,
                     sizeBytes: child.sizeBytes,
-                    modifiedSecs: self.lookupModificationDate(atPath: child.path),
+                    modifiedSecs: 0,
                     isDir: child.isDir,
                     colorHex: child.colorHex
                 )
             }
             self.displayedItems = items
             self.currentFolderTotalSize = max(currentSunburst.sizeBytes, items.reduce(0) { $0 + $1.sizeBytes })
+
+            // Asynchronously resolve modification dates in background without blocking main thread
+            let targetPath = self.currentPath
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let self = self else { return }
+                var updated = items
+                var didChange = false
+                for i in 0..<updated.count {
+                    let m = self.lookupModificationDate(atPath: updated[i].path)
+                    if m > 0 {
+                        updated[i].modifiedSecs = m
+                        didChange = true
+                    }
+                }
+                if didChange {
+                    DispatchQueue.main.async {
+                        if self.currentPath == targetPath {
+                            self.displayedItems = updated
+                        }
+                    }
+                }
+            }
         } else {
             loadDirectoryItems(for: currentPath)
         }
@@ -266,41 +320,53 @@ public final class VeloraViewModel {
     }
 
     private func loadDirectoryItems(for path: String) {
-        let url = URL(fileURLWithPath: path)
-        let fileManager = FileManager.default
-        guard let contents = try? fileManager.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            self.displayedItems = []
-            self.currentFolderTotalSize = 0
-            return
+        let targetPath = path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let url = URL(fileURLWithPath: targetPath)
+            let fileManager = FileManager.default
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                DispatchQueue.main.async {
+                    if self.currentPath == targetPath {
+                        self.displayedItems = []
+                        self.currentFolderTotalSize = 0
+                    }
+                }
+                return
+            }
+
+            var items: [SearchResultItem] = []
+            for fileURL in contents {
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey])
+                let isDir = resourceValues?.isDirectory ?? false
+                let size = UInt64(resourceValues?.fileSize ?? 0)
+                let modDate = resourceValues?.contentModificationDate?.timeIntervalSince1970 ?? 0
+
+                let name = fileURL.lastPathComponent
+                let ext = fileURL.pathExtension.lowercased()
+                let colorHex = self.colorHexForExtension(ext, isDir: isDir)
+
+                items.append(SearchResultItem(
+                    name: name,
+                    path: fileURL.path,
+                    sizeBytes: size,
+                    modifiedSecs: UInt64(modDate),
+                    isDir: isDir,
+                    colorHex: colorHex
+                ))
+            }
+
+            DispatchQueue.main.async {
+                if self.currentPath == targetPath {
+                    self.displayedItems = items
+                    self.currentFolderTotalSize = items.reduce(0) { $0 + $1.sizeBytes }
+                }
+            }
         }
-
-        var items: [SearchResultItem] = []
-        for fileURL in contents {
-            let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey])
-            let isDir = resourceValues?.isDirectory ?? false
-            let size = UInt64(resourceValues?.fileSize ?? 0)
-            let modDate = resourceValues?.contentModificationDate?.timeIntervalSince1970 ?? 0
-
-            let name = fileURL.lastPathComponent
-            let ext = fileURL.pathExtension.lowercased()
-            let colorHex = colorHexForExtension(ext, isDir: isDir)
-
-            items.append(SearchResultItem(
-                name: name,
-                path: fileURL.path,
-                sizeBytes: size,
-                modifiedSecs: UInt64(modDate),
-                isDir: isDir,
-                colorHex: colorHex
-            ))
-        }
-
-        self.displayedItems = items
-        self.currentFolderTotalSize = items.reduce(0) { $0 + $1.sizeBytes }
     }
 
     private func lookupModificationDate(atPath path: String) -> UInt64 {

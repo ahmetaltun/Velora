@@ -92,7 +92,7 @@ public struct MainWindowView: View {
                         TextField("Search anything (e.g. ext:rs size:>10MB !target)...", text: $viewModel.searchQuery)
                             .textFieldStyle(.plain)
                             .onChange(of: viewModel.searchQuery) { _, newValue in
-                                viewModel.performSearch(query: newValue)
+                                viewModel.performSearch(query: newValue, debounce: true)
                             }
 
                         if viewModel.isSearching {

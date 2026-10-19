@@ -10,13 +10,14 @@ public struct FileTableView: View {
     @Bindable public var viewModel: VeloraViewModel
     @State private var sortOrder = [KeyPathComparator(\SearchResultItem.sizeBytes, order: .reverse)]
     @State private var selectedItemIds = Set<String>()
+    @State private var sortedItems: [SearchResultItem] = []
 
     public init(viewModel: VeloraViewModel) {
         self.viewModel = viewModel
     }
 
-    private var sortedItems: [SearchResultItem] {
-        viewModel.displayedItems.sorted(using: sortOrder)
+    private func updateSortedItems() {
+        sortedItems = viewModel.displayedItems.sorted(using: sortOrder)
     }
 
     public var body: some View {
@@ -33,13 +34,6 @@ public struct FileTableView: View {
                             .font(.system(.body, design: .rounded, weight: item.isDir ? .medium : .regular))
                             .lineLimit(1)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        handleItemDoubleClick(item)
-                    }
-                    .contextMenu {
-                        itemContextMenu(for: item)
-                    }
                 }
                 .width(min: 180, ideal: 260)
 
@@ -53,32 +47,28 @@ public struct FileTableView: View {
 
                         if viewModel.currentFolderTotalSize > 0 {
                             let ratio = min(1.0, max(0.02, Double(item.sizeBytes) / Double(viewModel.currentFolderTotalSize)))
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.16))
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color(hex: item.colorHex), Color(hex: item.colorHex).opacity(0.65)],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
+                            let barWidth: CGFloat = 50
+
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.16))
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: item.colorHex), Color(hex: item.colorHex).opacity(0.65)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
                                         )
-                                        .frame(width: max(4, geo.size.width * ratio))
-                                }
+                                    )
+                                    .frame(width: max(4, barWidth * ratio))
                             }
-                            .frame(width: 50, height: 5)
+                            .frame(width: barWidth, height: 5)
 
                             Text(String(format: "%4.1f%%", (Double(item.sizeBytes) / Double(viewModel.currentFolderTotalSize)) * 100))
                                 .font(.system(.caption2, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .frame(width: 44, alignment: .trailing)
                         }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        handleItemDoubleClick(item)
                     }
                 }
                 .width(min: 170, ideal: 200)
@@ -113,6 +103,24 @@ public struct FileTableView: View {
                 .width(min: 150, ideal: 260)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
+            .contextMenu(forSelectionType: String.self) { selectedIds in
+                if let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                    itemContextMenu(for: item, selectedIds: selectedIds)
+                }
+            } primaryAction: { selectedIds in
+                if let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                    handleItemDoubleClick(item)
+                }
+            }
+            .onChange(of: sortOrder) { _, _ in
+                updateSortedItems()
+            }
+            .onChange(of: viewModel.displayedItems) { _, _ in
+                updateSortedItems()
+            }
+            .onAppear {
+                updateSortedItems()
+            }
 
             // MARK: Overlay States
             if viewModel.isSearching {
@@ -183,23 +191,39 @@ public struct FileTableView: View {
     }
 
     @ViewBuilder
-    private func itemContextMenu(for item: SearchResultItem) -> some View {
-        Button("Open") {
-            openFile(path: item.path)
-        }
-        Button("Reveal in Finder") {
-            revealInFinder(path: item.path)
-        }
-        Button("Copy Path") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.path, forType: .string)
-        }
-        Button("Open in Terminal") {
-            openInTerminal(path: item.path, isDir: item.isDir)
-        }
-        Divider()
-        Button("Collect for Cleanup") {
-            viewModel.collect(path: item.path, size: item.sizeBytes, isDir: item.isDir)
+    private func itemContextMenu(for item: SearchResultItem, selectedIds: Set<String>) -> some View {
+        if selectedIds.count <= 1 {
+            Button("Open") {
+                openFile(path: item.path)
+            }
+            Button("Reveal in Finder") {
+                revealInFinder(path: item.path)
+            }
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item.path, forType: .string)
+            }
+            Button("Open in Terminal") {
+                openInTerminal(path: item.path, isDir: item.isDir)
+            }
+            Divider()
+            Button("Collect for Cleanup") {
+                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: item.isDir)
+            }
+        } else {
+            Button("Collect \(selectedIds.count) Items for Cleanup") {
+                for id in selectedIds {
+                    if let found = sortedItems.first(where: { $0.id == id }) {
+                        viewModel.collect(path: found.path, size: found.sizeBytes, isDir: found.isDir)
+                    }
+                }
+            }
+            Divider()
+            Button("Copy \(selectedIds.count) Paths") {
+                let paths = selectedIds.compactMap { id in sortedItems.first(where: { $0.id == id })?.path }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(paths.joined(separator: "\n"), forType: .string)
+            }
         }
     }
 

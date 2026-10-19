@@ -43,10 +43,12 @@ public struct SidebarView: View {
                             .foregroundColor(.secondary)
                     }
                     .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         viewModel.activeSidebarId == "volume_root" ? Color.accentColor.opacity(0.12) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 8)
                     )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -157,6 +159,7 @@ private struct SidebarRowItem: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 isSelected ? Color.accentColor : Color.clear,
                 in: RoundedRectangle(cornerRadius: 7)
