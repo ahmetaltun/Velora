@@ -43,6 +43,11 @@ impl VolumeIndex {
         self.records.len()
     }
 
+    #[inline]
+    pub fn total_scanned_bytes(&self) -> u64 {
+        self.records.iter().map(|r| r.size).sum()
+    }
+
     pub fn resolve_full_path(&self, record: &FileRecord) -> String {
         let mut path = String::with_capacity(128);
         self.dirs.build_full_path(record.parent_dir, &self.pool, &mut path);

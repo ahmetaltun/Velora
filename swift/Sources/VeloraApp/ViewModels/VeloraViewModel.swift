@@ -28,6 +28,16 @@ public final class VeloraViewModel {
     public var scanThroughput: Double = 0
     public var cancelScanRequested: Bool = false
     public var scanStatusMessage: String = "Ready"
+    public var storageReconciliation: StorageReconciliationItem?
+    public var isReconcilingStorage: Bool = false
+    public var devArtifacts: [DevArtifactRecord] = []
+    public var isLoadingDevArtifacts: Bool = false
+    public var xcodeSummary: XcodeSummaryRecord?
+    public var isLoadingXcode: Bool = false
+    public var pruneSimulatorsStatus: String?
+    public var packageCacheSummary: PackageCacheSummaryRecord?
+    public var isLoadingPackageCaches: Bool = false
+    public var dockerPruneStatus: String?
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
 
@@ -36,6 +46,7 @@ public final class VeloraViewModel {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.currentPath = home
         self.pathStack = [home]
+        self.refreshStorageReconciliation()
     }
 
     /// Indicates whether a valid binary index snapshot file exists on disk.
@@ -87,13 +98,88 @@ public final class VeloraViewModel {
                     self.isLoadingSnapshot = false
                     self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
+                    self.refreshStorageReconciliation()
                 }
             } else {
                 DispatchQueue.main.async {
                     self.isLoadingSnapshot = false
                     self.scanStatusMessage = "Failed to load cached snapshot; please perform a clean scan"
                     self.refreshTableItems()
+                    self.refreshStorageReconciliation()
                 }
+            }
+        }
+    }
+
+    public func refreshStorageReconciliation() {
+        isReconcilingStorage = true
+        let mount = "/"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let item = self.engine.reconcileStorage(mountPoint: mount)
+            DispatchQueue.main.async {
+                self.storageReconciliation = item
+                self.isReconcilingStorage = false
+            }
+        }
+    }
+
+    public func loadDevArtifacts() {
+        isLoadingDevArtifacts = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let items = self.engine.findDevArtifacts(minSizeBytes: 1_000_000)
+            DispatchQueue.main.async {
+                self.devArtifacts = items
+                self.isLoadingDevArtifacts = false
+            }
+        }
+    }
+
+    public func loadXcodeSummary() {
+        isLoadingXcode = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.inspectXcode(homePath: home)
+            DispatchQueue.main.async {
+                self.xcodeSummary = summary
+                self.isLoadingXcode = false
+            }
+        }
+    }
+
+    public func pruneUnavailableSimulators() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let success = self.engine.pruneUnavailableSimulators()
+            DispatchQueue.main.async {
+                self.pruneSimulatorsStatus = success ? "Cleaned unavailable simulators" : "None pruned"
+                self.loadXcodeSummary()
+            }
+        }
+    }
+
+    public func loadPackageCaches() {
+        isLoadingPackageCaches = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.inspectPackageCaches(homePath: home)
+            DispatchQueue.main.async {
+                self.packageCacheSummary = summary
+                self.isLoadingPackageCaches = false
+            }
+        }
+    }
+
+    public func pruneDocker() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let success = self.engine.pruneDocker()
+            DispatchQueue.main.async {
+                self.dockerPruneStatus = success ? "Docker system pruned successfully" : "Docker daemon unavailable or error"
+                self.loadPackageCaches()
             }
         }
     }
@@ -147,6 +233,7 @@ public final class VeloraViewModel {
                         }
                         self.scanStatusMessage = "\(total) items indexed"
                         self.refreshTableItems()
+                        self.refreshStorageReconciliation()
                     } else {
                         self.scanStatusMessage = "Scan failed or permission denied: Unable to access \(path)"
                     }

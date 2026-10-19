@@ -56,6 +56,74 @@ pub struct CollectedFile {
     pub is_dir: bool,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct StorageSnapshotItem {
+    pub name: String,
+    pub date_formatted: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct StorageReconciliationItem {
+    pub container_total_bytes: u64,
+    pub container_free_bytes: u64,
+    pub user_scanned_bytes: u64,
+    pub system_volume_bytes: u64,
+    pub vm_swap_bytes: u64,
+    pub other_volumes_bytes: u64,
+    pub purgeable_bytes: u64,
+    pub hidden_system_bytes: u64,
+    pub snapshots: Vec<StorageSnapshotItem>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DevArtifactRecord {
+    pub path: String,
+    pub name: String,
+    pub kind_name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub inactivity_label: String,
+    pub parent_project_name: String,
+    pub color_hex: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct XcodeItemRecord {
+    pub name: String,
+    pub path: String,
+    pub category_name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub color_hex: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct XcodeSummaryRecord {
+    pub derived_data_bytes: u64,
+    pub archives_bytes: u64,
+    pub device_support_bytes: u64,
+    pub simulator_bytes: u64,
+    pub total_bytes: u64,
+    pub items: Vec<XcodeItemRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PackageCacheRecord {
+    pub name: String,
+    pub path: String,
+    pub ecosystem_name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub color_hex: String,
+    pub can_collect: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PackageCacheSummaryRecord {
+    pub total_bytes: u64,
+    pub items: Vec<PackageCacheRecord>,
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -196,5 +264,97 @@ impl VeloraEngine {
 
     pub fn is_online(&self) -> bool {
         self.volume.read().is_online
+    }
+
+    pub fn reconcile_storage(&self, mount_point: String) -> StorageReconciliationItem {
+        let scanned_bytes = self.volume.read().total_scanned_bytes();
+        let rec = velora_apfs::Reconciler::reconcile(Path::new(&mount_point), scanned_bytes);
+        StorageReconciliationItem {
+            container_total_bytes: rec.container_total_bytes,
+            container_free_bytes: rec.container_free_bytes,
+            user_scanned_bytes: rec.user_scanned_bytes,
+            system_volume_bytes: rec.system_volume_bytes,
+            vm_swap_bytes: rec.vm_swap_bytes,
+            other_volumes_bytes: rec.other_volumes_bytes,
+            purgeable_bytes: rec.purgeable_bytes,
+            hidden_system_bytes: rec.hidden_system_bytes,
+            snapshots: rec
+                .snapshots
+                .into_iter()
+                .map(|s| StorageSnapshotItem {
+                    name: s.name,
+                    date_formatted: s.date_formatted,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn find_dev_artifacts(&self, min_size_bytes: u64) -> Vec<DevArtifactRecord> {
+        let vol = self.volume.read();
+        let artifacts = velora_dev::ArtifactHunter::hunt(&vol, min_size_bytes);
+        artifacts
+            .into_iter()
+            .map(|a| DevArtifactRecord {
+                path: a.path,
+                name: a.name,
+                kind_name: a.kind.display_name().to_string(),
+                size_bytes: a.size_bytes,
+                modified_secs: a.modified_secs,
+                inactivity_label: a.inactivity.label().to_string(),
+                parent_project_name: a.parent_project_name,
+                color_hex: a.color_hex,
+            })
+            .collect()
+    }
+
+    pub fn inspect_xcode(&self, home_path: String) -> XcodeSummaryRecord {
+        let summary = velora_dev::XcodeInspector::inspect_home(Path::new(&home_path));
+        XcodeSummaryRecord {
+            derived_data_bytes: summary.derived_data_bytes,
+            archives_bytes: summary.archives_bytes,
+            device_support_bytes: summary.device_support_bytes,
+            simulator_bytes: summary.simulator_bytes,
+            total_bytes: summary.total_bytes,
+            items: summary
+                .items
+                .into_iter()
+                .map(|item| XcodeItemRecord {
+                    name: item.name,
+                    path: item.path,
+                    category_name: item.category.display_name().to_string(),
+                    size_bytes: item.size_bytes,
+                    modified_secs: item.modified_secs,
+                    color_hex: item.color_hex,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn prune_unavailable_simulators(&self) -> bool {
+        velora_dev::XcodeInspector::prune_unavailable_simulators()
+    }
+
+    pub fn inspect_package_caches(&self, home_path: String) -> PackageCacheSummaryRecord {
+        let summary = velora_dev::PackageCacheScanner::scan_home(Path::new(&home_path));
+        PackageCacheSummaryRecord {
+            total_bytes: summary.total_bytes,
+            items: summary
+                .items
+                .into_iter()
+                .map(|item| PackageCacheRecord {
+                    name: item.name,
+                    path: item.path,
+                    ecosystem_name: item.ecosystem.display_name().to_string(),
+                    size_bytes: item.size_bytes,
+                    modified_secs: item.modified_secs,
+                    color_hex: item.color_hex,
+                    can_collect: item.can_collect,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn prune_docker(&self) -> bool {
+        velora_dev::PackageCacheScanner::prune_docker()
     }
 }

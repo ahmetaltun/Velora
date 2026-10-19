@@ -524,9 +524,21 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func computeSunburst(maxDepth: UInt32, minAngleDeg: Float)  -> SunburstSectorItem?
     
+    func findDevArtifacts(minSizeBytes: UInt64)  -> [DevArtifactRecord]
+    
+    func inspectPackageCaches(homePath: String)  -> PackageCacheSummaryRecord
+    
+    func inspectXcode(homePath: String)  -> XcodeSummaryRecord
+    
     func isOnline()  -> Bool
     
     func loadOfflineSnapshot(srcPath: String)  -> Bool
+    
+    func pruneDocker()  -> Bool
+    
+    func pruneUnavailableSimulators()  -> Bool
+    
+    func reconcileStorage(mountPoint: String)  -> StorageReconciliationItem
     
     func removeCollected(path: String) 
     
@@ -635,6 +647,30 @@ open func computeSunburst(maxDepth: UInt32, minAngleDeg: Float) -> SunburstSecto
 })
 }
     
+open func findDevArtifacts(minSizeBytes: UInt64) -> [DevArtifactRecord] {
+    return try!  FfiConverterSequenceTypeDevArtifactRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_find_dev_artifacts(self.uniffiClonePointer(),
+        FfiConverterUInt64.lower(minSizeBytes),$0
+    )
+})
+}
+    
+open func inspectPackageCaches(homePath: String) -> PackageCacheSummaryRecord {
+    return try!  FfiConverterTypePackageCacheSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_inspect_package_caches(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func inspectXcode(homePath: String) -> XcodeSummaryRecord {
+    return try!  FfiConverterTypeXcodeSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_inspect_xcode(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
 open func isOnline() -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_is_online(self.uniffiClonePointer(),$0
@@ -646,6 +682,28 @@ open func loadOfflineSnapshot(srcPath: String) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_load_offline_snapshot(self.uniffiClonePointer(),
         FfiConverterString.lower(srcPath),$0
+    )
+})
+}
+    
+open func pruneDocker() -> Bool {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func pruneUnavailableSimulators() -> Bool {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_unavailable_simulators(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func reconcileStorage(mountPoint: String) -> StorageReconciliationItem {
+    return try!  FfiConverterTypeStorageReconciliationItem.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_reconcile_storage(self.uniffiClonePointer(),
+        FfiConverterString.lower(mountPoint),$0
     )
 })
 }
@@ -820,6 +878,292 @@ public func FfiConverterTypeCollectedFile_lower(_ value: CollectedFile) -> RustB
 }
 
 
+public struct DevArtifactRecord {
+    public var path: String
+    public var name: String
+    public var kindName: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var inactivityLabel: String
+    public var parentProjectName: String
+    public var colorHex: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, name: String, kindName: String, sizeBytes: UInt64, modifiedSecs: UInt64, inactivityLabel: String, parentProjectName: String, colorHex: String) {
+        self.path = path
+        self.name = name
+        self.kindName = kindName
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.inactivityLabel = inactivityLabel
+        self.parentProjectName = parentProjectName
+        self.colorHex = colorHex
+    }
+}
+
+
+
+extension DevArtifactRecord: Equatable, Hashable {
+    public static func ==(lhs: DevArtifactRecord, rhs: DevArtifactRecord) -> Bool {
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.kindName != rhs.kindName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.inactivityLabel != rhs.inactivityLabel {
+            return false
+        }
+        if lhs.parentProjectName != rhs.parentProjectName {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+        hasher.combine(name)
+        hasher.combine(kindName)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(inactivityLabel)
+        hasher.combine(parentProjectName)
+        hasher.combine(colorHex)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDevArtifactRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DevArtifactRecord {
+        return
+            try DevArtifactRecord(
+                path: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                kindName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                inactivityLabel: FfiConverterString.read(from: &buf), 
+                parentProjectName: FfiConverterString.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DevArtifactRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.kindName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterString.write(value.inactivityLabel, into: &buf)
+        FfiConverterString.write(value.parentProjectName, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDevArtifactRecord_lift(_ buf: RustBuffer) throws -> DevArtifactRecord {
+    return try FfiConverterTypeDevArtifactRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDevArtifactRecord_lower(_ value: DevArtifactRecord) -> RustBuffer {
+    return FfiConverterTypeDevArtifactRecord.lower(value)
+}
+
+
+public struct PackageCacheRecord {
+    public var name: String
+    public var path: String
+    public var ecosystemName: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var colorHex: String
+    public var canCollect: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, ecosystemName: String, sizeBytes: UInt64, modifiedSecs: UInt64, colorHex: String, canCollect: Bool) {
+        self.name = name
+        self.path = path
+        self.ecosystemName = ecosystemName
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.colorHex = colorHex
+        self.canCollect = canCollect
+    }
+}
+
+
+
+extension PackageCacheRecord: Equatable, Hashable {
+    public static func ==(lhs: PackageCacheRecord, rhs: PackageCacheRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.ecosystemName != rhs.ecosystemName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        if lhs.canCollect != rhs.canCollect {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(ecosystemName)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(colorHex)
+        hasher.combine(canCollect)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePackageCacheRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PackageCacheRecord {
+        return
+            try PackageCacheRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                ecosystemName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf), 
+                canCollect: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PackageCacheRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.ecosystemName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+        FfiConverterBool.write(value.canCollect, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePackageCacheRecord_lift(_ buf: RustBuffer) throws -> PackageCacheRecord {
+    return try FfiConverterTypePackageCacheRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePackageCacheRecord_lower(_ value: PackageCacheRecord) -> RustBuffer {
+    return FfiConverterTypePackageCacheRecord.lower(value)
+}
+
+
+public struct PackageCacheSummaryRecord {
+    public var totalBytes: UInt64
+    public var items: [PackageCacheRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalBytes: UInt64, items: [PackageCacheRecord]) {
+        self.totalBytes = totalBytes
+        self.items = items
+    }
+}
+
+
+
+extension PackageCacheSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: PackageCacheSummaryRecord, rhs: PackageCacheSummaryRecord) -> Bool {
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.items != rhs.items {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalBytes)
+        hasher.combine(items)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePackageCacheSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PackageCacheSummaryRecord {
+        return
+            try PackageCacheSummaryRecord(
+                totalBytes: FfiConverterUInt64.read(from: &buf), 
+                items: FfiConverterSequenceTypePackageCacheRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PackageCacheSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.totalBytes, into: &buf)
+        FfiConverterSequenceTypePackageCacheRecord.write(value.items, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePackageCacheSummaryRecord_lift(_ buf: RustBuffer) throws -> PackageCacheSummaryRecord {
+    return try FfiConverterTypePackageCacheSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePackageCacheSummaryRecord_lower(_ value: PackageCacheSummaryRecord) -> RustBuffer {
+    return FfiConverterTypePackageCacheSummaryRecord.lower(value)
+}
+
+
 public struct SearchResultItem {
     public var name: String
     public var path: String
@@ -915,6 +1259,194 @@ public func FfiConverterTypeSearchResultItem_lift(_ buf: RustBuffer) throws -> S
 #endif
 public func FfiConverterTypeSearchResultItem_lower(_ value: SearchResultItem) -> RustBuffer {
     return FfiConverterTypeSearchResultItem.lower(value)
+}
+
+
+public struct StorageReconciliationItem {
+    public var containerTotalBytes: UInt64
+    public var containerFreeBytes: UInt64
+    public var userScannedBytes: UInt64
+    public var systemVolumeBytes: UInt64
+    public var vmSwapBytes: UInt64
+    public var otherVolumesBytes: UInt64
+    public var purgeableBytes: UInt64
+    public var hiddenSystemBytes: UInt64
+    public var snapshots: [StorageSnapshotItem]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(containerTotalBytes: UInt64, containerFreeBytes: UInt64, userScannedBytes: UInt64, systemVolumeBytes: UInt64, vmSwapBytes: UInt64, otherVolumesBytes: UInt64, purgeableBytes: UInt64, hiddenSystemBytes: UInt64, snapshots: [StorageSnapshotItem]) {
+        self.containerTotalBytes = containerTotalBytes
+        self.containerFreeBytes = containerFreeBytes
+        self.userScannedBytes = userScannedBytes
+        self.systemVolumeBytes = systemVolumeBytes
+        self.vmSwapBytes = vmSwapBytes
+        self.otherVolumesBytes = otherVolumesBytes
+        self.purgeableBytes = purgeableBytes
+        self.hiddenSystemBytes = hiddenSystemBytes
+        self.snapshots = snapshots
+    }
+}
+
+
+
+extension StorageReconciliationItem: Equatable, Hashable {
+    public static func ==(lhs: StorageReconciliationItem, rhs: StorageReconciliationItem) -> Bool {
+        if lhs.containerTotalBytes != rhs.containerTotalBytes {
+            return false
+        }
+        if lhs.containerFreeBytes != rhs.containerFreeBytes {
+            return false
+        }
+        if lhs.userScannedBytes != rhs.userScannedBytes {
+            return false
+        }
+        if lhs.systemVolumeBytes != rhs.systemVolumeBytes {
+            return false
+        }
+        if lhs.vmSwapBytes != rhs.vmSwapBytes {
+            return false
+        }
+        if lhs.otherVolumesBytes != rhs.otherVolumesBytes {
+            return false
+        }
+        if lhs.purgeableBytes != rhs.purgeableBytes {
+            return false
+        }
+        if lhs.hiddenSystemBytes != rhs.hiddenSystemBytes {
+            return false
+        }
+        if lhs.snapshots != rhs.snapshots {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(containerTotalBytes)
+        hasher.combine(containerFreeBytes)
+        hasher.combine(userScannedBytes)
+        hasher.combine(systemVolumeBytes)
+        hasher.combine(vmSwapBytes)
+        hasher.combine(otherVolumesBytes)
+        hasher.combine(purgeableBytes)
+        hasher.combine(hiddenSystemBytes)
+        hasher.combine(snapshots)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStorageReconciliationItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StorageReconciliationItem {
+        return
+            try StorageReconciliationItem(
+                containerTotalBytes: FfiConverterUInt64.read(from: &buf), 
+                containerFreeBytes: FfiConverterUInt64.read(from: &buf), 
+                userScannedBytes: FfiConverterUInt64.read(from: &buf), 
+                systemVolumeBytes: FfiConverterUInt64.read(from: &buf), 
+                vmSwapBytes: FfiConverterUInt64.read(from: &buf), 
+                otherVolumesBytes: FfiConverterUInt64.read(from: &buf), 
+                purgeableBytes: FfiConverterUInt64.read(from: &buf), 
+                hiddenSystemBytes: FfiConverterUInt64.read(from: &buf), 
+                snapshots: FfiConverterSequenceTypeStorageSnapshotItem.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StorageReconciliationItem, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.containerTotalBytes, into: &buf)
+        FfiConverterUInt64.write(value.containerFreeBytes, into: &buf)
+        FfiConverterUInt64.write(value.userScannedBytes, into: &buf)
+        FfiConverterUInt64.write(value.systemVolumeBytes, into: &buf)
+        FfiConverterUInt64.write(value.vmSwapBytes, into: &buf)
+        FfiConverterUInt64.write(value.otherVolumesBytes, into: &buf)
+        FfiConverterUInt64.write(value.purgeableBytes, into: &buf)
+        FfiConverterUInt64.write(value.hiddenSystemBytes, into: &buf)
+        FfiConverterSequenceTypeStorageSnapshotItem.write(value.snapshots, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageReconciliationItem_lift(_ buf: RustBuffer) throws -> StorageReconciliationItem {
+    return try FfiConverterTypeStorageReconciliationItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageReconciliationItem_lower(_ value: StorageReconciliationItem) -> RustBuffer {
+    return FfiConverterTypeStorageReconciliationItem.lower(value)
+}
+
+
+public struct StorageSnapshotItem {
+    public var name: String
+    public var dateFormatted: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, dateFormatted: String) {
+        self.name = name
+        self.dateFormatted = dateFormatted
+    }
+}
+
+
+
+extension StorageSnapshotItem: Equatable, Hashable {
+    public static func ==(lhs: StorageSnapshotItem, rhs: StorageSnapshotItem) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.dateFormatted != rhs.dateFormatted {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(dateFormatted)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStorageSnapshotItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StorageSnapshotItem {
+        return
+            try StorageSnapshotItem(
+                name: FfiConverterString.read(from: &buf), 
+                dateFormatted: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StorageSnapshotItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.dateFormatted, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageSnapshotItem_lift(_ buf: RustBuffer) throws -> StorageSnapshotItem {
+    return try FfiConverterTypeStorageSnapshotItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageSnapshotItem_lower(_ value: StorageSnapshotItem) -> RustBuffer {
+    return FfiConverterTypeStorageSnapshotItem.lower(value)
 }
 
 
@@ -1045,6 +1577,202 @@ public func FfiConverterTypeSunburstSectorItem_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeSunburstSectorItem_lower(_ value: SunburstSectorItem) -> RustBuffer {
     return FfiConverterTypeSunburstSectorItem.lower(value)
+}
+
+
+public struct XcodeItemRecord {
+    public var name: String
+    public var path: String
+    public var categoryName: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var colorHex: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, categoryName: String, sizeBytes: UInt64, modifiedSecs: UInt64, colorHex: String) {
+        self.name = name
+        self.path = path
+        self.categoryName = categoryName
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.colorHex = colorHex
+    }
+}
+
+
+
+extension XcodeItemRecord: Equatable, Hashable {
+    public static func ==(lhs: XcodeItemRecord, rhs: XcodeItemRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.categoryName != rhs.categoryName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(categoryName)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(colorHex)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXcodeItemRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XcodeItemRecord {
+        return
+            try XcodeItemRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                categoryName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XcodeItemRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.categoryName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXcodeItemRecord_lift(_ buf: RustBuffer) throws -> XcodeItemRecord {
+    return try FfiConverterTypeXcodeItemRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXcodeItemRecord_lower(_ value: XcodeItemRecord) -> RustBuffer {
+    return FfiConverterTypeXcodeItemRecord.lower(value)
+}
+
+
+public struct XcodeSummaryRecord {
+    public var derivedDataBytes: UInt64
+    public var archivesBytes: UInt64
+    public var deviceSupportBytes: UInt64
+    public var simulatorBytes: UInt64
+    public var totalBytes: UInt64
+    public var items: [XcodeItemRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(derivedDataBytes: UInt64, archivesBytes: UInt64, deviceSupportBytes: UInt64, simulatorBytes: UInt64, totalBytes: UInt64, items: [XcodeItemRecord]) {
+        self.derivedDataBytes = derivedDataBytes
+        self.archivesBytes = archivesBytes
+        self.deviceSupportBytes = deviceSupportBytes
+        self.simulatorBytes = simulatorBytes
+        self.totalBytes = totalBytes
+        self.items = items
+    }
+}
+
+
+
+extension XcodeSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: XcodeSummaryRecord, rhs: XcodeSummaryRecord) -> Bool {
+        if lhs.derivedDataBytes != rhs.derivedDataBytes {
+            return false
+        }
+        if lhs.archivesBytes != rhs.archivesBytes {
+            return false
+        }
+        if lhs.deviceSupportBytes != rhs.deviceSupportBytes {
+            return false
+        }
+        if lhs.simulatorBytes != rhs.simulatorBytes {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.items != rhs.items {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(derivedDataBytes)
+        hasher.combine(archivesBytes)
+        hasher.combine(deviceSupportBytes)
+        hasher.combine(simulatorBytes)
+        hasher.combine(totalBytes)
+        hasher.combine(items)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeXcodeSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> XcodeSummaryRecord {
+        return
+            try XcodeSummaryRecord(
+                derivedDataBytes: FfiConverterUInt64.read(from: &buf), 
+                archivesBytes: FfiConverterUInt64.read(from: &buf), 
+                deviceSupportBytes: FfiConverterUInt64.read(from: &buf), 
+                simulatorBytes: FfiConverterUInt64.read(from: &buf), 
+                totalBytes: FfiConverterUInt64.read(from: &buf), 
+                items: FfiConverterSequenceTypeXcodeItemRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: XcodeSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.derivedDataBytes, into: &buf)
+        FfiConverterUInt64.write(value.archivesBytes, into: &buf)
+        FfiConverterUInt64.write(value.deviceSupportBytes, into: &buf)
+        FfiConverterUInt64.write(value.simulatorBytes, into: &buf)
+        FfiConverterUInt64.write(value.totalBytes, into: &buf)
+        FfiConverterSequenceTypeXcodeItemRecord.write(value.items, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXcodeSummaryRecord_lift(_ buf: RustBuffer) throws -> XcodeSummaryRecord {
+    return try FfiConverterTypeXcodeSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeXcodeSummaryRecord_lower(_ value: XcodeSummaryRecord) -> RustBuffer {
+    return FfiConverterTypeXcodeSummaryRecord.lower(value)
 }
 
 
@@ -1232,6 +1960,56 @@ fileprivate struct FfiConverterSequenceTypeCollectedFile: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDevArtifactRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DevArtifactRecord]
+
+    public static func write(_ value: [DevArtifactRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDevArtifactRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DevArtifactRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DevArtifactRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDevArtifactRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePackageCacheRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [PackageCacheRecord]
+
+    public static func write(_ value: [PackageCacheRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePackageCacheRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PackageCacheRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PackageCacheRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePackageCacheRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSearchResultItem: FfiConverterRustBuffer {
     typealias SwiftType = [SearchResultItem]
 
@@ -1257,6 +2035,31 @@ fileprivate struct FfiConverterSequenceTypeSearchResultItem: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeStorageSnapshotItem: FfiConverterRustBuffer {
+    typealias SwiftType = [StorageSnapshotItem]
+
+    public static func write(_ value: [StorageSnapshotItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStorageSnapshotItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StorageSnapshotItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StorageSnapshotItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStorageSnapshotItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSunburstSectorItem: FfiConverterRustBuffer {
     typealias SwiftType = [SunburstSectorItem]
 
@@ -1274,6 +2077,31 @@ fileprivate struct FfiConverterSequenceTypeSunburstSectorItem: FfiConverterRustB
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeSunburstSectorItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeXcodeItemRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [XcodeItemRecord]
+
+    public static func write(_ value: [XcodeItemRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeXcodeItemRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [XcodeItemRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [XcodeItemRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeXcodeItemRecord.read(from: &buf))
         }
         return seq
     }
@@ -1309,10 +2137,28 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_compute_sunburst() != 36924) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_find_dev_artifacts() != 2838) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_package_caches() != 31799) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_xcode() != 16095) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_is_online() != 56922) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_load_offline_snapshot() != 27215) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker() != 38498) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_unavailable_simulators() != 15692) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_reconcile_storage() != 38095) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_remove_collected() != 54207) {

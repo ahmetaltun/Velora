@@ -28,7 +28,13 @@ public struct MainWindowView: View {
 
                 // Main Workspace Canvas
                 Group {
-                    if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
+                    if viewModel.activeSidebarId == "tool_dev_artifacts" {
+                        DevArtifactsHunterView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_xcode" {
+                        XcodeStorageView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_package_caches" {
+                        PackageCachesView(viewModel: viewModel)
+                    } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
                         ScanHeroWelcomeView(viewModel: viewModel)
                             .padding(24)
                     } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {

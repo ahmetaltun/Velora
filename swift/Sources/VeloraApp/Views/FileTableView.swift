@@ -112,6 +112,18 @@ public struct FileTableView: View {
                     handleItemDoubleClick(item)
                 }
             }
+            .onChange(of: selectedItemIds) { _, newIds in
+                if let firstId = newIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                    QuickLookCoordinator.shared.updatePreviewIfVisible(path: item.path)
+                }
+            }
+            .onKeyPress(.space) {
+                if let firstId = selectedItemIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                    QuickLookCoordinator.shared.togglePreview(for: item.path)
+                    return .handled
+                }
+                return .ignored
+            }
             .onChange(of: sortOrder) { _, _ in
                 updateSortedItems()
             }
@@ -193,6 +205,11 @@ public struct FileTableView: View {
     @ViewBuilder
     private func itemContextMenu(for item: SearchResultItem, selectedIds: Set<String>) -> some View {
         if selectedIds.count <= 1 {
+            Button("Quick Look") {
+                QuickLookCoordinator.shared.togglePreview(for: item.path)
+            }
+            .keyboardShortcut(.space, modifiers: [])
+            Divider()
             Button("Open") {
                 openFile(path: item.path)
             }

@@ -10,47 +10,8 @@ public struct SidebarView: View {
     public var body: some View {
         List {
             Section("Volumes") {
-                Button(action: {
-                    viewModel.navigateToRoot()
-                }) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: "internaldrive.fill")
-                                .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .blue)
-                            Text("Macintosh HD")
-                                .font(.system(.body, design: .rounded, weight: .semibold))
-                                .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .primary)
-                            Spacer()
-                            Text("68%")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // Disk Gauge Bar
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.secondary.opacity(0.2))
-                                Capsule()
-                                    .fill(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
-                                    .frame(width: geo.size.width * 0.68)
-                            }
-                        }
-                        .frame(height: 6)
-
-                        Text("340 GB of 500 GB free")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        viewModel.activeSidebarId == "volume_root" ? Color.accentColor.opacity(0.12) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 8)
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                ApfsStorageCardView(viewModel: viewModel)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
 
                 HStack {
                     Image(systemName: "externaldrive.fill")
@@ -101,6 +62,35 @@ public struct SidebarView: View {
                         id: "fav_downloads",
                         path: dlPath
                     )
+                }
+            }
+
+            Section("Developer Tools") {
+                SidebarRowItem(
+                    title: "Build Artifacts",
+                    systemImage: "hammer.fill",
+                    isSelected: viewModel.activeSidebarId == "tool_dev_artifacts"
+                ) {
+                    viewModel.activeSidebarId = "tool_dev_artifacts"
+                    viewModel.loadDevArtifacts()
+                }
+
+                SidebarRowItem(
+                    title: "Xcode Storage",
+                    systemImage: "wrench.and.screwdriver.fill",
+                    isSelected: viewModel.activeSidebarId == "tool_xcode"
+                ) {
+                    viewModel.activeSidebarId = "tool_xcode"
+                    viewModel.loadXcodeSummary()
+                }
+
+                SidebarRowItem(
+                    title: "Package & Caches",
+                    systemImage: "shippingbox.circle.fill",
+                    isSelected: viewModel.activeSidebarId == "tool_package_caches"
+                ) {
+                    viewModel.activeSidebarId = "tool_package_caches"
+                    viewModel.loadPackageCaches()
                 }
             }
 

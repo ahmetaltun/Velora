@@ -1,0 +1,10 @@
+[package]
+name = "velora-apfs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+plist = "1.6"
+libc = "0.2"

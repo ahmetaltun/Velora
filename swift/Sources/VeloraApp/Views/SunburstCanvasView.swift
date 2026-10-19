@@ -73,6 +73,15 @@ public struct SunburstCanvasView: View {
                             Text(formatBytes(hovered.sizeBytes))
                                 .font(.system(.subheadline, design: .monospaced, weight: .medium))
                             Spacer()
+                            Button(action: {
+                                QuickLookCoordinator.shared.togglePreview(for: hovered.path)
+                            }) {
+                                Image(systemName: "eye")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("Quick Look preview (Space)")
+
                             Button("Collect") {
                                 viewModel.collect(path: hovered.path, size: hovered.sizeBytes, isDir: hovered.isDir)
                             }
@@ -93,6 +102,16 @@ public struct SunburstCanvasView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+        }
+        .onKeyPress(.space) {
+            if let hovered = hoveredSector {
+                QuickLookCoordinator.shared.togglePreview(for: hovered.path)
+                return .handled
+            } else if let selected = viewModel.selectedSector {
+                QuickLookCoordinator.shared.togglePreview(for: selected.path)
+                return .handled
+            }
+            return .ignored
         }
     }
 

@@ -14,6 +14,8 @@ velora-search = { path = "../velora-search" }
 velora-analyzer = { path = "../velora-analyzer" }
 velora-watcher = { path = "../velora-watcher" }
 velora-ops = { path = "../velora-ops" }
+velora-apfs = { path = "../velora-apfs" }
+velora-dev = { path = "../velora-dev" }
 parking_lot = "0.12"
 uniffi = { version = "0.28", features = ["cli"] }
 

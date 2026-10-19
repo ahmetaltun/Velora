@@ -11,6 +11,11 @@ mkdir -p "$MACOS" "$RESOURCES"
 # Copy binary
 cp swift/.build/debug/Velora "$MACOS/Velora"
 
+# Copy app icon if available
+if [ -f "assets/icons/AppIcon.icns" ]; then
+    cp assets/icons/AppIcon.icns "$RESOURCES/AppIcon.icns"
+fi
+
 # Create Info.plist
 cat << 'EOF' > "$CONTENTS/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -21,6 +26,8 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>Velora</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.velora.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -44,4 +51,5 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
 EOF
 
 chmod +x "$MACOS/Velora"
+touch "$APP_DIR"
 echo "✅ Velora.app created successfully!"
