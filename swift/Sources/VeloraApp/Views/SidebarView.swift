@@ -10,35 +10,45 @@ public struct SidebarView: View {
     public var body: some View {
         List {
             Section("Volumes") {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: "internaldrive.fill")
-                            .foregroundColor(.blue)
-                        Text("Macintosh HD")
-                            .font(.system(.body, design: .rounded, weight: .medium))
-                        Spacer()
-                        Text("68%")
-                            .font(.caption)
+                Button(action: {
+                    viewModel.navigateToRoot()
+                }) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: "internaldrive.fill")
+                                .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .blue)
+                            Text("Macintosh HD")
+                                .font(.system(.body, design: .rounded, weight: .semibold))
+                                .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .primary)
+                            Spacer()
+                            Text("68%")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Disk Gauge Bar
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.2))
+                                Capsule()
+                                    .fill(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: geo.size.width * 0.68)
+                            }
+                        }
+                        .frame(height: 6)
+
+                        Text("340 GB of 500 GB free")
+                            .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-
-                    // Disk Gauge Bar
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.2))
-                            Capsule()
-                                .fill(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
-                                .frame(width: geo.size.width * 0.68)
-                        }
-                    }
-                    .frame(height: 6)
-
-                    Text("340 GB of 500 GB free")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    .padding(8)
+                    .background(
+                        viewModel.activeSidebarId == "volume_root" ? Color.accentColor.opacity(0.12) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
 
                 HStack {
                     Image(systemName: "externaldrive.fill")
@@ -51,62 +61,108 @@ public struct SidebarView: View {
                     }
                 }
                 .opacity(0.6)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
 
             Section("Favorites") {
-                NavigationLink(destination: EmptyView()) {
-                    Label("Home", systemImage: "house.fill")
+                SidebarRowItem(
+                    title: "Home",
+                    systemImage: "house.fill",
+                    isSelected: viewModel.activeSidebarId == "fav_home"
+                ) {
+                    viewModel.navigateToFavorite(
+                        id: "fav_home",
+                        path: FileManager.default.homeDirectoryForCurrentUser.path
+                    )
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    viewModel.currentPath = FileManager.default.homeDirectoryForCurrentUser.path
-                    viewModel.scanCurrentPath()
-                })
 
-                NavigationLink(destination: EmptyView()) {
-                    Label("Developer", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-                .simultaneousGesture(TapGesture().onEnded {
+                SidebarRowItem(
+                    title: "Developer",
+                    systemImage: "chevron.left.forwardslash.chevron.right",
+                    isSelected: viewModel.activeSidebarId == "fav_dev"
+                ) {
                     let devPath = (FileManager.default.homeDirectoryForCurrentUser.path as NSString).appendingPathComponent("Rust")
-                    viewModel.currentPath = devPath
-                    viewModel.scanCurrentPath()
-                })
-
-                NavigationLink(destination: EmptyView()) {
-                    Label("Downloads", systemImage: "arrow.down.circle.fill")
+                    viewModel.navigateToFavorite(
+                        id: "fav_dev",
+                        path: devPath
+                    )
                 }
-                .simultaneousGesture(TapGesture().onEnded {
+
+                SidebarRowItem(
+                    title: "Downloads",
+                    systemImage: "arrow.down.circle.fill",
+                    isSelected: viewModel.activeSidebarId == "fav_downloads"
+                ) {
                     let dlPath = (FileManager.default.homeDirectoryForCurrentUser.path as NSString).appendingPathComponent("Downloads")
-                    viewModel.currentPath = dlPath
-                    viewModel.scanCurrentPath()
-                })
+                    viewModel.navigateToFavorite(
+                        id: "fav_downloads",
+                        path: dlPath
+                    )
+                }
             }
 
             Section("Smart Filters") {
-                Button(action: {
+                SidebarRowItem(
+                    title: "Large Files (>500MB)",
+                    systemImage: "shippingbox.fill",
+                    isSelected: viewModel.activeSidebarId == "filter_large"
+                ) {
+                    viewModel.activeSidebarId = "filter_large"
                     viewModel.performSearch(query: "size:>500mb")
                     viewModel.selectedViewMode = .table
-                }) {
-                    Label("Large Files (>500MB)", systemImage: "shippingbox.fill")
                 }
-                .buttonStyle(.plain)
 
-                Button(action: {
+                SidebarRowItem(
+                    title: "Developer Caches",
+                    systemImage: "hammer.fill",
+                    isSelected: viewModel.activeSidebarId == "filter_dev_caches"
+                ) {
+                    viewModel.activeSidebarId = "filter_dev_caches"
                     viewModel.performSearch(query: "target | node_modules | deriveddata")
                     viewModel.selectedViewMode = .table
-                }) {
-                    Label("Developer Caches", systemImage: "hammer.fill")
                 }
-                .buttonStyle(.plain)
 
-                Button(action: {
+                SidebarRowItem(
+                    title: "Modified Today",
+                    systemImage: "clock.fill",
+                    isSelected: viewModel.activeSidebarId == "filter_today"
+                ) {
+                    viewModel.activeSidebarId = "filter_today"
                     viewModel.performSearch(query: "dm:today")
                     viewModel.selectedViewMode = .table
-                }) {
-                    Label("Modified Today", systemImage: "clock.fill")
                 }
-                .buttonStyle(.plain)
             }
         }
         .listStyle(.sidebar)
+    }
+}
+
+private struct SidebarRowItem: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .foregroundColor(isSelected ? .white : .accentColor)
+                    .frame(width: 18)
+                Text(title)
+                    .font(.system(.body, design: .rounded, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .white : .primary)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                isSelected ? Color.accentColor : Color.clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

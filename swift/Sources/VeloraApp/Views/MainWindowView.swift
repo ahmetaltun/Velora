@@ -44,6 +44,13 @@ public struct MainWindowView: View {
                 // Navigation controls
                 ToolbarItemGroup(placement: .navigation) {
                     Button(action: {
+                        viewModel.navigateToRoot()
+                    }) {
+                        Image(systemName: "internaldrive")
+                    }
+                    .help("Return to main volume view")
+
+                    Button(action: {
                         viewModel.navigateUp()
                     }) {
                         Image(systemName: "chevron.left")
@@ -55,12 +62,25 @@ public struct MainWindowView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "folder")
                             .foregroundColor(.secondary)
-                        Text((viewModel.currentPath as NSString).lastPathComponent)
+                        Text((viewModel.currentPath as NSString).lastPathComponent.isEmpty ? "Macintosh HD" : (viewModel.currentPath as NSString).lastPathComponent)
                             .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+
+                    if viewModel.isLoadingSnapshot {
+                        HStack(spacing: 5) {
+                            ProgressView()
+                                .controlSize(.mini)
+                            Text("Indexing...")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                    }
                 }
 
                 // Instant Search Bar
