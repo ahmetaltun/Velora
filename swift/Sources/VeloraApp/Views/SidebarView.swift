@@ -94,6 +94,26 @@ public struct SidebarView: View {
                 }
             }
 
+            Section("Applications") {
+                SidebarRowItem(
+                    title: "App Uninstaller",
+                    systemImage: "app.badge.checkmark",
+                    isSelected: viewModel.activeSidebarId == "tool_apps"
+                ) {
+                    viewModel.activeSidebarId = "tool_apps"
+                    viewModel.loadInstalledApps()
+                }
+
+                SidebarRowItem(
+                    title: "Leftovers & Residue",
+                    systemImage: "trash.circle",
+                    isSelected: viewModel.activeSidebarId == "tool_orphans"
+                ) {
+                    viewModel.activeSidebarId = "tool_orphans"
+                    viewModel.loadOrphanedResidues()
+                }
+            }
+
             Section("Smart Filters") {
                 SidebarRowItem(
                     title: "Large Files (>100MB)",

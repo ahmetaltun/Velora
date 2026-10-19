@@ -9,6 +9,7 @@ members = [
     "crates/velora-ops",
     "crates/velora-apfs",
     "crates/velora-dev",
+    "crates/velora-apps",
     "crates/velora-ffi",
 ]
 

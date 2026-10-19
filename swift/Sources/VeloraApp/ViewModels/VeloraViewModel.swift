@@ -38,6 +38,10 @@ public final class VeloraViewModel {
     public var packageCacheSummary: PackageCacheSummaryRecord?
     public var isLoadingPackageCaches: Bool = false
     public var dockerPruneStatus: String?
+    public var installedApps: [InstalledAppRecord] = []
+    public var isLoadingApps: Bool = false
+    public var orphanedResidues: [OrphanedResidueRecord] = []
+    public var isLoadingOrphans: Bool = false
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
 
@@ -180,6 +184,32 @@ public final class VeloraViewModel {
             DispatchQueue.main.async {
                 self.dockerPruneStatus = success ? "Docker system pruned successfully" : "Docker daemon unavailable or error"
                 self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func loadInstalledApps() {
+        isLoadingApps = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let apps = self.engine.listAppsWithFootprint(homePath: home)
+            DispatchQueue.main.async {
+                self.installedApps = apps
+                self.isLoadingApps = false
+            }
+        }
+    }
+
+    public func loadOrphanedResidues() {
+        isLoadingOrphans = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let orphans = self.engine.findOrphanedResidue(homePath: home)
+            DispatchQueue.main.async {
+                self.orphanedResidues = orphans
+                self.isLoadingOrphans = false
             }
         }
     }

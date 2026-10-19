@@ -1151,6 +1151,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velora-apps"
+version = "0.1.0"
+dependencies = [
+ "plist",
+ "serde",
+]
+
+[[package]]
 name = "velora-dev"
 version = "0.1.0"
 dependencies = [
@@ -1167,6 +1175,7 @@ dependencies = [
  "uniffi",
  "velora-analyzer",
  "velora-apfs",
+ "velora-apps",
  "velora-dev",
  "velora-index",
  "velora-ops",

@@ -526,11 +526,15 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func findDevArtifacts(minSizeBytes: UInt64)  -> [DevArtifactRecord]
     
+    func findOrphanedResidue(homePath: String)  -> [OrphanedResidueRecord]
+    
     func inspectPackageCaches(homePath: String)  -> PackageCacheSummaryRecord
     
     func inspectXcode(homePath: String)  -> XcodeSummaryRecord
     
     func isOnline()  -> Bool
+    
+    func listAppsWithFootprint(homePath: String)  -> [InstalledAppRecord]
     
     func loadOfflineSnapshot(srcPath: String)  -> Bool
     
@@ -655,6 +659,14 @@ open func findDevArtifacts(minSizeBytes: UInt64) -> [DevArtifactRecord] {
 })
 }
     
+open func findOrphanedResidue(homePath: String) -> [OrphanedResidueRecord] {
+    return try!  FfiConverterSequenceTypeOrphanedResidueRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_find_orphaned_residue(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
 open func inspectPackageCaches(homePath: String) -> PackageCacheSummaryRecord {
     return try!  FfiConverterTypePackageCacheSummaryRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_inspect_package_caches(self.uniffiClonePointer(),
@@ -674,6 +686,14 @@ open func inspectXcode(homePath: String) -> XcodeSummaryRecord {
 open func isOnline() -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_is_online(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func listAppsWithFootprint(homePath: String) -> [InstalledAppRecord] {
+    return try!  FfiConverterSequenceTypeInstalledAppRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_list_apps_with_footprint(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
     )
 })
 }
@@ -801,6 +821,96 @@ public func FfiConverterTypeVeloraEngine_lift(_ pointer: UnsafeMutableRawPointer
 #endif
 public func FfiConverterTypeVeloraEngine_lower(_ value: VeloraEngine) -> UnsafeMutableRawPointer {
     return FfiConverterTypeVeloraEngine.lower(value)
+}
+
+
+public struct AppPartRecord {
+    public var name: String
+    public var path: String
+    public var kindName: String
+    public var sizeBytes: UInt64
+    public var colorHex: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, kindName: String, sizeBytes: UInt64, colorHex: String) {
+        self.name = name
+        self.path = path
+        self.kindName = kindName
+        self.sizeBytes = sizeBytes
+        self.colorHex = colorHex
+    }
+}
+
+
+
+extension AppPartRecord: Equatable, Hashable {
+    public static func ==(lhs: AppPartRecord, rhs: AppPartRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.kindName != rhs.kindName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(kindName)
+        hasher.combine(sizeBytes)
+        hasher.combine(colorHex)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAppPartRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AppPartRecord {
+        return
+            try AppPartRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                kindName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AppPartRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.kindName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppPartRecord_lift(_ buf: RustBuffer) throws -> AppPartRecord {
+    return try FfiConverterTypeAppPartRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppPartRecord_lower(_ value: AppPartRecord) -> RustBuffer {
+    return FfiConverterTypeAppPartRecord.lower(value)
 }
 
 
@@ -989,6 +1099,210 @@ public func FfiConverterTypeDevArtifactRecord_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeDevArtifactRecord_lower(_ value: DevArtifactRecord) -> RustBuffer {
     return FfiConverterTypeDevArtifactRecord.lower(value)
+}
+
+
+public struct InstalledAppRecord {
+    public var name: String
+    public var bundleId: String
+    public var version: String
+    public var appPath: String
+    public var isSystemApp: Bool
+    public var totalSizeBytes: UInt64
+    public var parts: [AppPartRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, bundleId: String, version: String, appPath: String, isSystemApp: Bool, totalSizeBytes: UInt64, parts: [AppPartRecord]) {
+        self.name = name
+        self.bundleId = bundleId
+        self.version = version
+        self.appPath = appPath
+        self.isSystemApp = isSystemApp
+        self.totalSizeBytes = totalSizeBytes
+        self.parts = parts
+    }
+}
+
+
+
+extension InstalledAppRecord: Equatable, Hashable {
+    public static func ==(lhs: InstalledAppRecord, rhs: InstalledAppRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.bundleId != rhs.bundleId {
+            return false
+        }
+        if lhs.version != rhs.version {
+            return false
+        }
+        if lhs.appPath != rhs.appPath {
+            return false
+        }
+        if lhs.isSystemApp != rhs.isSystemApp {
+            return false
+        }
+        if lhs.totalSizeBytes != rhs.totalSizeBytes {
+            return false
+        }
+        if lhs.parts != rhs.parts {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(bundleId)
+        hasher.combine(version)
+        hasher.combine(appPath)
+        hasher.combine(isSystemApp)
+        hasher.combine(totalSizeBytes)
+        hasher.combine(parts)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInstalledAppRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InstalledAppRecord {
+        return
+            try InstalledAppRecord(
+                name: FfiConverterString.read(from: &buf), 
+                bundleId: FfiConverterString.read(from: &buf), 
+                version: FfiConverterString.read(from: &buf), 
+                appPath: FfiConverterString.read(from: &buf), 
+                isSystemApp: FfiConverterBool.read(from: &buf), 
+                totalSizeBytes: FfiConverterUInt64.read(from: &buf), 
+                parts: FfiConverterSequenceTypeAppPartRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InstalledAppRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.bundleId, into: &buf)
+        FfiConverterString.write(value.version, into: &buf)
+        FfiConverterString.write(value.appPath, into: &buf)
+        FfiConverterBool.write(value.isSystemApp, into: &buf)
+        FfiConverterUInt64.write(value.totalSizeBytes, into: &buf)
+        FfiConverterSequenceTypeAppPartRecord.write(value.parts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledAppRecord_lift(_ buf: RustBuffer) throws -> InstalledAppRecord {
+    return try FfiConverterTypeInstalledAppRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInstalledAppRecord_lower(_ value: InstalledAppRecord) -> RustBuffer {
+    return FfiConverterTypeInstalledAppRecord.lower(value)
+}
+
+
+public struct OrphanedResidueRecord {
+    public var name: String
+    public var path: String
+    public var inferredBundleId: String
+    public var categoryName: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, inferredBundleId: String, categoryName: String, sizeBytes: UInt64, modifiedSecs: UInt64) {
+        self.name = name
+        self.path = path
+        self.inferredBundleId = inferredBundleId
+        self.categoryName = categoryName
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+    }
+}
+
+
+
+extension OrphanedResidueRecord: Equatable, Hashable {
+    public static func ==(lhs: OrphanedResidueRecord, rhs: OrphanedResidueRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.inferredBundleId != rhs.inferredBundleId {
+            return false
+        }
+        if lhs.categoryName != rhs.categoryName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(inferredBundleId)
+        hasher.combine(categoryName)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOrphanedResidueRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OrphanedResidueRecord {
+        return
+            try OrphanedResidueRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                inferredBundleId: FfiConverterString.read(from: &buf), 
+                categoryName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OrphanedResidueRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.inferredBundleId, into: &buf)
+        FfiConverterString.write(value.categoryName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrphanedResidueRecord_lift(_ buf: RustBuffer) throws -> OrphanedResidueRecord {
+    return try FfiConverterTypeOrphanedResidueRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrphanedResidueRecord_lower(_ value: OrphanedResidueRecord) -> RustBuffer {
+    return FfiConverterTypeOrphanedResidueRecord.lower(value)
 }
 
 
@@ -1935,6 +2249,31 @@ fileprivate struct FfiConverterOptionCallbackInterfaceScanProgressCallback: FfiC
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAppPartRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [AppPartRecord]
+
+    public static func write(_ value: [AppPartRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAppPartRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AppPartRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AppPartRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAppPartRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeCollectedFile: FfiConverterRustBuffer {
     typealias SwiftType = [CollectedFile]
 
@@ -1977,6 +2316,56 @@ fileprivate struct FfiConverterSequenceTypeDevArtifactRecord: FfiConverterRustBu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDevArtifactRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeInstalledAppRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [InstalledAppRecord]
+
+    public static func write(_ value: [InstalledAppRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInstalledAppRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InstalledAppRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InstalledAppRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInstalledAppRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOrphanedResidueRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [OrphanedResidueRecord]
+
+    public static func write(_ value: [OrphanedResidueRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOrphanedResidueRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OrphanedResidueRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OrphanedResidueRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOrphanedResidueRecord.read(from: &buf))
         }
         return seq
     }
@@ -2140,6 +2529,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_find_dev_artifacts() != 2838) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_find_orphaned_residue() != 43215) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_package_caches() != 31799) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2147,6 +2539,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_is_online() != 56922) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_list_apps_with_footprint() != 4290) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_load_offline_snapshot() != 27215) {

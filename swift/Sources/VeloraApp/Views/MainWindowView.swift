@@ -34,6 +34,10 @@ public struct MainWindowView: View {
                         XcodeStorageView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "tool_package_caches" {
                         PackageCachesView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_apps" {
+                        AppUninstallerDashboardView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_orphans" {
+                        OrphanedLeftoversView(viewModel: viewModel)
                     } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
                         ScanHeroWelcomeView(viewModel: viewModel)
                             .padding(24)

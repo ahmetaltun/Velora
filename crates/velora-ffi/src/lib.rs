@@ -124,6 +124,36 @@ pub struct PackageCacheSummaryRecord {
     pub items: Vec<PackageCacheRecord>,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct AppPartRecord {
+    pub name: String,
+    pub path: String,
+    pub kind_name: String,
+    pub size_bytes: u64,
+    pub color_hex: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct InstalledAppRecord {
+    pub name: String,
+    pub bundle_id: String,
+    pub version: String,
+    pub app_path: String,
+    pub is_system_app: bool,
+    pub total_size_bytes: u64,
+    pub parts: Vec<AppPartRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OrphanedResidueRecord {
+    pub name: String,
+    pub path: String,
+    pub inferred_bundle_id: String,
+    pub category_name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -356,5 +386,45 @@ impl VeloraEngine {
 
     pub fn prune_docker(&self) -> bool {
         velora_dev::PackageCacheScanner::prune_docker()
+    }
+
+    pub fn list_apps_with_footprint(&self, home_path: String) -> Vec<InstalledAppRecord> {
+        let apps = velora_apps::AppManager::list_apps_with_footprint(Path::new(&home_path));
+        apps.into_iter()
+            .map(|app| InstalledAppRecord {
+                name: app.name,
+                bundle_id: app.bundle_id,
+                version: app.version,
+                app_path: app.app_path,
+                is_system_app: app.is_system_app,
+                total_size_bytes: app.total_size_bytes,
+                parts: app
+                    .parts
+                    .into_iter()
+                    .map(|p| AppPartRecord {
+                        name: p.name,
+                        path: p.path,
+                        kind_name: p.kind.display_name().to_string(),
+                        size_bytes: p.size_bytes,
+                        color_hex: p.color_hex,
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    pub fn find_orphaned_residue(&self, home_path: String) -> Vec<OrphanedResidueRecord> {
+        let orphans = velora_apps::AppManager::find_orphaned_residue(Path::new(&home_path));
+        orphans
+            .into_iter()
+            .map(|o| OrphanedResidueRecord {
+                name: o.name,
+                path: o.path,
+                inferred_bundle_id: o.inferred_bundle_id,
+                category_name: o.category_name,
+                size_bytes: o.size_bytes,
+                modified_secs: o.modified_secs,
+            })
+            .collect()
     }
 }
