@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/velora-index",
+    "crates/velora-scanner",
+    "crates/velora-search",
+    "crates/velora-analyzer",
+    "crates/velora-watcher",
+    "crates/velora-ops",
+    "crates/velora-ffi",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Velora Team"]
+license = "MIT OR Apache-2.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+debug = true

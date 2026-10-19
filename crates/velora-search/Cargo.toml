@@ -1,0 +1,11 @@
+[package]
+name = "velora-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+velora-index = { path = "../velora-index" }
+memchr = "2.7"
+regex = "1.10"
+rayon = "1.10"

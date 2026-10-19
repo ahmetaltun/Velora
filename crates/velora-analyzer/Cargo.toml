@@ -1,0 +1,9 @@
+[package]
+name = "velora-analyzer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+velora-index = { path = "../velora-index" }
+serde = { version = "1.0", features = ["derive"] }

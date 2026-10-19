@@ -1,0 +1,21 @@
+[package]
+name = "velora-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+velora-index = { path = "../velora-index" }
+velora-scanner = { path = "../velora-scanner" }
+velora-search = { path = "../velora-search" }
+velora-analyzer = { path = "../velora-analyzer" }
+velora-watcher = { path = "../velora-watcher" }
+velora-ops = { path = "../velora-ops" }
+parking_lot = "0.12"
+uniffi = { version = "0.28", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.28", features = ["build"] }

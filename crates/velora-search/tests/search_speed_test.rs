@@ -1,0 +1,91 @@
+use velora_index::{FileFlags, FileRecord, VolumeIndex};
+use velora_search::{SearchEngine, SearchQuery};
+
+#[test]
+fn test_query_parsing() {
+    let q = SearchQuery::parse("report ext:pdf,docx size:>5MB dm:today !draft type:file");
+    assert_eq!(q.terms, vec!["report"]);
+    assert_eq!(q.extensions, vec!["pdf", "docx"]);
+    assert_eq!(q.negated_terms, vec!["draft"]);
+    assert!(q.is_file_only);
+    assert!(!q.is_dir_only);
+    assert_eq!(q.size_constraints.len(), 1);
+    assert_eq!(q.size_constraints[0].bytes, 5 * 1024 * 1024);
+    assert_eq!(q.date_constraints.len(), 1);
+}
+
+#[test]
+fn test_half_million_records_search_latency() {
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+
+    let (root_offset, root_len) = volume.pool.push("Users");
+    let root_dir = volume.dirs.insert(root_offset, root_len, None);
+
+    let filenames = [
+        "annual_financial_report_2026.pdf",
+        "quarterly_financial_report_q1.pdf",
+        "quarterly_financial_report_q2.pdf",
+        "quarterly_financial_report_q3_draft.pdf",
+        "marketing_strategy_notes.docx",
+        "velora_system_architecture.rs",
+        "project_invoice_september.pdf",
+        "family_photo_vacation.jpg",
+        "system_cache_backup.tmp",
+        "client_presentation_slides.key",
+    ];
+
+    let offsets_lens: Vec<(u32, u16)> = filenames
+        .iter()
+        .map(|&name| volume.pool.push(name))
+        .collect();
+
+    let total = 500_000;
+    for i in 0..total {
+        let (name_offset, name_len) = offsets_lens[i % offsets_lens.len()];
+        let size = ((i % 20 + 1) * 1024 * 1024) as u64; // 1MB to 20MB
+        let record = FileRecord::new(
+            name_offset,
+            name_len,
+            FileFlags::empty(),
+            root_dir,
+            size,
+            1730000000 + i as u64,
+        );
+        volume.add_file(record);
+    }
+
+    assert_eq!(volume.total_files(), total);
+
+    // 1. Cold sweep search: "financial"
+    let q1 = SearchQuery::parse("financial ext:pdf size:>5MB !draft");
+    let report1 = SearchEngine::search(&volume, &q1, None, 100);
+
+    println!(
+        "Cold search across {} files matched {} items in {:.3} ms ({} µs)",
+        total,
+        report1.total_matched,
+        report1.duration_micros as f64 / 1000.0,
+        report1.duration_micros
+    );
+
+    assert!(report1.total_matched > 0);
+    // Cold search should be well within interactive response budget
+    assert!(report1.duration_micros < 50_000, "Cold search latency exceeded 50ms");
+
+    // 2. Incremental search: user narrows by typing "annual"
+    let candidate_indices: Vec<usize> = report1.hits.iter().map(|h| h.record_index).collect();
+    let q2 = SearchQuery::parse("financial annual ext:pdf size:>5MB !draft");
+    let report2 = SearchEngine::search(&volume, &q2, Some(&candidate_indices), 100);
+
+    println!(
+        "Incremental narrowing over {} candidates finished in {:.3} ms ({} µs)",
+        candidate_indices.len(),
+        report2.duration_micros as f64 / 1000.0,
+        report2.duration_micros
+    );
+
+    assert!(report2.total_matched > 0);
+    assert!(report2.total_matched <= report1.total_matched);
+    // Incremental narrowing should be sub-millisecond (< 1.5ms)
+    assert!(report2.duration_micros < 5_000, "Incremental narrowing latency exceeded 5ms");
+}

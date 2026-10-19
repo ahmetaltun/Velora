@@ -1,0 +1,49 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+*.pdb
+
+# Swift / Swift Package Manager
+.build/
+swift/.build/
+Packages/
+.swiftpm/
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+xcuserdata/
+*.xcscmblueprint
+DerivedData/
+*.xcuserstate
+
+# macOS Application Bundles & Binaries
+Velora.app/
+*.app/
+*.dSYM/
+*.dmg
+
+# macOS System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Logs and Diagnostics
+*.log
+*.crash
+*.tmp
