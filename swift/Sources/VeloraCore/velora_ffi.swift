@@ -532,7 +532,7 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func saveSnapshot(destPath: String)  -> Bool
     
-    func scanVolume(mountPoint: String, volumeName: String)  -> Bool
+    func scanVolume(mountPoint: String, volumeName: String, callback: ScanProgressCallback?)  -> Bool
     
     func search(queryStr: String, maxResults: UInt32)  -> [SearchResultItem]
     
@@ -665,11 +665,12 @@ open func saveSnapshot(destPath: String) -> Bool {
 })
 }
     
-open func scanVolume(mountPoint: String, volumeName: String) -> Bool {
+open func scanVolume(mountPoint: String, volumeName: String, callback: ScanProgressCallback?) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_scan_volume(self.uniffiClonePointer(),
         FfiConverterString.lower(mountPoint),
-        FfiConverterString.lower(volumeName),$0
+        FfiConverterString.lower(volumeName),
+        FfiConverterOptionCallbackInterfaceScanProgressCallback.lower(callback),$0
     )
 })
 }
@@ -1046,6 +1047,115 @@ public func FfiConverterTypeSunburstSectorItem_lower(_ value: SunburstSectorItem
     return FfiConverterTypeSunburstSectorItem.lower(value)
 }
 
+
+
+
+public protocol ScanProgressCallback : AnyObject {
+    
+    func onProgress(currentPath: String, scannedCount: UInt64, bytesScanned: UInt64) 
+    
+}
+
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceScanProgressCallback {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceScanProgressCallback = UniffiVTableCallbackInterfaceScanProgressCallback(
+        onProgress: { (
+            uniffiHandle: UInt64,
+            currentPath: RustBuffer,
+            scannedCount: UInt64,
+            bytesScanned: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceScanProgressCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onProgress(
+                     currentPath: try FfiConverterString.lift(currentPath),
+                     scannedCount: try FfiConverterUInt64.lift(scannedCount),
+                     bytesScanned: try FfiConverterUInt64.lift(bytesScanned)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceScanProgressCallback.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ScanProgressCallback: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitScanProgressCallback() {
+    uniffi_velora_ffi_fn_init_callback_vtable_scanprogresscallback(&UniffiCallbackInterfaceScanProgressCallback.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceScanProgressCallback {
+    fileprivate static var handleMap = UniffiHandleMap<ScanProgressCallback>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceScanProgressCallback : FfiConverter {
+    typealias SwiftType = ScanProgressCallback
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -1065,6 +1175,30 @@ fileprivate struct FfiConverterOptionTypeSunburstSectorItem: FfiConverterRustBuf
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeSunburstSectorItem.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionCallbackInterfaceScanProgressCallback: FfiConverterRustBuffer {
+    typealias SwiftType = ScanProgressCallback?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceScanProgressCallback.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceScanProgressCallback.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -1187,7 +1321,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_save_snapshot() != 347) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_velora_ffi_checksum_method_veloraengine_scan_volume() != 26766) {
+    if (uniffi_velora_ffi_checksum_method_veloraengine_scan_volume() != 44556) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_search() != 32308) {
@@ -1199,7 +1333,11 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_constructor_veloraengine_new() != 40866) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_scanprogresscallback_on_progress() != 8118) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitScanProgressCallback()
     return InitializationResult.ok
 }()
 

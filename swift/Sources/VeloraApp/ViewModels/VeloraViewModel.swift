@@ -17,6 +17,11 @@ public final class VeloraViewModel {
     public var collectorTotalSize: UInt64 = 0
     public var selectedViewMode: ViewMode = .sunburst
     public var isScanning: Bool = false
+    public var isSearching: Bool = false
+    public var currentScanPath: String = ""
+    public var scannedCount: UInt64 = 0
+    public var scanThroughput: Double = 0
+    public var cancelScanRequested: Bool = false
     public var scanStatusMessage: String = "Ready"
 
     public init() {
@@ -26,23 +31,47 @@ public final class VeloraViewModel {
         self.pathStack = [home]
     }
 
+    public func cancelScan() {
+        cancelScanRequested = true
+        isScanning = false
+        scanStatusMessage = "Scan cancelled"
+    }
+
     public func scanCurrentPath() {
         let path = currentPath
         isScanning = true
+        cancelScanRequested = false
+        scannedCount = 0
+        scanThroughput = 0
+        currentScanPath = path
         scanStatusMessage = "Scanning \(path)..."
+
+        let progressBridge = ScanProgressBridge(viewModel: self)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let success = self.engine.scanVolume(mountPoint: path, volumeName: (path as NSString).lastPathComponent)
+
+            let success = self.engine.scanVolume(
+                mountPoint: path,
+                volumeName: (path as NSString).lastPathComponent,
+                callback: progressBridge
+            )
             let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+            let total = self.engine.totalFiles()
 
             DispatchQueue.main.async {
-                self.isScanning = false
-                if success {
-                    self.currentSunburst = sunburst
-                    self.scanStatusMessage = "\(self.engine.totalFiles()) items indexed"
-                } else {
-                    self.scanStatusMessage = "Scan failed or permission denied"
+                self.scannedCount = total
+                self.scanThroughput = 0
+                self.currentScanPath = "Completed: \((path as NSString).lastPathComponent)"
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    self.isScanning = false
+                    if success {
+                        self.currentSunburst = sunburst
+                        self.scanStatusMessage = "\(total) items indexed"
+                    } else {
+                        self.scanStatusMessage = "Scan failed or permission denied"
+                    }
                 }
             }
         }
@@ -52,14 +81,17 @@ public final class VeloraViewModel {
         self.searchQuery = query
         if query.trimmingCharacters(in: .whitespaces).isEmpty {
             self.searchResults = []
+            self.isSearching = false
             return
         }
 
+        self.isSearching = true
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             guard let self = self else { return }
             let hits = self.engine.search(queryStr: query, maxResults: 200)
             DispatchQueue.main.async {
                 self.searchResults = hits
+                self.isSearching = false
             }
         }
     }
@@ -109,5 +141,28 @@ public final class VeloraViewModel {
         }
         clearCollector()
         scanCurrentPath()
+    }
+}
+
+final class ScanProgressBridge: ScanProgressCallback {
+    private weak var viewModel: VeloraViewModel?
+    private var startTime: Date = Date()
+
+    init(viewModel: VeloraViewModel) {
+        self.viewModel = viewModel
+        self.startTime = Date()
+    }
+
+    func onProgress(currentPath: String, scannedCount: UInt64, bytesScanned: UInt64) {
+        let now = Date()
+        let elapsed = max(0.02, now.timeIntervalSince(startTime))
+        let throughput = Double(scannedCount) / elapsed
+
+        DispatchQueue.main.async { [weak self] in
+            guard let viewModel = self?.viewModel, viewModel.isScanning else { return }
+            viewModel.scannedCount = scannedCount
+            viewModel.scanThroughput = throughput
+            viewModel.currentScanPath = currentPath
+        }
     }
 }

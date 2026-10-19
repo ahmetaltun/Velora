@@ -251,6 +251,21 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureStr
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_SCAN_PROGRESS_CALLBACK_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_SCAN_PROGRESS_CALLBACK_METHOD0
+typedef void (*UniffiCallbackInterfaceScanProgressCallbackMethod0)(uint64_t, RustBuffer, uint64_t, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_SCAN_PROGRESS_CALLBACK
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_SCAN_PROGRESS_CALLBACK
+typedef struct UniffiVTableCallbackInterfaceScanProgressCallback {
+    UniffiCallbackInterfaceScanProgressCallbackMethod0 _Nonnull onProgress;
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+} UniffiVTableCallbackInterfaceScanProgressCallback;
+
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_CLONE_VELORAENGINE
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_CLONE_VELORAENGINE
 void*_Nonnull uniffi_velora_ffi_fn_clone_veloraengine(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -314,7 +329,7 @@ int8_t uniffi_velora_ffi_fn_method_veloraengine_save_snapshot(void*_Nonnull ptr,
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SCAN_VOLUME
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SCAN_VOLUME
-int8_t uniffi_velora_ffi_fn_method_veloraengine_scan_volume(void*_Nonnull ptr, RustBuffer mount_point, RustBuffer volume_name, RustCallStatus *_Nonnull out_status
+int8_t uniffi_velora_ffi_fn_method_veloraengine_scan_volume(void*_Nonnull ptr, RustBuffer mount_point, RustBuffer volume_name, RustBuffer callback, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SEARCH
@@ -325,6 +340,11 @@ RustBuffer uniffi_velora_ffi_fn_method_veloraengine_search(void*_Nonnull ptr, Ru
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_TOTAL_FILES
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_TOTAL_FILES
 uint64_t uniffi_velora_ffi_fn_method_veloraengine_total_files(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_INIT_CALLBACK_VTABLE_SCANPROGRESSCALLBACK
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_INIT_CALLBACK_VTABLE_SCANPROGRESSCALLBACK
+void uniffi_velora_ffi_fn_init_callback_vtable_scanprogresscallback(UniffiVTableCallbackInterfaceScanProgressCallback* _Nonnull vtable
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_VELORA_FFI_RUSTBUFFER_ALLOC
@@ -682,6 +702,12 @@ uint16_t uniffi_velora_ffi_checksum_method_veloraengine_total_files(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_CONSTRUCTOR_VELORAENGINE_NEW
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_CONSTRUCTOR_VELORAENGINE_NEW
 uint16_t uniffi_velora_ffi_checksum_constructor_veloraengine_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_SCANPROGRESSCALLBACK_ON_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_SCANPROGRESSCALLBACK_ON_PROGRESS
+uint16_t uniffi_velora_ffi_checksum_method_scanprogresscallback_on_progress(void
     
 );
 #endif

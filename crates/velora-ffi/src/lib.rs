@@ -4,7 +4,6 @@ use std::sync::Arc;
 use velora_analyzer::{Analyzer, CategoryKind, SunburstSector};
 use velora_index::{DirId, VolumeIndex};
 use velora_ops::{CollectedItem, CollectorTray};
-use velora_scanner::scan_directory;
 use velora_search::{SearchEngine, SearchQuery};
 
 uniffi::setup_scaffolding!();
@@ -57,6 +56,21 @@ pub struct CollectedFile {
     pub is_dir: bool,
 }
 
+#[uniffi::export(callback_interface)]
+pub trait ScanProgressCallback: Send + Sync + 'static {
+    fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
+}
+
+struct CallbackBridge<'a> {
+    callback: &'a dyn ScanProgressCallback,
+}
+
+impl<'a> velora_scanner::ProgressListener for CallbackBridge<'a> {
+    fn on_progress(&self, current_path: &str, files_scanned: u64, bytes_scanned: u64) {
+        self.callback.on_progress(current_path.to_string(), files_scanned, bytes_scanned);
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct VeloraEngine {
     volume: RwLock<VolumeIndex>,
@@ -73,10 +87,23 @@ impl VeloraEngine {
         })
     }
 
-    pub fn scan_volume(&self, mount_point: String, volume_name: String) -> bool {
+    pub fn scan_volume(
+        &self,
+        mount_point: String,
+        volume_name: String,
+        callback: Option<Box<dyn ScanProgressCallback>>,
+    ) -> bool {
         let mut vol = VolumeIndex::new(volume_name, &mount_point);
         let path = Path::new(&mount_point);
-        if scan_directory(path, &mut vol).is_ok() {
+        let res = match callback.as_ref() {
+            Some(cb) => {
+                let bridge = CallbackBridge { callback: cb.as_ref() };
+                velora_scanner::scan_directory_with_progress(path, &mut vol, Some(&bridge))
+            }
+            None => velora_scanner::scan_directory(path, &mut vol),
+        };
+
+        if res.is_ok() {
             *self.volume.write() = vol;
             true
         } else {

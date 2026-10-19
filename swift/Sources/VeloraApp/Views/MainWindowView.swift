@@ -12,6 +12,20 @@ public struct MainWindowView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             VStack(spacing: 0) {
+                // CleanMyMac-style Floating Scan Banner
+                if viewModel.isScanning {
+                    CleanScanBannerView(viewModel: viewModel)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                        .padding(.bottom, 6)
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .scale(scale: 0.96).combined(with: .opacity)
+                            )
+                        )
+                }
+
                 // Main Workspace Canvas
                 Group {
                     if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
@@ -25,6 +39,7 @@ public struct MainWindowView: View {
                 // Bottom DaisyDisk-style Collector Drawer
                 CollectorTrayView(viewModel: viewModel)
             }
+            .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.isScanning)
             .toolbar {
                 // Navigation controls
                 ToolbarItemGroup(placement: .navigation) {
@@ -60,7 +75,10 @@ public struct MainWindowView: View {
                                 viewModel.performSearch(query: newValue)
                             }
 
-                        if !viewModel.searchQuery.isEmpty {
+                        if viewModel.isSearching {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else if !viewModel.searchQuery.isEmpty {
                             Button(action: {
                                 viewModel.searchQuery = ""
                                 viewModel.performSearch(query: "")

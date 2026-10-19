@@ -47,3 +47,4 @@ Velora.app/
 *.log
 *.crash
 *.tmp
+/.cache/
