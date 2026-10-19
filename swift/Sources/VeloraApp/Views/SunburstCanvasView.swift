@@ -54,11 +54,8 @@ public struct SunburstCanvasView: View {
                     ProgressView(viewModel.scanStatusMessage)
                         .controlSize(.large)
                 } else {
-                    ContentUnavailableView(
-                        "No Disk Data",
-                        systemImage: "circle.dashed",
-                        description: Text("Select a folder or volume to scan.")
-                    )
+                    ScanHeroWelcomeView(viewModel: viewModel)
+                        .padding(24)
                 }
 
                 // Hovered Tooltip Overlay

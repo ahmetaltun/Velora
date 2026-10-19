@@ -119,7 +119,7 @@ public struct MainWindowView: View {
             }
         }
         .onAppear {
-            viewModel.scanCurrentPath()
+            viewModel.loadCachedSnapshotIfAvailable()
         }
     }
 }

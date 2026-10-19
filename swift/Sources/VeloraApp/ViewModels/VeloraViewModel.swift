@@ -37,6 +37,27 @@ public final class VeloraViewModel {
         scanStatusMessage = "Scan cancelled"
     }
 
+    @discardableResult
+    public func loadCachedSnapshotIfAvailable() -> Bool {
+        guard SnapshotManager.shared.snapshotExists else {
+            scanStatusMessage = "Ready for initial scan"
+            return false
+        }
+
+        let success = SnapshotManager.shared.loadSnapshot(engine: engine)
+        if success {
+            let total = engine.totalFiles()
+            let sunburst = engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+            self.scannedCount = total
+            self.currentSunburst = sunburst
+            self.scanStatusMessage = "Loaded \(total) indexed items from cache"
+            return true
+        } else {
+            scanStatusMessage = "Failed to load cached snapshot; please perform a clean scan"
+            return false
+        }
+    }
+
     public func scanCurrentPath() {
         let path = currentPath
         isScanning = true
@@ -56,8 +77,23 @@ public final class VeloraViewModel {
                 volumeName: (path as NSString).lastPathComponent,
                 callback: progressBridge
             )
+
+            // Integrity check: abort and do not persist if scan was cancelled
+            if self.cancelScanRequested {
+                DispatchQueue.main.async {
+                    self.isScanning = false
+                    self.scanStatusMessage = "Scan cancelled"
+                }
+                return
+            }
+
             let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
             let total = self.engine.totalFiles()
+
+            // Asynchronously persist completed index if scan was successful
+            if success {
+                SnapshotManager.shared.saveSnapshot(engine: self.engine)
+            }
 
             DispatchQueue.main.async {
                 self.scannedCount = total
@@ -70,7 +106,7 @@ public final class VeloraViewModel {
                         self.currentSunburst = sunburst
                         self.scanStatusMessage = "\(total) items indexed"
                     } else {
-                        self.scanStatusMessage = "Scan failed or permission denied"
+                        self.scanStatusMessage = "Scan failed or permission denied: Unable to access \(path)"
                     }
                 }
             }
