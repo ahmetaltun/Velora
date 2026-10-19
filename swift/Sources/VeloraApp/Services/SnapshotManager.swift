@@ -21,6 +21,21 @@ public final class SnapshotManager: @unchecked Sendable {
         FileManager.default.fileExists(atPath: snapshotURL.path)
     }
 
+    /// Verifies whether the default catalog snapshot or any binary index file (*.bin) exists in the storage directory.
+    public var hasAnyBinaryIndexFile: Bool {
+        if snapshotExists {
+            return true
+        }
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+        return files.contains { $0.pathExtension.lowercased() == "bin" }
+    }
+
     /// Ensures the parent storage directory exists on disk.
     public func ensureDirectoryExists() throws {
         if !FileManager.default.fileExists(atPath: directoryURL.path) {

@@ -106,12 +106,12 @@ public struct SidebarView: View {
 
             Section("Smart Filters") {
                 SidebarRowItem(
-                    title: "Large Files (>500MB)",
+                    title: "Large Files (>100MB)",
                     systemImage: "shippingbox.fill",
                     isSelected: viewModel.activeSidebarId == "filter_large"
                 ) {
                     viewModel.activeSidebarId = "filter_large"
-                    viewModel.performSearch(query: "size:>500mb")
+                    viewModel.performSearch(query: "size:>100mb")
                     viewModel.selectedViewMode = .table
                 }
 

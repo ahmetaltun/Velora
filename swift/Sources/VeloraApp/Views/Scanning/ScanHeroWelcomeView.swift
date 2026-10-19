@@ -117,34 +117,44 @@ public struct ScanHeroWelcomeView: View {
                     }
                 }) {
                     HStack(spacing: 10) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 14, weight: .bold))
+                        if viewModel.isScanning {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Scanning...")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        } else {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 14, weight: .bold))
 
-                        Text("Scan Now")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            Text("Scan Now")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(viewModel.isScanning ? .secondary : .black)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .background(
                         LinearGradient(
-                            colors: isHoveringButton
-                                ? [VeloraTheme.mint, VeloraTheme.teal]
-                                : [VeloraTheme.mintDark, VeloraTheme.mint],
+                            colors: viewModel.isScanning
+                                ? [VeloraTheme.mintDark.opacity(0.5), VeloraTheme.mint.opacity(0.5)]
+                                : (isHoveringButton
+                                    ? [VeloraTheme.mint, VeloraTheme.teal]
+                                    : [VeloraTheme.mintDark, VeloraTheme.mint]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         in: RoundedRectangle(cornerRadius: 12)
                     )
                     .shadow(
-                        color: VeloraTheme.mint.opacity(isHoveringButton ? 0.65 : 0.35),
-                        radius: isHoveringButton ? 16 : 8,
+                        color: VeloraTheme.mint.opacity(isHoveringButton && !viewModel.isScanning ? 0.65 : 0.35),
+                        radius: isHoveringButton && !viewModel.isScanning ? 16 : 8,
                         x: 0,
                         y: 0
                     )
-                    .scaleEffect(isHoveringButton ? 1.03 : 1.0)
+                    .scaleEffect(isHoveringButton && !viewModel.isScanning ? 1.03 : 1.0)
                 }
                 .buttonStyle(.plain)
+                .disabled(viewModel.isScanning)
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                         isHoveringButton = hovering

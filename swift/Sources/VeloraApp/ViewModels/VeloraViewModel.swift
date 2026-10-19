@@ -38,6 +38,21 @@ public final class VeloraViewModel {
         self.pathStack = [home]
     }
 
+    /// Indicates whether a valid binary index snapshot file exists on disk.
+    public var hasBinaryIndex: Bool {
+        SnapshotManager.shared.hasAnyBinaryIndexFile
+    }
+
+    /// Indicates whether the engine currently holds indexed volume data in memory.
+    public var hasIndexedData: Bool {
+        scannedCount > 0 || currentSunburst != nil || engine.totalFiles() > 0
+    }
+
+    /// Determines if the initial scan hero UI should be presented when no binary index file exists.
+    public var shouldShowScanUI: Bool {
+        !hasBinaryIndex && !hasIndexedData
+    }
+
     public func cancelScan() {
         cancelScanRequested = true
         isScanning = false
@@ -47,9 +62,8 @@ public final class VeloraViewModel {
     /// Asynchronously deserializes and loads the offline snapshot on a background thread.
     /// This prevents blocking window presentation on app launch.
     public func loadCachedSnapshotIfAvailable() {
-        guard SnapshotManager.shared.snapshotExists else {
+        guard SnapshotManager.shared.hasAnyBinaryIndexFile else {
             scanStatusMessage = "Ready for initial scan"
-            refreshTableItems()
             return
         }
 

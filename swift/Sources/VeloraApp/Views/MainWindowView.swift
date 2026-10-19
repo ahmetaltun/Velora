@@ -28,7 +28,10 @@ public struct MainWindowView: View {
 
                 // Main Workspace Canvas
                 Group {
-                    if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
+                    if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
+                        ScanHeroWelcomeView(viewModel: viewModel)
+                            .padding(24)
+                    } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
                         FileTableView(viewModel: viewModel)
                     } else {
                         SunburstCanvasView(viewModel: viewModel)
@@ -40,6 +43,7 @@ public struct MainWindowView: View {
                 CollectorTrayView(viewModel: viewModel)
             }
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.isScanning)
+            .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.shouldShowScanUI)
             .toolbar {
                 // Navigation controls
                 ToolbarItemGroup(placement: .navigation) {
