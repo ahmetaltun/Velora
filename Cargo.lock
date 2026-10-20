@@ -1156,6 +1156,8 @@ version = "0.1.0"
 dependencies = [
  "plist",
  "serde",
+ "velora-analyzer",
+ "velora-index",
 ]
 
 [[package]]
@@ -1177,11 +1179,22 @@ dependencies = [
  "velora-apfs",
  "velora-apps",
  "velora-dev",
+ "velora-hygiene",
  "velora-index",
  "velora-ops",
  "velora-scanner",
  "velora-search",
  "velora-watcher",
+]
+
+[[package]]
+name = "velora-hygiene"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "serde",
+ "velora-analyzer",
+ "velora-index",
 ]
 
 [[package]]

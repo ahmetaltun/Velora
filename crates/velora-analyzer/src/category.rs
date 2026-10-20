@@ -58,4 +58,15 @@ impl CategoryKind {
             CategoryKind::Other => "#6B7280",          // Gray
         }
     }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            CategoryKind::DevCaches => "Developer",
+            CategoryKind::Media => "Media",
+            CategoryKind::Documents => "Documents",
+            CategoryKind::Archives => "Archives",
+            CategoryKind::SystemPurgeable => "System Purgeable",
+            CategoryKind::Other => "Other",
+        }
+    }
 }

@@ -93,6 +93,9 @@ impl SectorBuilder {
 
         // 1. Collect direct child files and subdirectories
         for record in &volume.records {
+            if record.is_deleted() {
+                continue;
+            }
             if record.parent_dir == dir_id {
                 let name = volume.get_file_name(record);
                 if record.is_dir() {

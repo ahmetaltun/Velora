@@ -1,0 +1,493 @@
+import AppKit
+import SwiftUI
+import VeloraCore
+
+extension LargeOldFileRecord: Identifiable {
+    public var id: String { path }
+}
+
+extension MatrixCellRecord: Identifiable {
+    public var id: String { "\(ageIdx)_\(sizeIdx)" }
+}
+
+public struct LargeOldFilesMatrixView: View {
+    @Bindable public var viewModel: VeloraViewModel
+    @State private var selectedCellId: String? = nil
+    @State private var selectedCategory: String = "All"
+    @State private var searchFilter: String = ""
+
+    public init(viewModel: VeloraViewModel) {
+        self.viewModel = viewModel
+    }
+
+    private var summary: LargeOldMatrixSummaryRecord? {
+        viewModel.largeOldMatrix
+    }
+
+    private var filteredFiles: [LargeOldFileRecord] {
+        guard let summary = summary else { return [] }
+        var files = summary.files
+
+        // Filter by selected cell if any
+        if let cellId = selectedCellId {
+            let parts = cellId.split(separator: "_").compactMap { UInt32($0) }
+            if parts.count == 2 {
+                let ageIdx = parts[0]
+                let sizeIdx = parts[1]
+                files = files.filter { $0.ageIdx == ageIdx && $0.sizeIdx == sizeIdx }
+            }
+        }
+
+        // Filter by category
+        if selectedCategory != "All" {
+            files = files.filter { $0.categoryName == selectedCategory }
+        }
+
+        // Search query
+        let query = searchFilter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            files = files.filter {
+                $0.name.lowercased().contains(query) ||
+                $0.path.lowercased().contains(query)
+            }
+        }
+
+        return files
+    }
+
+    private var ancientTotalBytes: UInt64 {
+        guard let summary = summary else { return 0 }
+        return summary.files
+            .filter { $0.ageIdx == 3 } // Ancient (>1 yr)
+            .reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    private func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    private func parseColor(hex: String) -> Color {
+        let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: clean).scanHexInt64(&int)
+        let r, g, b: UInt64
+        switch clean.count {
+        case 6:
+            (r, g, b) = (int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (r, g, b) = (100, 149, 237)
+        }
+        return Color(
+            red: Double(r) / 255.0,
+            green: Double(g) / 255.0,
+            blue: Double(b) / 255.0
+        )
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            // Header Bar
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 16))
+                            .foregroundColor(VeloraTheme.amber)
+                        Text("Large & Old Files Matrix")
+                            .font(.system(.headline, design: .rounded, weight: .bold))
+                    }
+                    Text("Instant 2D Temporal × Size matrix computed in RAM from the indexed catalog")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                if let summary = summary, summary.totalFiles > 0 {
+                    Text("\(summary.totalFiles) files (\(formatBytes(summary.totalBytes)))")
+                        .font(.system(.caption, design: .monospaced, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.quaternary, in: Capsule())
+
+                    if ancientTotalBytes > 0 {
+                        Button(action: {
+                            let ancientFiles = summary.files.filter { $0.ageIdx == 3 }
+                            for file in ancientFiles {
+                                viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                            }
+                        }) {
+                            Label("Collect Ancient (\(formatBytes(ancientTotalBytes)))", systemImage: "sparkles")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red.opacity(0.85))
+                        .controlSize(.regular)
+                    }
+                }
+
+                Button(action: {
+                    viewModel.loadLargeOldMatrix()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .help("Recompute matrix")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial)
+
+            Divider()
+
+            if viewModel.isLoadingLargeOldMatrix {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Analyzing catalog records for large and dormant files...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let summary = summary, summary.totalFiles > 0 {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // 4x4 Heatmap Matrix Grid Card
+                        MatrixHeatmapGrid(
+                            cells: summary.cells,
+                            selectedCellId: $selectedCellId,
+                            formatBytes: formatBytes
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+
+                        // Filter Chips Bar
+                        HStack(spacing: 8) {
+                            CategoryChip(title: "All", isSelected: selectedCategory == "All") {
+                                selectedCategory = "All"
+                            }
+                            CategoryChip(title: "Media", isSelected: selectedCategory == "Media") {
+                                selectedCategory = "Media"
+                            }
+                            CategoryChip(title: "Archives", isSelected: selectedCategory == "Archives") {
+                                selectedCategory = "Archives"
+                            }
+                            CategoryChip(title: "Documents", isSelected: selectedCategory == "Documents") {
+                                selectedCategory = "Documents"
+                            }
+                            CategoryChip(title: "Developer", isSelected: selectedCategory == "Developer") {
+                                selectedCategory = "Developer"
+                            }
+
+                            if selectedCellId != nil {
+                                Button("Reset Cell Filter") {
+                                    selectedCellId = nil
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                                .foregroundColor(VeloraTheme.teal)
+                            }
+
+                            Spacer()
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.secondary)
+                                TextField("Filter files...", text: $searchFilter)
+                                    .textFieldStyle(.plain)
+                                    .frame(width: 140)
+                                if !searchFilter.isEmpty {
+                                    Button(action: { searchFilter = "" }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .padding(.horizontal, 20)
+
+                        // File List
+                        VStack(spacing: 6) {
+                            ForEach(filteredFiles) { file in
+                                LargeFileCard(
+                                    file: file,
+                                    categoryColor: parseColor(hex: file.colorHex),
+                                    formatBytes: formatBytes,
+                                    onCollect: {
+                                        viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "shippingbox.circle")
+                        .font(.system(size: 42))
+                        .foregroundColor(VeloraTheme.mint)
+                    Text("No Large Files (> 50MB) Detected")
+                        .font(.title3.weight(.bold))
+                    Text("Your indexed storage has no files exceeding the 50MB threshold.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .onAppear {
+            if viewModel.largeOldMatrix == nil {
+                viewModel.loadLargeOldMatrix()
+            }
+        }
+    }
+}
+
+// MARK: - 4x4 Heatmap Matrix Component
+
+private struct MatrixHeatmapGrid: View {
+    let cells: [MatrixCellRecord]
+    @Binding var selectedCellId: String?
+    let formatBytes: (UInt64) -> String
+
+    private let ageHeaders = ["Recent (< 1 mo)", "1 – 6 Months", "6 – 12 Months", "Ancient (> 1 yr)"]
+    private let sizeHeaders = ["> 1 GB", "500MB – 1GB", "100 – 500MB", "50 – 100MB"]
+
+    private var maxBytes: UInt64 {
+        cells.map(\.totalBytes).max() ?? 1
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("2D Distribution Matrix")
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                Spacer()
+                Text("Click any quadrant to isolate matching files below")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(spacing: 4) {
+                // Size Column Headers
+                HStack(spacing: 4) {
+                    Text("") // Top-left blank corner
+                        .frame(width: 100)
+
+                    ForEach(sizeHeaders, id: \.self) { header in
+                        Text(header)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+
+                // Matrix Rows (Age)
+                ForEach(0..<4, id: \.self) { ageIdx in
+                    HStack(spacing: 4) {
+                        Text(ageHeaders[ageIdx])
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .frame(width: 100, alignment: .leading)
+
+                        ForEach(0..<4, id: \.self) { sizeIdx in
+                            let cellIdx = ageIdx * 4 + sizeIdx
+                            if cellIdx < cells.count {
+                                let cell = cells[cellIdx]
+                                let isSelected = selectedCellId == cell.id
+
+                                HeatmapCell(
+                                    cell: cell,
+                                    maxBytes: maxBytes,
+                                    isSelected: isSelected,
+                                    formatBytes: formatBytes
+                                ) {
+                                    if isSelected {
+                                        selectedCellId = nil
+                                    } else {
+                                        selectedCellId = cell.id
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+}
+
+// MARK: - Individual Heatmap Cell
+
+private struct HeatmapCell: View {
+    let cell: MatrixCellRecord
+    let maxBytes: UInt64
+    let isSelected: Bool
+    let formatBytes: (UInt64) -> String
+    let onTap: () -> Void
+
+    private var intensity: Double {
+        guard maxBytes > 0 else { return 0 }
+        return Double(cell.totalBytes) / Double(maxBytes)
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 2) {
+                Text(cell.fileCount > 0 ? "\(cell.fileCount)" : "—")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(cell.fileCount > 0 ? .primary : .secondary.opacity(0.5))
+
+                Text(cell.totalBytes > 0 ? formatBytes(cell.totalBytes) : "0 B")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        isSelected
+                            ? VeloraTheme.teal.opacity(0.35)
+                            : (cell.totalBytes > 0
+                                ? (cell.ageIdx == 3
+                                    ? Color.red.opacity(0.12 + 0.3 * intensity)
+                                    : VeloraTheme.amber.opacity(0.10 + 0.25 * intensity))
+                                : Color.primary.opacity(0.03))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        isSelected ? VeloraTheme.teal : Color.clear,
+                        lineWidth: isSelected ? 2 : 0
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Large File Card Component
+
+private struct LargeFileCard: View {
+    let file: LargeOldFileRecord
+    let categoryColor: Color
+    let formatBytes: (UInt64) -> String
+    let onCollect: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(categoryColor)
+                .frame(width: 4, height: 40)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(file.name)
+                        .font(.system(.body, design: .rounded, weight: .bold))
+                        .lineLimit(1)
+
+                    Text(file.categoryName)
+                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .foregroundColor(categoryColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(categoryColor.opacity(0.12), in: Capsule())
+
+                    Text(file.ageLabel)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(file.ageIdx == 3 ? .red : .secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background((file.ageIdx == 3 ? Color.red : Color.secondary).opacity(0.1), in: Capsule())
+                }
+
+                Text(file.path)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            Text(formatBytes(file.sizeBytes))
+                .font(.system(.subheadline, design: .monospaced, weight: .bold))
+
+            // Reveal in Finder
+            Button(action: {
+                let url = URL(fileURLWithPath: file.path)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }) {
+                Image(systemName: "arrow.right.circle")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            .help("Reveal in Finder")
+
+            // QuickLook preview
+            Button(action: {
+                let url = URL(fileURLWithPath: file.path)
+                QuickLookCoordinator.shared.togglePreview(for: url)
+            }) {
+                Image(systemName: "eye")
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            .help("QuickLook preview")
+
+            // Stage into Collector
+            Button(action: onCollect) {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.orange)
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .help("Stage into Collector Tray")
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Category Chip
+
+private struct CategoryChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(isSelected ? .bold : .medium)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    isSelected ? VeloraTheme.teal : Color.secondary.opacity(0.12),
+                    in: Capsule()
+                )
+                .foregroundColor(isSelected ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+}

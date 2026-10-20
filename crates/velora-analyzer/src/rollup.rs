@@ -11,7 +11,7 @@ impl SizeRollup {
 
         // Pass 1: Aggregate direct file sizes
         for record in &volume.records {
-            if !record.is_dir() {
+            if !record.is_dir() && !record.is_deleted() {
                 let p = record.parent_dir.0 as usize;
                 if p < dir_count {
                     dir_sizes[p] += record.size;

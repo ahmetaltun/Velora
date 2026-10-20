@@ -514,6 +514,10 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol VeloraEngineProtocol : AnyObject {
     
+    func activeBytes()  -> UInt64
+    
+    func activeFiles()  -> UInt64
+    
     func clearCollector() 
     
     func collectItem(path: String, sizeBytes: UInt64, isDir: Bool) 
@@ -522,9 +526,13 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func collectorTotalSize()  -> UInt64
     
+    func computeLargeOldMatrix()  -> LargeOldMatrixSummaryRecord
+    
     func computeSunburst(maxDepth: UInt32, minAngleDeg: Float)  -> SunburstSectorItem?
     
     func findDevArtifacts(minSizeBytes: UInt64)  -> [DevArtifactRecord]
+    
+    func findDuplicates(minSizeBytes: UInt64)  -> DuplicateSummaryRecord
     
     func findOrphanedResidue(homePath: String)  -> [OrphanedResidueRecord]
     
@@ -537,6 +545,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     func listAppsWithFootprint(homePath: String)  -> [InstalledAppRecord]
     
     func loadOfflineSnapshot(srcPath: String)  -> Bool
+    
+    func markDeletedByPath(path: String)  -> UInt64
     
     func pruneDocker()  -> Bool
     
@@ -613,6 +623,20 @@ public convenience init() {
     
 
     
+open func activeBytes() -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_active_bytes(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func activeFiles() -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_active_files(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func clearCollector() {try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_clear_collector(self.uniffiClonePointer(),$0
     )
@@ -642,6 +666,13 @@ open func collectorTotalSize() -> UInt64 {
 })
 }
     
+open func computeLargeOldMatrix() -> LargeOldMatrixSummaryRecord {
+    return try!  FfiConverterTypeLargeOldMatrixSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_compute_large_old_matrix(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func computeSunburst(maxDepth: UInt32, minAngleDeg: Float) -> SunburstSectorItem? {
     return try!  FfiConverterOptionTypeSunburstSectorItem.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_compute_sunburst(self.uniffiClonePointer(),
@@ -654,6 +685,14 @@ open func computeSunburst(maxDepth: UInt32, minAngleDeg: Float) -> SunburstSecto
 open func findDevArtifacts(minSizeBytes: UInt64) -> [DevArtifactRecord] {
     return try!  FfiConverterSequenceTypeDevArtifactRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_find_dev_artifacts(self.uniffiClonePointer(),
+        FfiConverterUInt64.lower(minSizeBytes),$0
+    )
+})
+}
+    
+open func findDuplicates(minSizeBytes: UInt64) -> DuplicateSummaryRecord {
+    return try!  FfiConverterTypeDuplicateSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_find_duplicates(self.uniffiClonePointer(),
         FfiConverterUInt64.lower(minSizeBytes),$0
     )
 })
@@ -702,6 +741,14 @@ open func loadOfflineSnapshot(srcPath: String) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_load_offline_snapshot(self.uniffiClonePointer(),
         FfiConverterString.lower(srcPath),$0
+    )
+})
+}
+    
+open func markDeletedByPath(path: String) -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_mark_deleted_by_path(self.uniffiClonePointer(),
+        FfiConverterString.lower(path),$0
     )
 })
 }
@@ -1102,6 +1149,292 @@ public func FfiConverterTypeDevArtifactRecord_lower(_ value: DevArtifactRecord) 
 }
 
 
+public struct DuplicateFileRecord {
+    public var path: String
+    public var name: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var categoryName: String
+    public var colorHex: String
+    public var isOriginal: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, name: String, sizeBytes: UInt64, modifiedSecs: UInt64, categoryName: String, colorHex: String, isOriginal: Bool) {
+        self.path = path
+        self.name = name
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.categoryName = categoryName
+        self.colorHex = colorHex
+        self.isOriginal = isOriginal
+    }
+}
+
+
+
+extension DuplicateFileRecord: Equatable, Hashable {
+    public static func ==(lhs: DuplicateFileRecord, rhs: DuplicateFileRecord) -> Bool {
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.categoryName != rhs.categoryName {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        if lhs.isOriginal != rhs.isOriginal {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+        hasher.combine(name)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(categoryName)
+        hasher.combine(colorHex)
+        hasher.combine(isOriginal)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDuplicateFileRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DuplicateFileRecord {
+        return
+            try DuplicateFileRecord(
+                path: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                categoryName: FfiConverterString.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf), 
+                isOriginal: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DuplicateFileRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterString.write(value.categoryName, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+        FfiConverterBool.write(value.isOriginal, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateFileRecord_lift(_ buf: RustBuffer) throws -> DuplicateFileRecord {
+    return try FfiConverterTypeDuplicateFileRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateFileRecord_lower(_ value: DuplicateFileRecord) -> RustBuffer {
+    return FfiConverterTypeDuplicateFileRecord.lower(value)
+}
+
+
+public struct DuplicateGroupRecord {
+    public var groupId: String
+    public var hashHex: String
+    public var sizeBytes: UInt64
+    public var totalWastedBytes: UInt64
+    public var fileCount: UInt32
+    public var files: [DuplicateFileRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupId: String, hashHex: String, sizeBytes: UInt64, totalWastedBytes: UInt64, fileCount: UInt32, files: [DuplicateFileRecord]) {
+        self.groupId = groupId
+        self.hashHex = hashHex
+        self.sizeBytes = sizeBytes
+        self.totalWastedBytes = totalWastedBytes
+        self.fileCount = fileCount
+        self.files = files
+    }
+}
+
+
+
+extension DuplicateGroupRecord: Equatable, Hashable {
+    public static func ==(lhs: DuplicateGroupRecord, rhs: DuplicateGroupRecord) -> Bool {
+        if lhs.groupId != rhs.groupId {
+            return false
+        }
+        if lhs.hashHex != rhs.hashHex {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.totalWastedBytes != rhs.totalWastedBytes {
+            return false
+        }
+        if lhs.fileCount != rhs.fileCount {
+            return false
+        }
+        if lhs.files != rhs.files {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupId)
+        hasher.combine(hashHex)
+        hasher.combine(sizeBytes)
+        hasher.combine(totalWastedBytes)
+        hasher.combine(fileCount)
+        hasher.combine(files)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDuplicateGroupRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DuplicateGroupRecord {
+        return
+            try DuplicateGroupRecord(
+                groupId: FfiConverterString.read(from: &buf), 
+                hashHex: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                totalWastedBytes: FfiConverterUInt64.read(from: &buf), 
+                fileCount: FfiConverterUInt32.read(from: &buf), 
+                files: FfiConverterSequenceTypeDuplicateFileRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DuplicateGroupRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupId, into: &buf)
+        FfiConverterString.write(value.hashHex, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.totalWastedBytes, into: &buf)
+        FfiConverterUInt32.write(value.fileCount, into: &buf)
+        FfiConverterSequenceTypeDuplicateFileRecord.write(value.files, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateGroupRecord_lift(_ buf: RustBuffer) throws -> DuplicateGroupRecord {
+    return try FfiConverterTypeDuplicateGroupRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateGroupRecord_lower(_ value: DuplicateGroupRecord) -> RustBuffer {
+    return FfiConverterTypeDuplicateGroupRecord.lower(value)
+}
+
+
+public struct DuplicateSummaryRecord {
+    public var totalDuplicateFiles: UInt32
+    public var totalDuplicateGroups: UInt32
+    public var totalWastedBytes: UInt64
+    public var groups: [DuplicateGroupRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalDuplicateFiles: UInt32, totalDuplicateGroups: UInt32, totalWastedBytes: UInt64, groups: [DuplicateGroupRecord]) {
+        self.totalDuplicateFiles = totalDuplicateFiles
+        self.totalDuplicateGroups = totalDuplicateGroups
+        self.totalWastedBytes = totalWastedBytes
+        self.groups = groups
+    }
+}
+
+
+
+extension DuplicateSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: DuplicateSummaryRecord, rhs: DuplicateSummaryRecord) -> Bool {
+        if lhs.totalDuplicateFiles != rhs.totalDuplicateFiles {
+            return false
+        }
+        if lhs.totalDuplicateGroups != rhs.totalDuplicateGroups {
+            return false
+        }
+        if lhs.totalWastedBytes != rhs.totalWastedBytes {
+            return false
+        }
+        if lhs.groups != rhs.groups {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalDuplicateFiles)
+        hasher.combine(totalDuplicateGroups)
+        hasher.combine(totalWastedBytes)
+        hasher.combine(groups)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDuplicateSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DuplicateSummaryRecord {
+        return
+            try DuplicateSummaryRecord(
+                totalDuplicateFiles: FfiConverterUInt32.read(from: &buf), 
+                totalDuplicateGroups: FfiConverterUInt32.read(from: &buf), 
+                totalWastedBytes: FfiConverterUInt64.read(from: &buf), 
+                groups: FfiConverterSequenceTypeDuplicateGroupRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DuplicateSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.totalDuplicateFiles, into: &buf)
+        FfiConverterUInt32.write(value.totalDuplicateGroups, into: &buf)
+        FfiConverterUInt64.write(value.totalWastedBytes, into: &buf)
+        FfiConverterSequenceTypeDuplicateGroupRecord.write(value.groups, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateSummaryRecord_lift(_ buf: RustBuffer) throws -> DuplicateSummaryRecord {
+    return try FfiConverterTypeDuplicateSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDuplicateSummaryRecord_lower(_ value: DuplicateSummaryRecord) -> RustBuffer {
+    return FfiConverterTypeDuplicateSummaryRecord.lower(value)
+}
+
+
 public struct InstalledAppRecord {
     public var name: String
     public var bundleId: String
@@ -1205,6 +1538,308 @@ public func FfiConverterTypeInstalledAppRecord_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeInstalledAppRecord_lower(_ value: InstalledAppRecord) -> RustBuffer {
     return FfiConverterTypeInstalledAppRecord.lower(value)
+}
+
+
+public struct LargeOldFileRecord {
+    public var path: String
+    public var name: String
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var categoryName: String
+    public var colorHex: String
+    public var ageLabel: String
+    public var ageIdx: UInt32
+    public var sizeIdx: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, name: String, sizeBytes: UInt64, modifiedSecs: UInt64, categoryName: String, colorHex: String, ageLabel: String, ageIdx: UInt32, sizeIdx: UInt32) {
+        self.path = path
+        self.name = name
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.categoryName = categoryName
+        self.colorHex = colorHex
+        self.ageLabel = ageLabel
+        self.ageIdx = ageIdx
+        self.sizeIdx = sizeIdx
+    }
+}
+
+
+
+extension LargeOldFileRecord: Equatable, Hashable {
+    public static func ==(lhs: LargeOldFileRecord, rhs: LargeOldFileRecord) -> Bool {
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.categoryName != rhs.categoryName {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        if lhs.ageLabel != rhs.ageLabel {
+            return false
+        }
+        if lhs.ageIdx != rhs.ageIdx {
+            return false
+        }
+        if lhs.sizeIdx != rhs.sizeIdx {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+        hasher.combine(name)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(categoryName)
+        hasher.combine(colorHex)
+        hasher.combine(ageLabel)
+        hasher.combine(ageIdx)
+        hasher.combine(sizeIdx)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLargeOldFileRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LargeOldFileRecord {
+        return
+            try LargeOldFileRecord(
+                path: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                categoryName: FfiConverterString.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf), 
+                ageLabel: FfiConverterString.read(from: &buf), 
+                ageIdx: FfiConverterUInt32.read(from: &buf), 
+                sizeIdx: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LargeOldFileRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterString.write(value.categoryName, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+        FfiConverterString.write(value.ageLabel, into: &buf)
+        FfiConverterUInt32.write(value.ageIdx, into: &buf)
+        FfiConverterUInt32.write(value.sizeIdx, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLargeOldFileRecord_lift(_ buf: RustBuffer) throws -> LargeOldFileRecord {
+    return try FfiConverterTypeLargeOldFileRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLargeOldFileRecord_lower(_ value: LargeOldFileRecord) -> RustBuffer {
+    return FfiConverterTypeLargeOldFileRecord.lower(value)
+}
+
+
+public struct LargeOldMatrixSummaryRecord {
+    public var totalFiles: UInt32
+    public var totalBytes: UInt64
+    public var cells: [MatrixCellRecord]
+    public var files: [LargeOldFileRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalFiles: UInt32, totalBytes: UInt64, cells: [MatrixCellRecord], files: [LargeOldFileRecord]) {
+        self.totalFiles = totalFiles
+        self.totalBytes = totalBytes
+        self.cells = cells
+        self.files = files
+    }
+}
+
+
+
+extension LargeOldMatrixSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: LargeOldMatrixSummaryRecord, rhs: LargeOldMatrixSummaryRecord) -> Bool {
+        if lhs.totalFiles != rhs.totalFiles {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.cells != rhs.cells {
+            return false
+        }
+        if lhs.files != rhs.files {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalFiles)
+        hasher.combine(totalBytes)
+        hasher.combine(cells)
+        hasher.combine(files)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLargeOldMatrixSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LargeOldMatrixSummaryRecord {
+        return
+            try LargeOldMatrixSummaryRecord(
+                totalFiles: FfiConverterUInt32.read(from: &buf), 
+                totalBytes: FfiConverterUInt64.read(from: &buf), 
+                cells: FfiConverterSequenceTypeMatrixCellRecord.read(from: &buf), 
+                files: FfiConverterSequenceTypeLargeOldFileRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LargeOldMatrixSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.totalFiles, into: &buf)
+        FfiConverterUInt64.write(value.totalBytes, into: &buf)
+        FfiConverterSequenceTypeMatrixCellRecord.write(value.cells, into: &buf)
+        FfiConverterSequenceTypeLargeOldFileRecord.write(value.files, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLargeOldMatrixSummaryRecord_lift(_ buf: RustBuffer) throws -> LargeOldMatrixSummaryRecord {
+    return try FfiConverterTypeLargeOldMatrixSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLargeOldMatrixSummaryRecord_lower(_ value: LargeOldMatrixSummaryRecord) -> RustBuffer {
+    return FfiConverterTypeLargeOldMatrixSummaryRecord.lower(value)
+}
+
+
+public struct MatrixCellRecord {
+    public var ageIdx: UInt32
+    public var sizeIdx: UInt32
+    public var ageLabel: String
+    public var sizeLabel: String
+    public var fileCount: UInt32
+    public var totalBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ageIdx: UInt32, sizeIdx: UInt32, ageLabel: String, sizeLabel: String, fileCount: UInt32, totalBytes: UInt64) {
+        self.ageIdx = ageIdx
+        self.sizeIdx = sizeIdx
+        self.ageLabel = ageLabel
+        self.sizeLabel = sizeLabel
+        self.fileCount = fileCount
+        self.totalBytes = totalBytes
+    }
+}
+
+
+
+extension MatrixCellRecord: Equatable, Hashable {
+    public static func ==(lhs: MatrixCellRecord, rhs: MatrixCellRecord) -> Bool {
+        if lhs.ageIdx != rhs.ageIdx {
+            return false
+        }
+        if lhs.sizeIdx != rhs.sizeIdx {
+            return false
+        }
+        if lhs.ageLabel != rhs.ageLabel {
+            return false
+        }
+        if lhs.sizeLabel != rhs.sizeLabel {
+            return false
+        }
+        if lhs.fileCount != rhs.fileCount {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(ageIdx)
+        hasher.combine(sizeIdx)
+        hasher.combine(ageLabel)
+        hasher.combine(sizeLabel)
+        hasher.combine(fileCount)
+        hasher.combine(totalBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMatrixCellRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MatrixCellRecord {
+        return
+            try MatrixCellRecord(
+                ageIdx: FfiConverterUInt32.read(from: &buf), 
+                sizeIdx: FfiConverterUInt32.read(from: &buf), 
+                ageLabel: FfiConverterString.read(from: &buf), 
+                sizeLabel: FfiConverterString.read(from: &buf), 
+                fileCount: FfiConverterUInt32.read(from: &buf), 
+                totalBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MatrixCellRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.ageIdx, into: &buf)
+        FfiConverterUInt32.write(value.sizeIdx, into: &buf)
+        FfiConverterString.write(value.ageLabel, into: &buf)
+        FfiConverterString.write(value.sizeLabel, into: &buf)
+        FfiConverterUInt32.write(value.fileCount, into: &buf)
+        FfiConverterUInt64.write(value.totalBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMatrixCellRecord_lift(_ buf: RustBuffer) throws -> MatrixCellRecord {
+    return try FfiConverterTypeMatrixCellRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMatrixCellRecord_lower(_ value: MatrixCellRecord) -> RustBuffer {
+    return FfiConverterTypeMatrixCellRecord.lower(value)
 }
 
 
@@ -2324,6 +2959,56 @@ fileprivate struct FfiConverterSequenceTypeDevArtifactRecord: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDuplicateFileRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DuplicateFileRecord]
+
+    public static func write(_ value: [DuplicateFileRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDuplicateFileRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DuplicateFileRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DuplicateFileRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDuplicateFileRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDuplicateGroupRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DuplicateGroupRecord]
+
+    public static func write(_ value: [DuplicateGroupRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDuplicateGroupRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DuplicateGroupRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DuplicateGroupRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDuplicateGroupRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeInstalledAppRecord: FfiConverterRustBuffer {
     typealias SwiftType = [InstalledAppRecord]
 
@@ -2341,6 +3026,56 @@ fileprivate struct FfiConverterSequenceTypeInstalledAppRecord: FfiConverterRustB
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeInstalledAppRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLargeOldFileRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [LargeOldFileRecord]
+
+    public static func write(_ value: [LargeOldFileRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLargeOldFileRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LargeOldFileRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LargeOldFileRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLargeOldFileRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeMatrixCellRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [MatrixCellRecord]
+
+    public static func write(_ value: [MatrixCellRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeMatrixCellRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [MatrixCellRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [MatrixCellRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeMatrixCellRecord.read(from: &buf))
         }
         return seq
     }
@@ -2511,6 +3246,12 @@ private var initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_active_bytes() != 62369) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_active_files() != 54765) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_clear_collector() != 39824) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2523,10 +3264,16 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_collector_total_size() != 60539) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_compute_large_old_matrix() != 18534) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_compute_sunburst() != 36924) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_find_dev_artifacts() != 2838) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_find_duplicates() != 105) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_find_orphaned_residue() != 43215) {
@@ -2545,6 +3292,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_load_offline_snapshot() != 27215) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_mark_deleted_by_path() != 52147) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker() != 38498) {

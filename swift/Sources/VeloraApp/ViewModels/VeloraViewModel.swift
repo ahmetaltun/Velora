@@ -42,6 +42,10 @@ public final class VeloraViewModel {
     public var isLoadingApps: Bool = false
     public var orphanedResidues: [OrphanedResidueRecord] = []
     public var isLoadingOrphans: Bool = false
+    public var largeOldMatrix: LargeOldMatrixSummaryRecord?
+    public var isLoadingLargeOldMatrix: Bool = false
+    public var duplicateSummary: DuplicateSummaryRecord?
+    public var isLoadingDuplicates: Bool = false
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
 
@@ -210,6 +214,30 @@ public final class VeloraViewModel {
             DispatchQueue.main.async {
                 self.orphanedResidues = orphans
                 self.isLoadingOrphans = false
+            }
+        }
+    }
+
+    public func loadLargeOldMatrix() {
+        isLoadingLargeOldMatrix = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.computeLargeOldMatrix()
+            DispatchQueue.main.async {
+                self.largeOldMatrix = summary
+                self.isLoadingLargeOldMatrix = false
+            }
+        }
+    }
+
+    public func loadDuplicates(minSizeBytes: UInt64 = 1_000_000) {
+        isLoadingDuplicates = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.findDuplicates(minSizeBytes: minSizeBytes)
+            DispatchQueue.main.async {
+                self.duplicateSummary = summary
+                self.isLoadingDuplicates = false
             }
         }
     }
@@ -555,9 +583,29 @@ public final class VeloraViewModel {
         for item in collectorItems {
             let url = URL(fileURLWithPath: item.path)
             try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            _ = engine.markDeletedByPath(path: item.path)
         }
         clearCollector()
-        scanCurrentPath()
+
+        // Asynchronously persist the updated index with tombstoned files to catalog.bin
+        SnapshotManager.shared.saveSnapshot(engine: self.engine)
+
+        // Instant in-memory refresh without scanning physical disk
+        self.scannedCount = engine.activeFiles()
+        self.currentSunburst = engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+        if let root = self.currentSunburst {
+            self.sectorStack = [root]
+        }
+        self.refreshTableItems()
+        self.refreshStorageReconciliation()
+
+        // Also update apps and leftovers cache if loaded
+        if !installedApps.isEmpty {
+            loadInstalledApps()
+        }
+        if !orphanedResidues.isEmpty {
+            loadOrphanedResidues()
+        }
     }
 }
 

@@ -154,6 +154,66 @@ pub struct OrphanedResidueRecord {
     pub modified_secs: u64,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct MatrixCellRecord {
+    pub age_idx: u32,
+    pub size_idx: u32,
+    pub age_label: String,
+    pub size_label: String,
+    pub file_count: u32,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LargeOldFileRecord {
+    pub path: String,
+    pub name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub category_name: String,
+    pub color_hex: String,
+    pub age_label: String,
+    pub age_idx: u32,
+    pub size_idx: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LargeOldMatrixSummaryRecord {
+    pub total_files: u32,
+    pub total_bytes: u64,
+    pub cells: Vec<MatrixCellRecord>,
+    pub files: Vec<LargeOldFileRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DuplicateFileRecord {
+    pub path: String,
+    pub name: String,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub category_name: String,
+    pub color_hex: String,
+    pub is_original: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DuplicateGroupRecord {
+    pub group_id: String,
+    pub hash_hex: String,
+    pub size_bytes: u64,
+    pub total_wasted_bytes: u64,
+    pub file_count: u32,
+    pub files: Vec<DuplicateFileRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DuplicateSummaryRecord {
+    pub total_duplicate_files: u32,
+    pub total_duplicate_groups: u32,
+    pub total_wasted_bytes: u64,
+    pub groups: Vec<DuplicateGroupRecord>,
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -296,6 +356,18 @@ impl VeloraEngine {
         self.volume.read().is_online
     }
 
+    pub fn mark_deleted_by_path(&self, path: String) -> u64 {
+        self.volume.write().mark_deleted_by_path(&path)
+    }
+
+    pub fn active_files(&self) -> u64 {
+        self.volume.read().active_files() as u64
+    }
+
+    pub fn active_bytes(&self) -> u64 {
+        self.volume.read().active_bytes()
+    }
+
     pub fn reconcile_storage(&self, mount_point: String) -> StorageReconciliationItem {
         let scanned_bytes = self.volume.read().total_scanned_bytes();
         let rec = velora_apfs::Reconciler::reconcile(Path::new(&mount_point), scanned_bytes);
@@ -389,7 +461,8 @@ impl VeloraEngine {
     }
 
     pub fn list_apps_with_footprint(&self, home_path: String) -> Vec<InstalledAppRecord> {
-        let apps = velora_apps::AppManager::list_apps_with_footprint(Path::new(&home_path));
+        let vol = self.volume.read();
+        let apps = velora_apps::AppManager::list_apps_with_footprint(Path::new(&home_path), Some(&*vol));
         apps.into_iter()
             .map(|app| InstalledAppRecord {
                 name: app.name,
@@ -414,7 +487,8 @@ impl VeloraEngine {
     }
 
     pub fn find_orphaned_residue(&self, home_path: String) -> Vec<OrphanedResidueRecord> {
-        let orphans = velora_apps::AppManager::find_orphaned_residue(Path::new(&home_path));
+        let vol = self.volume.read();
+        let orphans = velora_apps::AppManager::find_orphaned_residue(Path::new(&home_path), Some(&*vol));
         orphans
             .into_iter()
             .map(|o| OrphanedResidueRecord {
@@ -426,5 +500,75 @@ impl VeloraEngine {
                 modified_secs: o.modified_secs,
             })
             .collect()
+    }
+
+    pub fn compute_large_old_matrix(&self) -> LargeOldMatrixSummaryRecord {
+        let vol = self.volume.read();
+        let summary = velora_hygiene::LargeOldFilesMatrix::compute(&vol);
+        LargeOldMatrixSummaryRecord {
+            total_files: summary.total_files,
+            total_bytes: summary.total_bytes,
+            cells: summary
+                .cells
+                .into_iter()
+                .map(|c| MatrixCellRecord {
+                    age_idx: c.age_idx,
+                    size_idx: c.size_idx,
+                    age_label: c.age_label,
+                    size_label: c.size_label,
+                    file_count: c.file_count,
+                    total_bytes: c.total_bytes,
+                })
+                .collect(),
+            files: summary
+                .files
+                .into_iter()
+                .map(|f| LargeOldFileRecord {
+                    path: f.path,
+                    name: f.name,
+                    size_bytes: f.size_bytes,
+                    modified_secs: f.modified_secs,
+                    category_name: f.category_name,
+                    color_hex: f.color_hex,
+                    age_label: f.age_label,
+                    age_idx: f.age_idx,
+                    size_idx: f.size_idx,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn find_duplicates(&self, min_size_bytes: u64) -> DuplicateSummaryRecord {
+        let vol = self.volume.read();
+        let summary = velora_hygiene::DuplicateFinder::find_duplicates(&vol, min_size_bytes);
+        DuplicateSummaryRecord {
+            total_duplicate_files: summary.total_duplicate_files,
+            total_duplicate_groups: summary.total_duplicate_groups,
+            total_wasted_bytes: summary.total_wasted_bytes,
+            groups: summary
+                .groups
+                .into_iter()
+                .map(|g| DuplicateGroupRecord {
+                    group_id: g.group_id,
+                    hash_hex: g.hash_hex,
+                    size_bytes: g.size_bytes,
+                    total_wasted_bytes: g.total_wasted_bytes,
+                    file_count: g.file_count,
+                    files: g
+                        .files
+                        .into_iter()
+                        .map(|f| DuplicateFileRecord {
+                            path: f.path,
+                            name: f.name,
+                            size_bytes: f.size_bytes,
+                            modified_secs: f.modified_secs,
+                            category_name: f.category_name,
+                            color_hex: f.color_hex,
+                            is_original: f.is_original,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
     }
 }

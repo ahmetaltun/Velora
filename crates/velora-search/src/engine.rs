@@ -30,6 +30,10 @@ impl SearchEngine {
         let start = Instant::now();
 
         let evaluate_record = |idx: usize, record: &FileRecord| -> Option<SearchHit> {
+            if record.is_deleted() {
+                return None;
+            }
+
             // Type filters
             if query.is_dir_only && !record.is_dir() {
                 return None;

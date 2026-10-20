@@ -7,3 +7,5 @@ license.workspace = true
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 plist = "1.6"
+velora-index = { path = "../velora-index" }
+velora-analyzer = { path = "../velora-analyzer" }

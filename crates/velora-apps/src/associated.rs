@@ -1,4 +1,5 @@
 use crate::bundle::BundleScanner;
+use crate::index_resolver::IndexFootprintResolver;
 use crate::model::{AppPart, AppPartKind, InstalledApp};
 use std::path::Path;
 
@@ -6,7 +7,11 @@ pub struct AssociatedFileResolver;
 
 impl AssociatedFileResolver {
     /// Discovers all associated files and sandboxed containers for an application across `~/Library`.
-    pub fn resolve_associated_files(app: &mut InstalledApp, home_path: &Path) {
+    pub fn resolve_associated_files(
+        app: &mut InstalledApp,
+        home_path: &Path,
+        resolver: Option<&IndexFootprintResolver>,
+    ) {
         let lib_path = home_path.join("Library");
         let bundle_id = &app.bundle_id;
         let app_name = &app.name;
@@ -19,6 +24,7 @@ impl AssociatedFileResolver {
             &app_support.join(bundle_id),
             AppPartKind::ApplicationSupport,
             "App Support Data",
+            resolver,
             &mut additional_parts,
         );
         if bundle_id != app_name {
@@ -26,6 +32,7 @@ impl AssociatedFileResolver {
                 &app_support.join(app_name),
                 AppPartKind::ApplicationSupport,
                 "App Support Data",
+                resolver,
                 &mut additional_parts,
             );
         }
@@ -36,6 +43,7 @@ impl AssociatedFileResolver {
             &caches.join(bundle_id),
             AppPartKind::CachesAndLogs,
             "Caches",
+            resolver,
             &mut additional_parts,
         );
         if bundle_id != app_name {
@@ -43,6 +51,7 @@ impl AssociatedFileResolver {
                 &caches.join(app_name),
                 AppPartKind::CachesAndLogs,
                 "Caches",
+                resolver,
                 &mut additional_parts,
             );
         }
@@ -52,6 +61,7 @@ impl AssociatedFileResolver {
             &webkit.join(bundle_id),
             AppPartKind::CachesAndLogs,
             "WebKit Storage",
+            resolver,
             &mut additional_parts,
         );
 
@@ -60,6 +70,7 @@ impl AssociatedFileResolver {
             &logs.join(bundle_id),
             AppPartKind::CachesAndLogs,
             "Logs",
+            resolver,
             &mut additional_parts,
         );
         if bundle_id != app_name {
@@ -67,6 +78,7 @@ impl AssociatedFileResolver {
                 &logs.join(app_name),
                 AppPartKind::CachesAndLogs,
                 "Logs",
+                resolver,
                 &mut additional_parts,
             );
         }
@@ -76,6 +88,7 @@ impl AssociatedFileResolver {
             &http_storages.join(bundle_id),
             AppPartKind::CachesAndLogs,
             "HTTP Storage",
+            resolver,
             &mut additional_parts,
         );
 
@@ -85,6 +98,7 @@ impl AssociatedFileResolver {
             &containers.join(bundle_id),
             AppPartKind::SandboxedContainer,
             "Sandboxed Container",
+            resolver,
             &mut additional_parts,
         );
 
@@ -100,6 +114,7 @@ impl AssociatedFileResolver {
                             &p,
                             AppPartKind::SandboxedContainer,
                             "Group Container",
+                            resolver,
                             &mut additional_parts,
                         );
                     }
@@ -113,6 +128,7 @@ impl AssociatedFileResolver {
             &prefs.join(format!("{}.plist", bundle_id)),
             AppPartKind::PreferencesAndDaemons,
             "Preferences Plist",
+            resolver,
             &mut additional_parts,
         );
 
@@ -121,6 +137,7 @@ impl AssociatedFileResolver {
             &saved_state.join(format!("{}.savedState", bundle_id)),
             AppPartKind::PreferencesAndDaemons,
             "Saved Window State",
+            resolver,
             &mut additional_parts,
         );
 
@@ -135,6 +152,7 @@ impl AssociatedFileResolver {
                             &p,
                             AppPartKind::PreferencesAndDaemons,
                             "Background LaunchAgent",
+                            resolver,
                             &mut additional_parts,
                         );
                     }
@@ -155,16 +173,31 @@ impl AssociatedFileResolver {
         path: &Path,
         kind: AppPartKind,
         label: &str,
+        resolver: Option<&IndexFootprintResolver>,
         out: &mut Vec<AppPart>,
     ) {
-        if !path.exists() {
-            return;
-        }
-
-        let size_bytes = if path.is_file() {
-            path.metadata().map(|m| m.len()).unwrap_or(0)
+        let size_bytes = if let Some(res) = resolver {
+            match res.query_size(path) {
+                Some(sz) => sz,
+                None => {
+                    if path.is_file() {
+                        path.metadata().map(|m| m.len()).unwrap_or(0)
+                    } else if path.exists() {
+                        BundleScanner::calculate_dir_size(path)
+                    } else {
+                        0
+                    }
+                }
+            }
         } else {
-            BundleScanner::calculate_dir_size(path)
+            if !path.exists() {
+                return;
+            }
+            if path.is_file() {
+                path.metadata().map(|m| m.len()).unwrap_or(0)
+            } else {
+                BundleScanner::calculate_dir_size(path)
+            }
         };
 
         if size_bytes == 0 {
@@ -172,7 +205,13 @@ impl AssociatedFileResolver {
         }
 
         out.push(AppPart {
-            name: format!("{} ({})", label, path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()),
+            name: format!(
+                "{} ({})",
+                label,
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            ),
             path: path.to_string_lossy().to_string(),
             kind,
             size_bytes,

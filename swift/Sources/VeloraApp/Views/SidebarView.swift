@@ -72,7 +72,9 @@ public struct SidebarView: View {
                     isSelected: viewModel.activeSidebarId == "tool_dev_artifacts"
                 ) {
                     viewModel.activeSidebarId = "tool_dev_artifacts"
-                    viewModel.loadDevArtifacts()
+                    if viewModel.devArtifacts.isEmpty {
+                        viewModel.loadDevArtifacts()
+                    }
                 }
 
                 SidebarRowItem(
@@ -81,7 +83,9 @@ public struct SidebarView: View {
                     isSelected: viewModel.activeSidebarId == "tool_xcode"
                 ) {
                     viewModel.activeSidebarId = "tool_xcode"
-                    viewModel.loadXcodeSummary()
+                    if viewModel.xcodeSummary == nil {
+                        viewModel.loadXcodeSummary()
+                    }
                 }
 
                 SidebarRowItem(
@@ -90,7 +94,9 @@ public struct SidebarView: View {
                     isSelected: viewModel.activeSidebarId == "tool_package_caches"
                 ) {
                     viewModel.activeSidebarId = "tool_package_caches"
-                    viewModel.loadPackageCaches()
+                    if viewModel.packageCacheSummary == nil {
+                        viewModel.loadPackageCaches()
+                    }
                 }
             }
 
@@ -101,7 +107,9 @@ public struct SidebarView: View {
                     isSelected: viewModel.activeSidebarId == "tool_apps"
                 ) {
                     viewModel.activeSidebarId = "tool_apps"
-                    viewModel.loadInstalledApps()
+                    if viewModel.installedApps.isEmpty {
+                        viewModel.loadInstalledApps()
+                    }
                 }
 
                 SidebarRowItem(
@@ -110,11 +118,35 @@ public struct SidebarView: View {
                     isSelected: viewModel.activeSidebarId == "tool_orphans"
                 ) {
                     viewModel.activeSidebarId = "tool_orphans"
-                    viewModel.loadOrphanedResidues()
+                    if viewModel.orphanedResidues.isEmpty {
+                        viewModel.loadOrphanedResidues()
+                    }
                 }
             }
 
             Section("Smart Filters") {
+                SidebarRowItem(
+                    title: "Large & Old Matrix",
+                    systemImage: "calendar.badge.clock",
+                    isSelected: viewModel.activeSidebarId == "tool_large_old_matrix"
+                ) {
+                    viewModel.activeSidebarId = "tool_large_old_matrix"
+                    if viewModel.largeOldMatrix == nil {
+                        viewModel.loadLargeOldMatrix()
+                    }
+                }
+
+                SidebarRowItem(
+                    title: "Duplicate Finder",
+                    systemImage: "doc.on.doc.fill",
+                    isSelected: viewModel.activeSidebarId == "tool_duplicates"
+                ) {
+                    viewModel.activeSidebarId = "tool_duplicates"
+                    if viewModel.duplicateSummary == nil {
+                        viewModel.loadDuplicates()
+                    }
+                }
+
                 SidebarRowItem(
                     title: "Large Files (>100MB)",
                     systemImage: "shippingbox.fill",

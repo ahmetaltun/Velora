@@ -1,8 +1,9 @@
 use crate::bundle::BundleScanner;
+use crate::index_resolver::IndexFootprintResolver;
 use crate::model::{InstalledApp, OrphanedResidue};
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct OrphanDetector;
 
@@ -11,6 +12,7 @@ impl OrphanDetector {
     pub fn find_orphaned_residue(
         home_path: &Path,
         installed_apps: &[InstalledApp],
+        resolver: Option<&IndexFootprintResolver>,
     ) -> Vec<OrphanedResidue> {
         let lib_path = home_path.join("Library");
 
@@ -34,7 +36,14 @@ impl OrphanDetector {
         ];
 
         for (dir_path, category) in &targets {
-            Self::scan_target_for_orphans(dir_path, category, &known_ids, &known_names, &mut orphans);
+            Self::scan_target_for_orphans(
+                dir_path,
+                category,
+                &known_ids,
+                &known_names,
+                resolver,
+                &mut orphans,
+            );
         }
 
         // Sort descending by size
@@ -47,17 +56,34 @@ impl OrphanDetector {
         category: &str,
         known_ids: &HashSet<String>,
         known_names: &HashSet<String>,
+        resolver: Option<&IndexFootprintResolver>,
         out: &mut Vec<OrphanedResidue>,
     ) {
-        let entries = match fs::read_dir(dir) {
-            Ok(e) => e,
-            Err(_) => return,
+        // Collect candidate tuples (path, raw_name, size_bytes)
+        let candidates: Vec<(PathBuf, String, u64)> = if let Some(res) = resolver {
+            res.list_subdirs(dir)
+        } else {
+            let entries = match fs::read_dir(dir) {
+                Ok(e) => e,
+                Err(_) => return,
+            };
+
+            entries
+                .flatten()
+                .map(|e| {
+                    let p = e.path();
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let sz = if p.is_file() {
+                        p.metadata().map(|m| m.len()).unwrap_or(0)
+                    } else {
+                        BundleScanner::calculate_dir_size(&p)
+                    };
+                    (p, name, sz)
+                })
+                .collect()
         };
 
-        for entry_res in entries.flatten() {
-            let path = entry_res.path();
-            let raw_name = entry_res.file_name().to_string_lossy().to_string();
-
+        for (path, raw_name, size_bytes) in candidates {
             // Skip Apple system folders and internal components
             if raw_name.starts_with("com.apple.")
                 || raw_name == "Apple"
@@ -85,12 +111,6 @@ impl OrphanDetector {
                 || known_names.iter().any(|name| clean_name.contains(name.as_str()));
 
             if !is_active {
-                let size_bytes = if path.is_file() {
-                    path.metadata().map(|m| m.len()).unwrap_or(0)
-                } else {
-                    BundleScanner::calculate_dir_size(&path)
-                };
-
                 // Only surface non-trivial leftovers (> 500 KB)
                 if size_bytes < 500_000 {
                     continue;
@@ -148,7 +168,7 @@ mod tests {
             parts: Vec::new(),
         }];
 
-        let orphans = OrphanDetector::find_orphaned_residue(&temp, &installed_apps);
+        let orphans = OrphanDetector::find_orphaned_residue(&temp, &installed_apps, None);
         assert_eq!(orphans.len(), 1);
         assert_eq!(orphans[0].name, "com.olduninstalled.app");
         assert_eq!(orphans[0].size_bytes, 2_000_000);

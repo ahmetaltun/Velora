@@ -44,8 +44,66 @@ impl VolumeIndex {
     }
 
     #[inline]
+    pub fn active_files(&self) -> usize {
+        self.records.iter().filter(|r| !r.is_deleted()).count()
+    }
+
+    #[inline]
     pub fn total_scanned_bytes(&self) -> u64 {
         self.records.iter().map(|r| r.size).sum()
+    }
+
+    #[inline]
+    pub fn active_bytes(&self) -> u64 {
+        self.records
+            .iter()
+            .filter(|r| !r.is_deleted())
+            .map(|r| r.size)
+            .sum()
+    }
+
+    /// Marks a specific record as deleted by its ID and returns its size.
+    pub fn mark_deleted_by_id(&mut self, id: FileId) -> u64 {
+        if let Some(record) = self.records.get_mut(id.0 as usize) {
+            if !record.is_deleted() {
+                record.mark_deleted();
+                return record.size;
+            }
+        }
+        0
+    }
+
+    /// Marks all records matching the given path or inside the directory prefix as deleted.
+    /// Returns the total bytes freed by this tombstoning operation.
+    pub fn mark_deleted_by_path(&mut self, target_path: &str) -> u64 {
+        let clean_target = target_path.trim_end_matches('/');
+        let mut freed_bytes = 0u64;
+
+        for record in &mut self.records {
+            if record.is_deleted() {
+                continue;
+            }
+
+            let full_path = {
+                let mut path = String::with_capacity(128);
+                self.dirs.build_full_path(record.parent_dir, &self.pool, &mut path);
+                if !path.ends_with('/') {
+                    path.push('/');
+                }
+                path.push_str(self.pool.get(record.name_offset, record.name_len));
+                path
+            };
+
+            let clean_full = full_path.trim_end_matches('/');
+            if clean_full == clean_target
+                || clean_full.starts_with(&format!("{}/", clean_target))
+            {
+                record.mark_deleted();
+                freed_bytes += record.size;
+            }
+        }
+
+        freed_bytes
     }
 
     pub fn resolve_full_path(&self, record: &FileRecord) -> String {

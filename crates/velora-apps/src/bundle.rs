@@ -1,3 +1,4 @@
+use crate::index_resolver::IndexFootprintResolver;
 use crate::model::{AppPart, AppPartKind, InstalledApp};
 use plist::Value;
 use std::fs;
@@ -8,7 +9,10 @@ pub struct BundleScanner;
 
 impl BundleScanner {
     /// Discovers all installed applications across `/Applications` and `~/Applications`.
-    pub fn scan_installed_apps(home_path: &Path) -> Vec<InstalledApp> {
+    pub fn scan_installed_apps(
+        home_path: &Path,
+        resolver: Option<&IndexFootprintResolver>,
+    ) -> Vec<InstalledApp> {
         let mut app_roots = vec![PathBuf::from("/Applications")];
         let user_apps = home_path.join("Applications");
         if user_apps.exists() {
@@ -18,20 +22,25 @@ impl BundleScanner {
         let mut apps = Vec::new();
 
         for root in &app_roots {
-            Self::scan_directory_for_apps(root, false, &mut apps);
+            Self::scan_directory_for_apps(root, false, resolver, &mut apps);
         }
 
         // Also discover system apps for completeness (marked protected)
         let sys_apps = PathBuf::from("/System/Applications");
         if sys_apps.exists() {
-            Self::scan_directory_for_apps(&sys_apps, true, &mut apps);
+            Self::scan_directory_for_apps(&sys_apps, true, resolver, &mut apps);
         }
 
         apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
         apps
     }
 
-    pub fn scan_directory_for_apps(dir: &Path, is_system: bool, out: &mut Vec<InstalledApp>) {
+    pub fn scan_directory_for_apps(
+        dir: &Path,
+        is_system: bool,
+        resolver: Option<&IndexFootprintResolver>,
+        out: &mut Vec<InstalledApp>,
+    ) {
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -45,20 +54,24 @@ impl BundleScanner {
 
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("app") {
-                if let Some(app) = Self::inspect_app_bundle(&path, is_system) {
+                if let Some(app) = Self::inspect_app_bundle(&path, is_system, resolver) {
                     out.push(app);
                 }
             } else if path.is_dir() && !path.is_symlink() {
                 // Check subdirectories (e.g., /Applications/Utilities)
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name == "Utilities" {
-                    Self::scan_directory_for_apps(&path, is_system, out);
+                    Self::scan_directory_for_apps(&path, is_system, resolver, out);
                 }
             }
         }
     }
 
-    pub fn inspect_app_bundle(app_path: &Path, is_system_app: bool) -> Option<InstalledApp> {
+    pub fn inspect_app_bundle(
+        app_path: &Path,
+        is_system_app: bool,
+        resolver: Option<&IndexFootprintResolver>,
+    ) -> Option<InstalledApp> {
         let info_plist_path = app_path.join("Contents/Info.plist");
         let (bundle_id, name, version) = if info_plist_path.exists() {
             Self::parse_info_plist(&info_plist_path)
@@ -78,7 +91,11 @@ impl BundleScanner {
         });
         let final_version = version.unwrap_or_else(|| "1.0".to_string());
 
-        let bundle_size = Self::calculate_dir_size(app_path);
+        let bundle_size = if let Some(res) = resolver {
+            res.query_size(app_path).unwrap_or_else(|| Self::calculate_dir_size(app_path))
+        } else {
+            Self::calculate_dir_size(app_path)
+        };
 
         let bundle_part = AppPart {
             name: format!("{}.app", final_name),
@@ -188,7 +205,7 @@ mod tests {
         fs::write(contents.join("Info.plist"), plist_xml).unwrap();
         fs::write(contents.join("binary"), vec![0u8; 5000]).unwrap();
 
-        let app = BundleScanner::inspect_app_bundle(&temp, false).unwrap();
+        let app = BundleScanner::inspect_app_bundle(&temp, false, None).unwrap();
         assert_eq!(app.name, "TestApp");
         assert_eq!(app.bundle_id, "com.velora.testapp");
         assert_eq!(app.version, "2.4.0");

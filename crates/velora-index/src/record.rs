@@ -49,4 +49,14 @@ impl FileRecord {
     pub fn is_hidden(&self) -> bool {
         self.flags.contains(FileFlags::IS_HIDDEN)
     }
+
+    #[inline(always)]
+    pub fn is_deleted(&self) -> bool {
+        self.flags.contains(FileFlags::IS_DELETED)
+    }
+
+    #[inline(always)]
+    pub fn mark_deleted(&mut self) {
+        self.flags.insert(FileFlags::IS_DELETED);
+    }
 }

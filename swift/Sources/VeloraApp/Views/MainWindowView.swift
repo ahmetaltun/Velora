@@ -38,6 +38,10 @@ public struct MainWindowView: View {
                         AppUninstallerDashboardView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "tool_orphans" {
                         OrphanedLeftoversView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_large_old_matrix" {
+                        LargeOldFilesMatrixView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_duplicates" {
+                        DuplicateFinderView(viewModel: viewModel)
                     } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
                         ScanHeroWelcomeView(viewModel: viewModel)
                             .padding(24)

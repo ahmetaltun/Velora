@@ -10,5 +10,6 @@ bitflags! {
         const IS_SYSTEM    = 1 << 3;
         const IS_PACKAGE   = 1 << 4;
         const IS_READONLY  = 1 << 5;
+        const IS_DELETED   = 1 << 6;
     }
 }
