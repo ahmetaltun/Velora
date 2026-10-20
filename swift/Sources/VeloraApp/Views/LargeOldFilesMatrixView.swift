@@ -151,7 +151,7 @@ public struct LargeOldFilesMatrixView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let summary = summary, summary.totalFiles > 0 {
                 // PINNED CONTROLS AREA (4x4 Grid & Filter Bar)
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     // 4x4 Heatmap Matrix Grid Card
                     MatrixHeatmapGrid(
                         cells: summary.cells,
@@ -208,8 +208,8 @@ public struct LargeOldFilesMatrixView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 10)
                 .background(.ultraThinMaterial)
 
                 Divider()
@@ -274,76 +274,65 @@ private struct MatrixHeatmapGrid: View {
     @Binding var selectedCellId: String?
     let formatBytes: (UInt64) -> String
 
-    private let ageHeaders = ["Recent (< 1 mo)", "1 – 6 Months", "6 – 12 Months", "Ancient (> 1 yr)"]
-    private let sizeHeaders = ["> 1 GB", "500MB – 1GB", "100 – 500MB", "50 – 100MB"]
+    private let ageHeaders = ["< 1 mo", "1 – 6 mo", "6 – 12 mo", "> 1 yr"]
+    private let sizeHeaders = ["> 1 GB", "0.5 – 1 GB", "100 – 500 MB", "50 – 100 MB"]
 
     private var maxBytes: UInt64 {
         cells.map(\.totalBytes).max() ?? 1
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("2D Distribution Matrix")
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-                Spacer()
-                Text("Click any quadrant to isolate matching files below")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 3) {
+            // Size Column Headers
+            HStack(spacing: 4) {
+                Text("") // Top-left blank corner
+                    .frame(width: 65)
+
+                ForEach(sizeHeaders, id: \.self) { header in
+                    Text(header)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
             }
 
-            VStack(spacing: 4) {
-                // Size Column Headers
+            // Matrix Rows (Age)
+            ForEach(0..<4, id: \.self) { ageIdx in
                 HStack(spacing: 4) {
-                    Text("") // Top-left blank corner
-                        .frame(width: 100)
+                    Text(ageHeaders[ageIdx])
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .frame(width: 65, alignment: .leading)
 
-                    ForEach(sizeHeaders, id: \.self) { header in
-                        Text(header)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
+                    ForEach(0..<4, id: \.self) { sizeIdx in
+                        let cellIdx = ageIdx * 4 + sizeIdx
+                        if cellIdx < cells.count {
+                            let cell = cells[cellIdx]
+                            let isSelected = selectedCellId == cell.id
 
-                // Matrix Rows (Age)
-                ForEach(0..<4, id: \.self) { ageIdx in
-                    HStack(spacing: 4) {
-                        Text(ageHeaders[ageIdx])
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .frame(width: 100, alignment: .leading)
-
-                        ForEach(0..<4, id: \.self) { sizeIdx in
-                            let cellIdx = ageIdx * 4 + sizeIdx
-                            if cellIdx < cells.count {
-                                let cell = cells[cellIdx]
-                                let isSelected = selectedCellId == cell.id
-
-                                HeatmapCell(
-                                    cell: cell,
-                                    maxBytes: maxBytes,
-                                    isSelected: isSelected,
-                                    formatBytes: formatBytes
-                                ) {
-                                    if isSelected {
-                                        selectedCellId = nil
-                                    } else {
-                                        selectedCellId = cell.id
-                                    }
+                            HeatmapCell(
+                                cell: cell,
+                                maxBytes: maxBytes,
+                                isSelected: isSelected,
+                                formatBytes: formatBytes
+                            ) {
+                                if isSelected {
+                                    selectedCellId = nil
+                                } else {
+                                    selectedCellId = cell.id
                                 }
                             }
                         }
                     }
                 }
             }
-            .padding(12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-            )
         }
+        .padding(8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
@@ -363,19 +352,19 @@ private struct HeatmapCell: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 2) {
+            VStack(spacing: 1) {
                 Text(cell.fileCount > 0 ? "\(cell.fileCount)" : "—")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(cell.fileCount > 0 ? .primary : .secondary.opacity(0.5))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(cell.fileCount > 0 ? .primary : .secondary.opacity(0.4))
 
                 Text(cell.totalBytes > 0 ? formatBytes(cell.totalBytes) : "0 B")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            .frame(height: 30)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 6)
                     .fill(
                         isSelected
                             ? VeloraTheme.teal.opacity(0.35)
@@ -387,10 +376,10 @@ private struct HeatmapCell: View {
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 6)
                     .stroke(
                         isSelected ? VeloraTheme.teal : Color.clear,
-                        lineWidth: isSelected ? 2 : 0
+                        lineWidth: isSelected ? 1.5 : 0
                     )
             )
         }

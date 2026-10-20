@@ -23,6 +23,7 @@ pub struct DateConstraint {
 pub struct SearchQuery {
     pub raw_text: String,
     pub terms: Vec<String>,
+    pub or_groups: Vec<Vec<String>>,
     pub negated_terms: Vec<String>,
     pub extensions: Vec<String>,
     pub size_constraints: Vec<SizeConstraint>,
@@ -43,6 +44,9 @@ impl SearchQuery {
         if trimmed.is_empty() {
             return query;
         }
+
+        let mut current_or_group: Vec<String> = Vec::new();
+        let mut pending_or = false;
 
         for token in trimmed.split_whitespace() {
             if let Some(exts) = token.strip_prefix("ext:") {
@@ -71,10 +75,52 @@ impl SearchQuery {
                 if !cleaned.is_empty() {
                     query.negated_terms.push(cleaned);
                 }
+            } else if token == "|" {
+                pending_or = true;
+                if current_or_group.is_empty() {
+                    if let Some(prev) = query.terms.pop() {
+                        current_or_group.push(prev);
+                    }
+                }
             } else {
                 let cleaned = token.to_lowercase();
-                query.terms.push(cleaned);
+                if cleaned.contains('|') {
+                    let parts: Vec<String> = cleaned
+                        .split('|')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if !current_or_group.is_empty() {
+                        current_or_group.extend(parts);
+                    } else if pending_or {
+                        if let Some(prev) = query.terms.pop() {
+                            current_or_group.push(prev);
+                        }
+                        current_or_group.extend(parts);
+                    } else if parts.len() > 1 {
+                        query.or_groups.push(parts);
+                    } else if let Some(single) = parts.into_iter().next() {
+                        query.terms.push(single);
+                    }
+                    pending_or = false;
+                } else if pending_or {
+                    current_or_group.push(cleaned);
+                    pending_or = false;
+                } else {
+                    if current_or_group.len() > 1 {
+                        query.or_groups.push(std::mem::take(&mut current_or_group));
+                    } else {
+                        current_or_group.clear();
+                    }
+                    query.terms.push(cleaned);
+                }
             }
+        }
+
+        if current_or_group.len() > 1 {
+            query.or_groups.push(current_or_group);
+        } else if let Some(single) = current_or_group.pop() {
+            query.terms.push(single);
         }
 
         query

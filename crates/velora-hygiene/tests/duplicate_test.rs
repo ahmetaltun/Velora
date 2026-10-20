@@ -48,6 +48,17 @@ fn test_progressive_duplicate_detection() {
     let (fe_off, fe_len) = volume.pool.push("file_e.bin");
     volume.add_file(FileRecord::new(fe_off, fe_len, FileFlags::IS_DELETED, dup_dir, 10_000, 5000));
 
+    // 5. File F: Same size (10,000 bytes) and identical first 4KB, but differing suffix -> eliminated by Tier 2 sparse probe
+    let mut content_f = vec![0xAB; 10_000];
+    for b in &mut content_f[6_000..10_000] {
+        *b = 0xFE;
+    }
+    let file_f_path = temp.join("file_f.bin");
+    fs::write(&file_f_path, &content_f).unwrap();
+
+    let (ff_off, ff_len) = volume.pool.push("file_f.bin");
+    volume.add_file(FileRecord::new(ff_off, ff_len, FileFlags::empty(), dup_dir, 10_000, 6000));
+
     let summary = DuplicateFinder::find_duplicates(&volume, 1_000);
 
     assert_eq!(summary.total_duplicate_groups, 1);
@@ -63,6 +74,43 @@ fn test_progressive_duplicate_detection() {
     assert_eq!(group.files[0].modified_secs, 1000);
     assert!(!group.files[1].is_original);
     assert_eq!(group.files[1].modified_secs, 2000);
+
+    let _ = fs::remove_dir_all(&temp);
+}
+
+#[test]
+fn test_lockstep_early_abort_internal_mismatch() {
+    let temp = std::env::temp_dir().join("velora_test_dups_abort");
+    let _ = fs::remove_dir_all(&temp);
+    fs::create_dir_all(&temp).unwrap();
+
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (d_off, d_len) = volume.pool.push(temp.to_str().unwrap().trim_start_matches('/'));
+    let dup_dir = volume.dirs.insert(d_off, d_len, None);
+
+    // Two 200,000 byte files
+    // File G and File H: identical prefix (0..4096), identical suffix (195904..200000), identical midpoint (98000..102000)
+    // But they differ at byte 80,000
+    let data_g = vec![0x77; 200_000];
+    let mut data_h = vec![0x77; 200_000];
+    data_h[80_000] = 0x99; // Differing byte between midpoint and prefix
+
+    let file_g_path = temp.join("file_g.bin");
+    let file_h_path = temp.join("file_h.bin");
+    fs::write(&file_g_path, &data_g).unwrap();
+    fs::write(&file_h_path, &data_h).unwrap();
+
+    let (fg_off, fg_len) = volume.pool.push("file_g.bin");
+    volume.add_file(FileRecord::new(fg_off, fg_len, FileFlags::empty(), dup_dir, 200_000, 100));
+
+    let (fh_off, fh_len) = volume.pool.push("file_h.bin");
+    volume.add_file(FileRecord::new(fh_off, fh_len, FileFlags::empty(), dup_dir, 200_000, 200));
+
+    let summary = DuplicateFinder::find_duplicates(&volume, 1_000);
+
+    // They should NOT be confirmed as duplicates
+    assert_eq!(summary.total_duplicate_groups, 0);
+    assert_eq!(summary.total_duplicate_files, 0);
 
     let _ = fs::remove_dir_all(&temp);
 }

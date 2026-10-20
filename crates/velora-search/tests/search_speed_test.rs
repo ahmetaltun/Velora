@@ -15,6 +15,60 @@ fn test_query_parsing() {
 }
 
 #[test]
+fn test_boolean_or_query_parsing() {
+    let q1 = SearchQuery::parse("target | node_modules | deriveddata");
+    assert_eq!(q1.terms.len(), 0);
+    assert_eq!(q1.or_groups.len(), 1);
+    assert_eq!(q1.or_groups[0], vec!["target", "node_modules", "deriveddata"]);
+
+    let q2 = SearchQuery::parse("report|invoice ext:pdf");
+    assert_eq!(q2.terms.len(), 0);
+    assert_eq!(q2.or_groups.len(), 1);
+    assert_eq!(q2.or_groups[0], vec!["report", "invoice"]);
+    assert_eq!(q2.extensions, vec!["pdf"]);
+
+    let q3 = SearchQuery::parse("important note | memo !archive");
+    assert_eq!(q3.terms, vec!["important"]);
+    assert_eq!(q3.or_groups, vec![vec!["note", "memo"]]);
+    assert_eq!(q3.negated_terms, vec!["archive"]);
+}
+
+#[test]
+fn test_boolean_or_search_execution() {
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (r_off, r_len) = volume.pool.push("Users");
+    let root = volume.dirs.insert(r_off, r_len, None);
+
+    let items = [
+        ("target", true),
+        ("node_modules", true),
+        ("DerivedData", true),
+        ("src", true),
+        ("main.rs", false),
+        ("Cargo.toml", false),
+    ];
+
+    for (name, is_dir) in items {
+        let (n_off, n_len) = volume.pool.push(name);
+        let flags = if is_dir { FileFlags::IS_DIRECTORY } else { FileFlags::empty() };
+        volume.add_file(FileRecord::new(n_off, n_len, flags, root, 0, 100));
+    }
+
+    let query = SearchQuery::parse("target | node_modules | deriveddata");
+    let report = SearchEngine::search(&volume, &query, None, 10);
+
+    assert_eq!(report.total_matched, 3);
+    let matched_names: Vec<&str> = report
+        .hits
+        .iter()
+        .map(|h| volume.get_file_name(&volume.records[h.record_index]))
+        .collect();
+    assert!(matched_names.contains(&"target"));
+    assert!(matched_names.contains(&"node_modules"));
+    assert!(matched_names.contains(&"DerivedData"));
+}
+
+#[test]
 fn test_half_million_records_search_latency() {
     let mut volume = VolumeIndex::new("Macintosh HD", "/");
 

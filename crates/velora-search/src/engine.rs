@@ -70,7 +70,7 @@ impl SearchEngine {
                 }
             }
 
-            // Required positive terms
+            // Required positive terms (AND)
             let mut score = 100u32;
             for term in &query.terms {
                 if !contains_ignore_case_ascii(file_name, term) {
@@ -82,6 +82,28 @@ impl SearchEngine {
                 } else if file_name.to_ascii_lowercase().starts_with(term) {
                     score += 25;
                 }
+            }
+
+            // Disjunction OR groups (at least one alternative in each group must match)
+            for group in &query.or_groups {
+                let mut matched_any = false;
+                let mut best_bonus = 0u32;
+
+                for term in group {
+                    if contains_ignore_case_ascii(file_name, term) {
+                        matched_any = true;
+                        if file_name.eq_ignore_ascii_case(term) {
+                            best_bonus = best_bonus.max(50);
+                        } else if file_name.to_ascii_lowercase().starts_with(term) {
+                            best_bonus = best_bonus.max(25);
+                        }
+                    }
+                }
+
+                if !matched_any {
+                    return None;
+                }
+                score += best_bonus;
             }
 
             Some(SearchHit {
