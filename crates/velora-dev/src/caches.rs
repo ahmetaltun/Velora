@@ -2,6 +2,8 @@ use crate::model::{CacheEcosystem, PackageCacheItem, PackageCacheSummary};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use velora_analyzer::SizeRollup;
+use velora_index::VolumeIndex;
 
 pub struct PackageCacheScanner;
 
@@ -109,7 +111,73 @@ const TARGETS: &[CacheTarget] = &[
 
 impl PackageCacheScanner {
     /// Discovers and measures all package manager and developer tool caches under the user's home directory.
-    pub fn scan_home(home_path: &Path) -> PackageCacheSummary {
+    /// When a populated `VolumeIndex` is provided, queries memory/catalog.bin with zero disk I/O.
+    pub fn scan_home(home_path: &Path, volume: Option<&VolumeIndex>) -> PackageCacheSummary {
+        if let Some(vol) = volume.filter(|v| v.total_files() > 0) {
+            return Self::scan_from_volume(home_path, vol);
+        }
+        Self::scan_from_disk(home_path)
+    }
+
+    fn scan_from_volume(home_path: &Path, volume: &VolumeIndex) -> PackageCacheSummary {
+        let rollup = SizeRollup::compute(volume);
+        let mut summary = PackageCacheSummary::default();
+
+        for target in TARGETS {
+            let full_path = home_path.join(target.relative_path);
+
+            if let Some(dir_id) = volume.find_dir_by_path(&full_path) {
+                let size_bytes = rollup.get_size(dir_id);
+                if size_bytes == 0 {
+                    continue;
+                }
+                let path = volume.build_dir_path(dir_id);
+                let modified_secs = volume.get_dir_modified_secs(dir_id);
+
+                summary.total_bytes += size_bytes;
+                summary.items.push(PackageCacheItem {
+                    name: target.name.to_string(),
+                    path,
+                    ecosystem: target.ecosystem,
+                    size_bytes,
+                    modified_secs,
+                    color_hex: target.ecosystem.color_hex().to_string(),
+                    can_collect: target.can_collect,
+                });
+            } else {
+                // If it's a single file (e.g. Docker.raw), check volume records
+                let clean_full = full_path.to_string_lossy().trim_end_matches('/').to_string();
+                if let Some(parent_path) = full_path.parent() {
+                    if let Some(parent_id) = volume.find_dir_by_path(parent_path) {
+                        let file_name = full_path.file_name().and_then(|f| f.to_str()).unwrap_or("");
+                        for rec in &volume.records {
+                            if !rec.is_deleted() && !rec.is_dir() && rec.parent_dir == parent_id {
+                                if volume.get_file_name(rec) == file_name && rec.size > 0 {
+                                    summary.total_bytes += rec.size;
+                                    summary.items.push(PackageCacheItem {
+                                        name: target.name.to_string(),
+                                        path: clean_full.clone(),
+                                        ecosystem: target.ecosystem,
+                                        size_bytes: rec.size,
+                                        modified_secs: rec.modified_secs,
+                                        color_hex: target.ecosystem.color_hex().to_string(),
+                                        can_collect: target.can_collect,
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort largest caches first
+        summary.items.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        summary
+    }
+
+    fn scan_from_disk(home_path: &Path) -> PackageCacheSummary {
         let mut summary = PackageCacheSummary::default();
 
         for target in TARGETS {
@@ -209,7 +277,7 @@ mod tests {
         fs::create_dir_all(&cargo_cache).unwrap();
         fs::write(cargo_cache.join("dummy.crate"), vec![0u8; 100_000]).unwrap();
 
-        let summary = PackageCacheScanner::scan_home(&temp);
+        let summary = PackageCacheScanner::scan_home(&temp, None);
         assert_eq!(summary.items.len(), 1);
         assert_eq!(summary.items[0].ecosystem, CacheEcosystem::RustCargo);
         assert_eq!(summary.items[0].size_bytes, 100_000);

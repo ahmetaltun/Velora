@@ -2,12 +2,166 @@ use crate::model::{XcodeCategoryKind, XcodeItem, XcodeStorageSummary};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use velora_analyzer::SizeRollup;
+use velora_index::VolumeIndex;
 
 pub struct XcodeInspector;
 
 impl XcodeInspector {
     /// Discovers and summarizes all Xcode storage locations starting from a user's home directory.
-    pub fn inspect_home(home_path: &Path) -> XcodeStorageSummary {
+    /// When a populated `VolumeIndex` is provided, queries memory/catalog.bin with zero disk I/O.
+    pub fn inspect_home(home_path: &Path, volume: Option<&VolumeIndex>) -> XcodeStorageSummary {
+        if let Some(vol) = volume.filter(|v| v.total_files() > 0) {
+            return Self::inspect_from_volume(home_path, vol);
+        }
+        Self::inspect_from_disk(home_path)
+    }
+
+    fn inspect_from_volume(home_path: &Path, volume: &VolumeIndex) -> XcodeStorageSummary {
+        let rollup = SizeRollup::compute(volume);
+        let dev_dir = home_path.join("Library/Developer");
+        let xcode_dir = dev_dir.join("Xcode");
+        let sim_dir = dev_dir.join("CoreSimulator/Devices");
+
+        let mut summary = XcodeStorageSummary::default();
+
+        // 1. DerivedData
+        let derived_data_path = xcode_dir.join("DerivedData");
+        Self::collect_volume_subdirectories(
+            &derived_data_path,
+            XcodeCategoryKind::DerivedData,
+            volume,
+            &rollup,
+            &mut summary,
+        );
+
+        // 2. Archives
+        let archives_path = xcode_dir.join("Archives");
+        Self::collect_volume_archives(&archives_path, volume, &rollup, &mut summary);
+
+        // 3. Device Support (iOS, watchOS, tvOS)
+        let support_dirs = [
+            xcode_dir.join("iOS DeviceSupport"),
+            xcode_dir.join("watchOS DeviceSupport"),
+            xcode_dir.join("tvOS DeviceSupport"),
+        ];
+        for s_dir in &support_dirs {
+            Self::collect_volume_subdirectories(
+                s_dir,
+                XcodeCategoryKind::DeviceSupport,
+                volume,
+                &rollup,
+                &mut summary,
+            );
+        }
+
+        // 4. CoreSimulator Devices
+        Self::collect_volume_subdirectories(
+            &sim_dir,
+            XcodeCategoryKind::Simulators,
+            volume,
+            &rollup,
+            &mut summary,
+        );
+
+        // Compute category totals
+        for item in &summary.items {
+            summary.total_bytes += item.size_bytes;
+            match item.category {
+                XcodeCategoryKind::DerivedData => summary.derived_data_bytes += item.size_bytes,
+                XcodeCategoryKind::Archives => summary.archives_bytes += item.size_bytes,
+                XcodeCategoryKind::DeviceSupport => summary.device_support_bytes += item.size_bytes,
+                XcodeCategoryKind::Simulators => summary.simulator_bytes += item.size_bytes,
+                XcodeCategoryKind::DocumentationCache => {}
+            }
+        }
+
+        // Sort items descending by size
+        summary.items.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        summary
+    }
+
+    fn collect_volume_subdirectories(
+        parent_path: &Path,
+        category: XcodeCategoryKind,
+        volume: &VolumeIndex,
+        rollup: &SizeRollup,
+        summary: &mut XcodeStorageSummary,
+    ) {
+        let parent_id = match volume.find_dir_by_path(parent_path) {
+            Some(id) => id,
+            None => return,
+        };
+
+        for (child_id, raw_name) in volume.get_child_dirs(parent_id) {
+            let display_name = if category == XcodeCategoryKind::DerivedData {
+                if let Some(hyphen_idx) = raw_name.rfind('-') {
+                    if hyphen_idx > 0 && hyphen_idx + 20 <= raw_name.len() {
+                        raw_name[0..hyphen_idx].to_string()
+                    } else {
+                        raw_name.to_string()
+                    }
+                } else {
+                    raw_name.to_string()
+                }
+            } else {
+                raw_name.to_string()
+            };
+
+            let size_bytes = rollup.get_size(child_id);
+            if size_bytes == 0 {
+                continue;
+            }
+
+            let path = volume.build_dir_path(child_id);
+            let modified_secs = volume.get_dir_modified_secs(child_id);
+
+            summary.items.push(XcodeItem {
+                name: display_name,
+                path,
+                category,
+                size_bytes,
+                modified_secs,
+                color_hex: category.color_hex().to_string(),
+            });
+        }
+    }
+
+    fn collect_volume_archives(
+        archives_root: &Path,
+        volume: &VolumeIndex,
+        rollup: &SizeRollup,
+        summary: &mut XcodeStorageSummary,
+    ) {
+        let root_id = match volume.find_dir_by_path(archives_root) {
+            Some(id) => id,
+            None => return,
+        };
+
+        for (date_dir_id, _) in volume.get_child_dirs(root_id) {
+            for (archive_id, raw_name) in volume.get_child_dirs(date_dir_id) {
+                if raw_name.ends_with(".xcarchive") {
+                    let size_bytes = rollup.get_size(archive_id);
+                    if size_bytes == 0 {
+                        continue;
+                    }
+                    let path = volume.build_dir_path(archive_id);
+                    let modified_secs = volume.get_dir_modified_secs(archive_id);
+
+                    summary.items.push(XcodeItem {
+                        name: raw_name.to_string(),
+                        path,
+                        category: XcodeCategoryKind::Archives,
+                        size_bytes,
+                        modified_secs,
+                        color_hex: XcodeCategoryKind::Archives.color_hex().to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn inspect_from_disk(home_path: &Path) -> XcodeStorageSummary {
         let dev_dir = home_path.join("Library/Developer");
         let xcode_dir = dev_dir.join("Xcode");
         let sim_dir = dev_dir.join("CoreSimulator/Devices");
@@ -208,7 +362,7 @@ mod tests {
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp).unwrap();
 
-        let summary = XcodeInspector::inspect_home(&temp);
+        let summary = XcodeInspector::inspect_home(&temp, None);
         assert_eq!(summary.total_bytes, 0);
         assert!(summary.items.is_empty());
 

@@ -1,8 +1,17 @@
 use crate::pool::StringPool;
-use crate::record::{FileId, FileRecord};
+use crate::record::{DirId, FileId, FileRecord};
 use crate::table::DirectoryTable;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppMetadataEntry {
+    pub name: String,
+    pub bundle_id: String,
+    pub version: String,
+    pub app_path: String,
+    pub is_system_app: bool,
+}
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct VolumeIndex {
@@ -12,6 +21,8 @@ pub struct VolumeIndex {
     pub pool: StringPool,
     pub dirs: DirectoryTable,
     pub records: Vec<FileRecord>,
+    #[serde(default)]
+    pub apps: Vec<AppMetadataEntry>,
 }
 
 impl VolumeIndex {
@@ -23,6 +34,7 @@ impl VolumeIndex {
             pool: StringPool::new(),
             dirs: DirectoryTable::new(),
             records: Vec::with_capacity(1024 * 1024),
+            apps: Vec::new(),
         }
     }
 
@@ -137,5 +149,124 @@ impl VolumeIndex {
         self.pool.len_bytes()
             + (self.records.len() * std::mem::size_of::<FileRecord>())
             + (self.dirs.len() * 16)
+    }
+
+    /// Resolves a path (relative or absolute) to a DirId inside the index.
+    pub fn find_dir_by_path(&self, target_path: &Path) -> Option<DirId> {
+        let target_str = target_path.to_string_lossy();
+        let clean = target_str.trim_end_matches('/');
+
+        let dir_count = self.dirs.len();
+
+        // 1. Check if it matches any root directory directly or starts with that root
+        for i in 0..dir_count {
+            let dir_id = DirId(i as u32);
+            if let Some(entry) = self.dirs.get(dir_id) {
+                if entry.parent.is_none() {
+                    let root_name = self.pool.get(entry.name_offset, entry.name_len);
+                    let clean_root = root_name.trim_end_matches('/');
+
+                    if clean == clean_root {
+                        return Some(dir_id);
+                    }
+
+                    if clean.starts_with(clean_root) {
+                        let remainder = &clean[clean_root.len()..];
+                        if remainder.starts_with('/') {
+                            let sub_path = &remainder[1..];
+                            if let Some(found) = self.find_child_by_rel_path(dir_id, sub_path) {
+                                return Some(found);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Also support relative path matching across roots (e.g. "Library/Developer")
+        let clean_rel = clean.trim_start_matches('/');
+        for i in 0..dir_count {
+            let dir_id = DirId(i as u32);
+            if let Some(entry) = self.dirs.get(dir_id) {
+                if entry.parent.is_none() {
+                    if let Some(found) = self.find_child_by_rel_path(dir_id, clean_rel) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Recursively traverses child directory components from a parent DirId.
+    fn find_child_by_rel_path(&self, start: DirId, rel_path: &str) -> Option<DirId> {
+        let mut curr = start;
+        let dir_count = self.dirs.len();
+
+        for component in rel_path.split('/').filter(|s| !s.is_empty()) {
+            let mut found = None;
+            for i in 0..dir_count {
+                let id = DirId(i as u32);
+                if let Some(entry) = self.dirs.get(id) {
+                    if entry.parent == Some(curr) {
+                        let name = self.pool.get(entry.name_offset, entry.name_len);
+                        if name == component {
+                            found = Some(id);
+                            break;
+                        }
+                    }
+                }
+            }
+            match found {
+                Some(next) => curr = next,
+                None => return None,
+            }
+        }
+        Some(curr)
+    }
+
+    /// Returns immediate child directories of the given parent directory as (DirId, name).
+    pub fn get_child_dirs(&self, parent: DirId) -> Vec<(DirId, &str)> {
+        let mut children = Vec::new();
+        let dir_count = self.dirs.len();
+        for i in 0..dir_count {
+            let id = DirId(i as u32);
+            if let Some(entry) = self.dirs.get(id) {
+                if entry.parent == Some(parent) {
+                    let name = self.pool.get(entry.name_offset, entry.name_len);
+                    children.push((id, name));
+                }
+            }
+        }
+        children
+    }
+
+    /// Returns the name of the directory.
+    pub fn get_dir_name(&self, dir_id: DirId) -> Option<&str> {
+        self.dirs.get(dir_id).map(|e| self.pool.get(e.name_offset, e.name_len))
+    }
+
+    /// Reconstructs the full path for a directory ID.
+    pub fn build_dir_path(&self, dir_id: DirId) -> String {
+        let mut path = String::with_capacity(128);
+        self.dirs.build_full_path(dir_id, &self.pool, &mut path);
+        path
+    }
+
+    /// Retrieves modification timestamp for a directory if recorded.
+    pub fn get_dir_modified_secs(&self, dir_id: DirId) -> u64 {
+        if let Some(entry) = self.dirs.get(dir_id) {
+            let parent = entry.parent.unwrap_or(dir_id);
+            let name = self.pool.get(entry.name_offset, entry.name_len);
+            for rec in &self.records {
+                if rec.is_dir() && rec.parent_dir == parent {
+                    if self.get_file_name(rec) == name {
+                        return rec.modified_secs;
+                    }
+                }
+            }
+        }
+        0
     }
 }

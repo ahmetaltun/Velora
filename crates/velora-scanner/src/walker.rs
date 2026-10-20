@@ -71,14 +71,29 @@ pub fn scan_directory_with_progress(
     volume: &mut VolumeIndex,
     listener: Option<&dyn ProgressListener>,
 ) -> std::io::Result<()> {
-    let root_str = root_path.to_string_lossy();
-    let (offset, len) = volume.pool.push(&root_str);
-    let root_dir_id = volume.dirs.insert(offset, len, None);
+    scan_directories_with_progress(&[root_path], volume, listener)
+}
 
+/// Scans multiple root paths recursively into a single VolumeIndex, reporting progress through an optional ProgressListener.
+pub fn scan_directories_with_progress(
+    roots: &[&Path],
+    volume: &mut VolumeIndex,
+    listener: Option<&dyn ProgressListener>,
+) -> std::io::Result<()> {
     let mut context = ScanContext::new(listener);
-    let res = scan_dir_recursive(root_path, root_dir_id, volume, &mut context);
-    context.finish(root_path);
-    res
+    for &root_path in roots {
+        if !root_path.exists() {
+            continue;
+        }
+        let root_str = root_path.to_string_lossy();
+        let (offset, len) = volume.pool.push(&root_str);
+        let root_dir_id = volume.dirs.insert(offset, len, None);
+        let _ = scan_dir_recursive(root_path, root_dir_id, volume, &mut context);
+    }
+    if let Some(&first) = roots.first() {
+        context.finish(first);
+    }
+    Ok(())
 }
 
 fn scan_dir_recursive(

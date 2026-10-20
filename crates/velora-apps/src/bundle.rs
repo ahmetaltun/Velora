@@ -8,8 +8,46 @@ use std::path::{Path, PathBuf};
 pub struct BundleScanner;
 
 impl BundleScanner {
-    /// Discovers all installed applications across `/Applications` and `~/Applications`.
+    /// Discovers all installed applications. If catalog metadata is available in `resolver.volume.apps`,
+    /// queries memory with zero physical disk I/O. Otherwise falls back to disk scan.
     pub fn scan_installed_apps(
+        home_path: &Path,
+        resolver: Option<&IndexFootprintResolver>,
+    ) -> Vec<InstalledApp> {
+        if let Some(res) = resolver {
+            if !res.volume.apps.is_empty() {
+                let mut apps = Vec::with_capacity(res.volume.apps.len());
+                for meta in &res.volume.apps {
+                    let app_path = Path::new(&meta.app_path);
+                    let bundle_size = res.query_size(app_path).unwrap_or(0);
+                    let bundle_part = AppPart {
+                        name: format!("Application Bundle ({})", meta.name),
+                        path: meta.app_path.clone(),
+                        kind: AppPartKind::ApplicationBundle,
+                        size_bytes: bundle_size,
+                        color_hex: AppPartKind::ApplicationBundle.color_hex().to_string(),
+                    };
+
+                    apps.push(InstalledApp {
+                        name: meta.name.clone(),
+                        bundle_id: meta.bundle_id.clone(),
+                        version: meta.version.clone(),
+                        app_path: meta.app_path.clone(),
+                        is_system_app: meta.is_system_app,
+                        total_size_bytes: bundle_size,
+                        parts: vec![bundle_part],
+                    });
+                }
+                apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                return apps;
+            }
+        }
+
+        Self::scan_installed_apps_from_disk(home_path, resolver)
+    }
+
+    /// Explicit disk traversal of `/Applications` and `~/Applications` used during scan time.
+    pub fn scan_installed_apps_from_disk(
         home_path: &Path,
         resolver: Option<&IndexFootprintResolver>,
     ) -> Vec<InstalledApp> {

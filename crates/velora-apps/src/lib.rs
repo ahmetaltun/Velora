@@ -10,11 +10,27 @@ pub use index_resolver::IndexFootprintResolver;
 pub use model::{AppPart, AppPartKind, InstalledApp, OrphanedResidue};
 pub use orphans::OrphanDetector;
 use std::path::Path;
-use velora_index::VolumeIndex;
+use velora_index::{AppMetadataEntry, VolumeIndex};
 
 pub struct AppManager;
 
 impl AppManager {
+    /// Discovers all apps from disk and populates their metadata into the volume index
+    /// during scan time, so subsequent runs can be 100% in-memory from catalog.bin.
+    pub fn index_apps_into_volume(volume: &mut VolumeIndex, home_path: &Path) {
+        let apps = BundleScanner::scan_installed_apps_from_disk(home_path, None);
+        volume.apps = apps
+            .into_iter()
+            .map(|a| AppMetadataEntry {
+                name: a.name,
+                bundle_id: a.bundle_id,
+                version: a.version,
+                app_path: a.app_path,
+                is_system_app: a.is_system_app,
+            })
+            .collect();
+    }
+
     /// Discovers all installed apps and resolves their complete ~/Library footprints,
     /// leveraging the pre-indexed `VolumeIndex` when available to bypass physical disk I/O.
     pub fn list_apps_with_footprint(

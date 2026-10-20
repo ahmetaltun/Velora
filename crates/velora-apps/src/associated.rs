@@ -104,7 +104,19 @@ impl AssociatedFileResolver {
 
         // Group Containers
         let group_containers = lib_path.join("Group Containers");
-        if group_containers.exists() {
+        if let Some(res) = resolver {
+            for (p, folder_name, _) in res.list_subdirs(&group_containers) {
+                if folder_name.contains(bundle_id) || folder_name.contains(app_name) {
+                    Self::check_candidate(
+                        &p,
+                        AppPartKind::SandboxedContainer,
+                        "Group Container",
+                        resolver,
+                        &mut additional_parts,
+                    );
+                }
+            }
+        } else if group_containers.exists() {
             if let Ok(entries) = std::fs::read_dir(&group_containers) {
                 for entry_res in entries.flatten() {
                     let p = entry_res.path();
@@ -142,7 +154,25 @@ impl AssociatedFileResolver {
         );
 
         let launch_agents = lib_path.join("LaunchAgents");
-        if launch_agents.exists() {
+        if let Some(res) = resolver {
+            if let Some(la_dir) = res.volume.find_dir_by_path(&launch_agents) {
+                for rec in &res.volume.records {
+                    if !rec.is_deleted() && !rec.is_dir() && rec.parent_dir == la_dir {
+                        let file_name = res.volume.get_file_name(rec);
+                        if file_name.contains(bundle_id) || file_name.contains(app_name) {
+                            let p = res.volume.resolve_full_path(rec);
+                            Self::check_candidate(
+                                Path::new(&p),
+                                AppPartKind::PreferencesAndDaemons,
+                                "Background LaunchAgent",
+                                resolver,
+                                &mut additional_parts,
+                            );
+                        }
+                    }
+                }
+            }
+        } else if launch_agents.exists() {
             if let Ok(entries) = std::fs::read_dir(&launch_agents) {
                 for entry_res in entries.flatten() {
                     let p = entry_res.path();
@@ -177,18 +207,7 @@ impl AssociatedFileResolver {
         out: &mut Vec<AppPart>,
     ) {
         let size_bytes = if let Some(res) = resolver {
-            match res.query_size(path) {
-                Some(sz) => sz,
-                None => {
-                    if path.is_file() {
-                        path.metadata().map(|m| m.len()).unwrap_or(0)
-                    } else if path.exists() {
-                        BundleScanner::calculate_dir_size(path)
-                    } else {
-                        0
-                    }
-                }
-            }
+            res.query_size(path).unwrap_or(0)
         } else {
             if !path.exists() {
                 return;

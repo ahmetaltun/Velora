@@ -253,15 +253,23 @@ impl VeloraEngine {
     ) -> bool {
         let mut vol = VolumeIndex::new(volume_name, &mount_point);
         let path = Path::new(&mount_point);
+
+        let mut roots: Vec<&Path> = vec![path];
+        let apps_path = Path::new("/Applications");
+        if apps_path.is_dir() && !path.starts_with(apps_path) && path != Path::new("/") {
+            roots.push(apps_path);
+        }
+
         let res = match callback.as_ref() {
             Some(cb) => {
                 let bridge = CallbackBridge { callback: cb.as_ref() };
-                velora_scanner::scan_directory_with_progress(path, &mut vol, Some(&bridge))
+                velora_scanner::scan_directories_with_progress(&roots, &mut vol, Some(&bridge))
             }
-            None => velora_scanner::scan_directory(path, &mut vol),
+            None => velora_scanner::scan_directories_with_progress(&roots, &mut vol, None),
         };
 
         if res.is_ok() {
+            velora_apps::AppManager::index_apps_into_volume(&mut vol, path);
             *self.volume.write() = vol;
             true
         } else {
@@ -410,7 +418,8 @@ impl VeloraEngine {
     }
 
     pub fn inspect_xcode(&self, home_path: String) -> XcodeSummaryRecord {
-        let summary = velora_dev::XcodeInspector::inspect_home(Path::new(&home_path));
+        let vol = self.volume.read();
+        let summary = velora_dev::XcodeInspector::inspect_home(Path::new(&home_path), Some(&*vol));
         XcodeSummaryRecord {
             derived_data_bytes: summary.derived_data_bytes,
             archives_bytes: summary.archives_bytes,
@@ -437,7 +446,8 @@ impl VeloraEngine {
     }
 
     pub fn inspect_package_caches(&self, home_path: String) -> PackageCacheSummaryRecord {
-        let summary = velora_dev::PackageCacheScanner::scan_home(Path::new(&home_path));
+        let vol = self.volume.read();
+        let summary = velora_dev::PackageCacheScanner::scan_home(Path::new(&home_path), Some(&*vol));
         PackageCacheSummaryRecord {
             total_bytes: summary.total_bytes,
             items: summary

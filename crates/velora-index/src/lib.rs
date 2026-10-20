@@ -8,4 +8,4 @@ pub use flags::FileFlags;
 pub use pool::StringPool;
 pub use record::{DirId, FileId, FileRecord};
 pub use table::DirectoryTable;
-pub use volume::VolumeIndex;
+pub use volume::{AppMetadataEntry, VolumeIndex};
