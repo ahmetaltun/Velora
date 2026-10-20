@@ -66,22 +66,21 @@ public struct LargeOldFilesMatrixView: View {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    private func parseColor(hex: String) -> Color {
-        let clean = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: clean).scanHexInt64(&int)
-        let r, g, b: UInt64
-        switch clean.count {
-        case 6:
-            (r, g, b) = (int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+    private func categoryColor(for category: String) -> Color {
+        switch category {
+        case "Developer", "DevCaches":
+            return VeloraTheme.amber
+        case "Media":
+            return Color.blue
+        case "Documents":
+            return VeloraTheme.mint
+        case "Archives":
+            return Color.purple
+        case "System Purgeable":
+            return Color.red
         default:
-            (r, g, b) = (100, 149, 237)
+            return VeloraTheme.teal
         }
-        return Color(
-            red: Double(r) / 255.0,
-            green: Double(g) / 255.0,
-            blue: Double(b) / 255.0
-        )
     }
 
     public var body: some View {
@@ -151,72 +150,90 @@ public struct LargeOldFilesMatrixView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let summary = summary, summary.totalFiles > 0 {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // 4x4 Heatmap Matrix Grid Card
-                        MatrixHeatmapGrid(
-                            cells: summary.cells,
-                            selectedCellId: $selectedCellId,
-                            formatBytes: formatBytes
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 14)
+                // PINNED CONTROLS AREA (4x4 Grid & Filter Bar)
+                VStack(spacing: 12) {
+                    // 4x4 Heatmap Matrix Grid Card
+                    MatrixHeatmapGrid(
+                        cells: summary.cells,
+                        selectedCellId: $selectedCellId,
+                        formatBytes: formatBytes
+                    )
 
-                        // Filter Chips Bar
-                        HStack(spacing: 8) {
-                            CategoryChip(title: "All", isSelected: selectedCategory == "All") {
-                                selectedCategory = "All"
-                            }
-                            CategoryChip(title: "Media", isSelected: selectedCategory == "Media") {
-                                selectedCategory = "Media"
-                            }
-                            CategoryChip(title: "Archives", isSelected: selectedCategory == "Archives") {
-                                selectedCategory = "Archives"
-                            }
-                            CategoryChip(title: "Documents", isSelected: selectedCategory == "Documents") {
-                                selectedCategory = "Documents"
-                            }
-                            CategoryChip(title: "Developer", isSelected: selectedCategory == "Developer") {
-                                selectedCategory = "Developer"
-                            }
-
-                            if selectedCellId != nil {
-                                Button("Reset Cell Filter") {
-                                    selectedCellId = nil
-                                }
-                                .buttonStyle(.borderless)
-                                .font(.caption)
-                                .foregroundColor(VeloraTheme.teal)
-                            }
-
-                            Spacer()
-
-                            HStack(spacing: 6) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundColor(.secondary)
-                                TextField("Filter files...", text: $searchFilter)
-                                    .textFieldStyle(.plain)
-                                    .frame(width: 140)
-                                if !searchFilter.isEmpty {
-                                    Button(action: { searchFilter = "" }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    // Filter Chips Bar
+                    HStack(spacing: 8) {
+                        CategoryChip(title: "All", isSelected: selectedCategory == "All") {
+                            selectedCategory = "All"
                         }
-                        .padding(.horizontal, 20)
+                        CategoryChip(title: "Media", isSelected: selectedCategory == "Media") {
+                            selectedCategory = "Media"
+                        }
+                        CategoryChip(title: "Archives", isSelected: selectedCategory == "Archives") {
+                            selectedCategory = "Archives"
+                        }
+                        CategoryChip(title: "Documents", isSelected: selectedCategory == "Documents") {
+                            selectedCategory = "Documents"
+                        }
+                        CategoryChip(title: "Developer", isSelected: selectedCategory == "Developer") {
+                            selectedCategory = "Developer"
+                        }
 
-                        // File List
-                        VStack(spacing: 6) {
+                        if selectedCellId != nil {
+                            Button("Reset Cell Filter") {
+                                selectedCellId = nil
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .foregroundColor(VeloraTheme.teal)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                            TextField("Filter files...", text: $searchFilter)
+                                .textFieldStyle(.plain)
+                                .frame(width: 140)
+                            if !searchFilter.isEmpty {
+                                Button(action: { searchFilter = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
+                .padding(.bottom, 12)
+                .background(.ultraThinMaterial)
+
+                Divider()
+
+                // DEDICATED SCROLLABLE VIRTUALIZED FILE LIST
+                if filteredFiles.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 36))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Text("No Files Match Selected Filter")
+                            .font(.headline)
+                        Text("Try selecting a different quadrant in the matrix or clearing the category filter.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
                             ForEach(filteredFiles) { file in
                                 LargeFileCard(
                                     file: file,
-                                    categoryColor: parseColor(hex: file.colorHex),
+                                    categoryColor: categoryColor(for: file.categoryName),
                                     formatBytes: formatBytes,
                                     onCollect: {
                                         viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
@@ -225,7 +242,7 @@ public struct LargeOldFilesMatrixView: View {
                             }
                         }
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                        .padding(.vertical, 14)
                     }
                 }
             } else {
@@ -460,7 +477,10 @@ private struct LargeFileCard: View {
             .help("Stage into Collector Tray")
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
