@@ -59,6 +59,24 @@ fn test_progressive_duplicate_detection() {
     let (ff_off, ff_len) = volume.pool.push("file_f.bin");
     volume.add_file(FileRecord::new(ff_off, ff_len, FileFlags::empty(), dup_dir, 10_000, 6000));
 
+    // 6. File Symlink: Points to file_a.bin, has identical size, but marked IS_SYMLINK -> eliminated by Tier 1
+    let sym_path = temp.join("file_symlink.bin");
+    #[cfg(unix)]
+    let _ = std::os::unix::fs::symlink(&file_a_path, &sym_path);
+    let (fsym_off, fsym_len) = volume.pool.push("file_symlink.bin");
+    volume.add_file(FileRecord::new(fsym_off, fsym_len, FileFlags::IS_SYMLINK, dup_dir, 10_000, 7000));
+
+    // 7. File inside .app bundle: Points to a bundle resource with identical size & content -> protected & excluded
+    let app_bundle_dir = temp.join("TestApp.app");
+    fs::create_dir_all(&app_bundle_dir).unwrap();
+    let bundle_file = app_bundle_dir.join("asset.bin");
+    fs::write(&bundle_file, &content_ab).unwrap();
+
+    let (app_off, app_len) = volume.pool.push("TestApp.app");
+    let app_dir = volume.dirs.insert(app_off, app_len, Some(dup_dir));
+    let (bf_off, bf_len) = volume.pool.push("asset.bin");
+    volume.add_file(FileRecord::new(bf_off, bf_len, FileFlags::empty(), app_dir, 10_000, 8000));
+
     let summary = DuplicateFinder::find_duplicates(&volume, 1_000);
 
     assert_eq!(summary.total_duplicate_groups, 1);
@@ -111,6 +129,52 @@ fn test_lockstep_early_abort_internal_mismatch() {
     // They should NOT be confirmed as duplicates
     assert_eq!(summary.total_duplicate_groups, 0);
     assert_eq!(summary.total_duplicate_files, 0);
+
+    let _ = fs::remove_dir_all(&temp);
+}
+
+#[test]
+fn test_hardlink_deduplication() {
+    let temp = std::env::temp_dir().join("velora_test_dups_hardlink");
+    let _ = fs::remove_dir_all(&temp);
+    fs::create_dir_all(&temp).unwrap();
+
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (d_off, d_len) = volume.pool.push(temp.to_str().unwrap().trim_start_matches('/'));
+    let dup_dir = volume.dirs.insert(d_off, d_len, None);
+
+    // 1. Original file: 15,000 bytes
+    let content = vec![0x42; 15_000];
+    let file_orig = temp.join("orig.bin");
+    fs::write(&file_orig, &content).unwrap();
+
+    let (fo_off, fo_len) = volume.pool.push("orig.bin");
+    volume.add_file(FileRecord::new(fo_off, fo_len, FileFlags::empty(), dup_dir, 15_000, 100));
+
+    // 2. Hard link to original file: shares same inode, zero extra physical disk space
+    let file_hl = temp.join("hl.bin");
+    fs::hard_link(&file_orig, &file_hl).unwrap();
+
+    let (fhl_off, fhl_len) = volume.pool.push("hl.bin");
+    volume.add_file(FileRecord::new(fhl_off, fhl_len, FileFlags::empty(), dup_dir, 15_000, 200));
+
+    // Pure hardlink case: exactly 1 file with hardlinks -> 0 duplicate groups, 0 wasted space
+    let summary_hl_only = DuplicateFinder::find_duplicates(&volume, 1_000);
+    assert_eq!(summary_hl_only.total_duplicate_groups, 0);
+    assert_eq!(summary_hl_only.total_duplicate_files, 0);
+    assert_eq!(summary_hl_only.total_wasted_bytes, 0);
+
+    // 3. Independent physical copy with distinct inode: genuine duplicate wasting 15,000 bytes
+    let file_copy = temp.join("copy.bin");
+    fs::write(&file_copy, &content).unwrap();
+
+    let (fc_off, fc_len) = volume.pool.push("copy.bin");
+    volume.add_file(FileRecord::new(fc_off, fc_len, FileFlags::empty(), dup_dir, 15_000, 300));
+
+    let summary = DuplicateFinder::find_duplicates(&volume, 1_000);
+    assert_eq!(summary.total_duplicate_groups, 1);
+    assert_eq!(summary.total_duplicate_files, 2); // orig.bin and copy.bin (hl.bin deduplicated!)
+    assert_eq!(summary.total_wasted_bytes, 15_000); // Only 1 duplicate wasted
 
     let _ = fs::remove_dir_all(&temp);
 }

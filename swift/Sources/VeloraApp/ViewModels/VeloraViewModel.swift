@@ -580,6 +580,8 @@ public final class VeloraViewModel {
     }
 
     public func cleanStagedItems() {
+        let deletedPaths = Set(collectorItems.map { $0.path })
+
         for item in collectorItems {
             let url = URL(fileURLWithPath: item.path)
             try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
@@ -605,6 +607,56 @@ public final class VeloraViewModel {
         }
         if !orphanedResidues.isEmpty {
             loadOrphanedResidues()
+        }
+
+        // Optimistically update duplicateSummary and re-sync with engine
+        if let currentSummary = duplicateSummary {
+            var updatedGroups: [DuplicateGroupRecord] = []
+            var newTotalFiles: UInt32 = 0
+            var newTotalWasted: UInt64 = 0
+
+            for group in currentSummary.groups {
+                var remaining = group.files.filter { !deletedPaths.contains($0.path) }
+                if remaining.count >= 2 {
+                    // Ensure the oldest remaining file is marked as original if original was deleted
+                    remaining.sort(by: { $0.modifiedSecs < $1.modifiedSecs })
+                    for i in 0..<remaining.count {
+                        remaining[i].isOriginal = (i == 0)
+                    }
+
+                    let groupWasted = group.sizeBytes * UInt64(remaining.count - 1)
+                    let updatedGroup = DuplicateGroupRecord(
+                        groupId: group.groupId,
+                        hashHex: group.hashHex,
+                        sizeBytes: group.sizeBytes,
+                        totalWastedBytes: groupWasted,
+                        fileCount: UInt32(remaining.count),
+                        files: remaining
+                    )
+                    updatedGroups.append(updatedGroup)
+                    newTotalFiles += UInt32(remaining.count)
+                    newTotalWasted += groupWasted
+                }
+            }
+
+            self.duplicateSummary = DuplicateSummaryRecord(
+                totalDuplicateFiles: newTotalFiles,
+                totalDuplicateGroups: UInt32(updatedGroups.count),
+                totalWastedBytes: newTotalWasted,
+                groups: updatedGroups
+            )
+            loadDuplicates()
+        }
+
+        // Refresh developer artifacts and large old matrix if loaded
+        if !devArtifacts.isEmpty {
+            loadDevArtifacts()
+        }
+        if largeOldMatrix != nil {
+            loadLargeOldMatrix()
+        }
+        if packageCacheSummary != nil {
+            loadPackageCaches()
         }
     }
 }

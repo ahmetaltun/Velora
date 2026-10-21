@@ -253,12 +253,7 @@ impl VeloraEngine {
     ) -> bool {
         let mut vol = VolumeIndex::new(volume_name, &mount_point);
         let path = Path::new(&mount_point);
-
-        let mut roots: Vec<&Path> = vec![path];
-        let apps_path = Path::new("/Applications");
-        if apps_path.is_dir() && !path.starts_with(apps_path) && path != Path::new("/") {
-            roots.push(apps_path);
-        }
+        let roots: Vec<&Path> = vec![path];
 
         let res = match callback.as_ref() {
             Some(cb) => {

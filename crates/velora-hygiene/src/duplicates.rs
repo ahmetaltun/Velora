@@ -1,11 +1,14 @@
 use crate::model::{DuplicateFile, DuplicateGroup, DuplicateSummary};
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use velora_analyzer::CategoryKind;
 use velora_index::VolumeIndex;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 
 // CommonCrypto C FFI for hardware-accelerated SHA-256 on macOS
 #[repr(C)]
@@ -67,6 +70,19 @@ impl Sha256 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FileInodeId {
+    pub dev: u64,
+    pub ino: u64,
+}
+
+impl FileInodeId {
+    #[inline]
+    pub fn is_valid(&self) -> bool {
+        self.ino != 0
+    }
+}
+
 pub struct DuplicateFinder;
 
 impl DuplicateFinder {
@@ -78,7 +94,7 @@ impl DuplicateFinder {
         let mut size_buckets: HashMap<u64, Vec<usize>> = HashMap::new();
 
         for (idx, record) in volume.records.iter().enumerate() {
-            if record.is_deleted() || record.is_dir() || record.size < min_size_bytes {
+            if record.is_deleted() || record.is_dir() || record.is_symlink() || record.size < min_size_bytes {
                 continue;
             }
             size_buckets.entry(record.size).or_default().push(idx);
@@ -92,16 +108,29 @@ impl DuplicateFinder {
 
         // TIER 2: Parallel multi-point sparse probe (< 12KB disk I/O)
         // Samples 4KB prefix, 4KB suffix, and 4KB midpoint to eliminate non-duplicates early.
+        // Also tracks seen inodes to deduplicate hard links sharing identical APFS physical storage.
         let candidate_sparse_groups: Vec<Vec<(usize, String, [u8; 32])>> = candidate_size_groups
             .into_par_iter()
             .flat_map(|(size, indices)| {
                 let mut sparse_buckets: HashMap<[u8; 32], Vec<(usize, String, [u8; 32])>> = HashMap::new();
+                let mut seen_inodes: HashSet<FileInodeId> = HashSet::new();
 
                 for idx in indices {
                     let record = &volume.records[idx];
                     let path = volume.resolve_full_path(record);
 
-                    if let Some(sparse_hash) = Self::probe_sparse_fingerprint(Path::new(&path), size) {
+                    // Skip files located inside .app bundles to protect application code signing and system integrity
+                    if path.contains(".app/") {
+                        continue;
+                    }
+
+                    if let Some((inode_id, sparse_hash)) = Self::probe_sparse_fingerprint(Path::new(&path), size) {
+                        // If this inode was already seen in this size bucket, it's a hard link to the same physical file.
+                        // Hard links share physical storage blocks, so they do not waste space.
+                        if inode_id.is_valid() && !seen_inodes.insert(inode_id) {
+                            continue;
+                        }
+
                         sparse_buckets
                             .entry(sparse_hash)
                             .or_default()
@@ -241,8 +270,23 @@ impl DuplicateFinder {
     /// Computes a multi-point sparse fingerprint (under 12KB disk I/O):
     /// - Files <= 4KB: Reads up to 4096 bytes (full content hash).
     /// - Files > 4KB: Reads 4KB prefix, 4KB suffix, and 4KB midpoint (if > 64KB).
-    fn probe_sparse_fingerprint(path: &Path, file_size: u64) -> Option<[u8; 32]> {
+    /// Returns the filesystem Inode identity and sparse SHA-256 fingerprint.
+    fn probe_sparse_fingerprint(path: &Path, file_size: u64) -> Option<(FileInodeId, [u8; 32])> {
         let mut file = File::open(path).ok()?;
+        let meta = file.metadata().ok()?;
+
+        #[cfg(unix)]
+        let inode_id = FileInodeId {
+            dev: meta.dev(),
+            ino: meta.ino(),
+        };
+
+        #[cfg(not(unix))]
+        let inode_id = FileInodeId {
+            dev: 0,
+            ino: 0,
+        };
+
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 4096];
 
@@ -254,7 +298,7 @@ impl DuplicateFinder {
         hasher.update(&buffer[..bytes_read]);
 
         if file_size <= 4096 {
-            return Some(hasher.finalize());
+            return Some((inode_id, hasher.finalize()));
         }
 
         // 2. Suffix probe (last 4KB via seek)
@@ -280,7 +324,7 @@ impl DuplicateFinder {
             }
         }
 
-        Some(hasher.finalize())
+        Some((inode_id, hasher.finalize()))
     }
 
     /// Streams two files in lockstep 64KB chunks:

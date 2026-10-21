@@ -46,6 +46,11 @@ impl FileRecord {
     }
 
     #[inline(always)]
+    pub fn is_symlink(&self) -> bool {
+        self.flags.contains(FileFlags::IS_SYMLINK)
+    }
+
+    #[inline(always)]
     pub fn is_hidden(&self) -> bool {
         self.flags.contains(FileFlags::IS_HIDDEN)
     }

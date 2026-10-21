@@ -27,6 +27,20 @@ public struct DuplicateFinderView: View {
         guard let summary = summary else { return [] }
         var groups = summary.groups
 
+        // Exclude any file that no longer exists on disk
+        groups = groups.compactMap { group in
+            let existingFiles = group.files.filter { FileManager.default.fileExists(atPath: $0.path) }
+            guard existingFiles.count >= 2 else { return nil }
+            if existingFiles.count == group.files.count {
+                return group
+            }
+            var updated = group
+            updated.files = existingFiles
+            updated.fileCount = UInt32(existingFiles.count)
+            updated.totalWastedBytes = group.sizeBytes * UInt64(existingFiles.count - 1)
+            return updated
+        }
+
         let query = searchFilter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !query.isEmpty {
             groups = groups.filter { group in
@@ -38,6 +52,10 @@ public struct DuplicateFinderView: View {
         }
 
         return groups
+    }
+
+    private var stagedPaths: Set<String> {
+        Set(viewModel.collectorItems.map { $0.path })
     }
 
     private func formatBytes(_ bytes: UInt64) -> String {
@@ -193,13 +211,18 @@ public struct DuplicateFinderView: View {
                             group: group,
                             formatBytes: formatBytes,
                             parseColor: parseColor,
+                            stagedPaths: stagedPaths,
                             onStageDuplicates: {
                                 for file in group.files where !file.isOriginal {
                                     viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
                                 }
                             },
-                            onCollectSingle: { file in
-                                viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                            onToggleCollect: { file in
+                                if stagedPaths.contains(file.path) {
+                                    viewModel.removeCollected(path: file.path)
+                                } else {
+                                    viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                                }
                             }
                         )
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -223,8 +246,9 @@ private struct DuplicateGroupCard: View {
     let group: DuplicateGroupRecord
     let formatBytes: (UInt64) -> String
     let parseColor: (String) -> Color
+    let stagedPaths: Set<String>
     let onStageDuplicates: () -> Void
-    let onCollectSingle: (DuplicateFileRecord) -> Void
+    let onToggleCollect: (DuplicateFileRecord) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -265,9 +289,10 @@ private struct DuplicateGroupCard: View {
                 ForEach(group.files) { file in
                     DuplicateFileRow(
                         file: file,
+                        isStaged: stagedPaths.contains(file.path),
                         categoryColor: parseColor(file.colorHex),
                         formatBytes: formatBytes,
-                        onCollect: { onCollectSingle(file) }
+                        onToggleCollect: { onToggleCollect(file) }
                     )
                 }
             }
@@ -285,9 +310,16 @@ private struct DuplicateGroupCard: View {
 
 private struct DuplicateFileRow: View {
     let file: DuplicateFileRecord
+    let isStaged: Bool
     let categoryColor: Color
     let formatBytes: (UInt64) -> String
-    let onCollect: () -> Void
+    let onToggleCollect: () -> Void
+
+    private var parentDirectoryName: String {
+        let parent = (file.path as NSString).deletingLastPathComponent
+        let name = (parent as NSString).lastPathComponent
+        return name.isEmpty ? "/" : name
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -300,6 +332,18 @@ private struct DuplicateFileRow: View {
                     Text(file.name)
                         .font(.system(.subheadline, weight: .semibold))
                         .lineLimit(1)
+
+                    HStack(spacing: 3) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9))
+                        Text(parentDirectoryName)
+                            .font(.system(size: 10, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
 
                     if file.isOriginal {
                         Text("ORIGINAL")
@@ -315,6 +359,15 @@ private struct DuplicateFileRow: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Color.orange.opacity(0.15), in: Capsule())
+
+                        if isStaged {
+                            Text("STAGED")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(VeloraTheme.teal)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(VeloraTheme.teal.opacity(0.15), in: Capsule())
+                        }
                     }
                 }
 
@@ -323,6 +376,7 @@ private struct DuplicateFileRow: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .help(file.path)
             }
 
             Spacer()
@@ -351,12 +405,12 @@ private struct DuplicateFileRow: View {
 
             // Stage to Collector (only enabled if duplicate)
             if !file.isOriginal {
-                Button(action: onCollect) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.orange)
+                Button(action: onToggleCollect) {
+                    Image(systemName: isStaged ? "checkmark.circle.fill" : "plus.circle.fill")
+                        .foregroundColor(isStaged ? VeloraTheme.teal : .orange)
                 }
                 .buttonStyle(.plain)
-                .help("Stage into Collector Tray")
+                .help(isStaged ? "Remove from Collector Tray" : "Stage into Collector Tray")
             }
         }
         .padding(.horizontal, 8)
