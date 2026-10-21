@@ -645,7 +645,6 @@ public final class VeloraViewModel {
                 totalWastedBytes: newTotalWasted,
                 groups: updatedGroups
             )
-            loadDuplicates()
         }
 
         // Refresh developer artifacts and large old matrix if loaded

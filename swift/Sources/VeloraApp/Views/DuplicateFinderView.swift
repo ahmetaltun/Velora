@@ -27,26 +27,12 @@ public struct DuplicateFinderView: View {
         guard let summary = summary else { return [] }
         var groups = summary.groups
 
-        // Exclude any file that no longer exists on disk
-        groups = groups.compactMap { group in
-            let existingFiles = group.files.filter { FileManager.default.fileExists(atPath: $0.path) }
-            guard existingFiles.count >= 2 else { return nil }
-            if existingFiles.count == group.files.count {
-                return group
-            }
-            var updated = group
-            updated.files = existingFiles
-            updated.fileCount = UInt32(existingFiles.count)
-            updated.totalWastedBytes = group.sizeBytes * UInt64(existingFiles.count - 1)
-            return updated
-        }
-
-        let query = searchFilter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let query = searchFilter.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             groups = groups.filter { group in
                 group.files.contains {
-                    $0.name.lowercased().contains(query) ||
-                    $0.path.lowercased().contains(query)
+                    $0.name.localizedCaseInsensitiveContains(query) ||
+                    $0.path.localizedCaseInsensitiveContains(query)
                 }
             }
         }
@@ -207,11 +193,13 @@ public struct DuplicateFinderView: View {
             } else {
                 List {
                     ForEach(filteredGroups) { group in
+                        let groupFilePaths = Set(group.files.map { $0.path })
+                        let groupStagedPaths = stagedPaths.intersection(groupFilePaths)
                         DuplicateGroupCard(
                             group: group,
                             formatBytes: formatBytes,
                             parseColor: parseColor,
-                            stagedPaths: stagedPaths,
+                            stagedPaths: groupStagedPaths,
                             onStageDuplicates: {
                                 for file in group.files where !file.isOriginal {
                                     viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
@@ -225,6 +213,7 @@ public struct DuplicateFinderView: View {
                                 }
                             }
                         )
+                        .equatable()
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowSeparator(.hidden)
                     }
@@ -242,13 +231,17 @@ public struct DuplicateFinderView: View {
 
 // MARK: - Duplicate Group Card Component
 
-private struct DuplicateGroupCard: View {
+private struct DuplicateGroupCard: View, Equatable {
     let group: DuplicateGroupRecord
     let formatBytes: (UInt64) -> String
     let parseColor: (String) -> Color
     let stagedPaths: Set<String>
     let onStageDuplicates: () -> Void
     let onToggleCollect: (DuplicateFileRecord) -> Void
+
+    static func == (lhs: DuplicateGroupCard, rhs: DuplicateGroupCard) -> Bool {
+        lhs.group == rhs.group && lhs.stagedPaths == rhs.stagedPaths
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -298,7 +291,7 @@ private struct DuplicateGroupCard: View {
             }
         }
         .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
