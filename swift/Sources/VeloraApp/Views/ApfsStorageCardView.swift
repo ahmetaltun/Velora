@@ -61,61 +61,60 @@ public struct ApfsStorageCardView: View {
             }
 
             // Multi-segment Segmented Bar
-            GeometryReader { geo in
-                let width = geo.size.width
-                let tot = Double(totalBytes)
+            Capsule()
+                .fill(Color.secondary.opacity(0.18))
+                .frame(height: 7)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .leading) {
+                    GeometryReader { geo in
+                        let width = geo.size.width
+                        let tot = max(1.0, Double(totalBytes))
 
-                let scannedRatio = Double(rec?.userScannedBytes ?? 0) / tot
-                let systemRatio = Double(rec?.systemVolumeBytes ?? 0) / tot
-                let otherRatio = Double(rec?.otherVolumesBytes ?? 0) / tot
-                let hiddenRatio = Double(rec?.hiddenSystemBytes ?? 0) / tot
-                let purgeRatio = Double(rec?.purgeableBytes ?? 0) / tot
+                        let scannedRatio = min(1.0, Double(rec?.userScannedBytes ?? 0) / tot)
+                        let systemRatio = min(1.0, Double(rec?.systemVolumeBytes ?? 0) / tot)
+                        let otherRatio = min(1.0, Double(rec?.otherVolumesBytes ?? 0) / tot)
+                        let hiddenRatio = min(1.0, Double(rec?.hiddenSystemBytes ?? 0) / tot)
+                        let purgeRatio = min(1.0, Double(rec?.purgeableBytes ?? 0) / tot)
 
-                ZStack(alignment: .leading) {
-                    // Background / Free Space
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.18))
-                        .frame(width: width, height: 7)
+                        HStack(spacing: 1.5) {
+                            // User Scanned Files (Teal/Blue)
+                            if scannedRatio > 0.005 {
+                                Capsule()
+                                    .fill(VeloraTheme.teal)
+                                    .frame(width: max(2, width * scannedRatio), height: 7)
+                            }
 
-                    HStack(spacing: 1.5) {
-                        // User Scanned Files (Teal/Blue)
-                        if scannedRatio > 0.005 {
-                            Capsule()
-                                .fill(VeloraTheme.teal)
-                                .frame(width: max(2, width * scannedRatio), height: 7)
-                        }
+                            // macOS System OS (Indigo)
+                            if systemRatio > 0.005 {
+                                Capsule()
+                                    .fill(Color.indigo)
+                                    .frame(width: max(2, width * systemRatio), height: 7)
+                            }
 
-                        // macOS System OS (Indigo)
-                        if systemRatio > 0.005 {
-                            Capsule()
-                                .fill(Color.indigo)
-                                .frame(width: max(2, width * systemRatio), height: 7)
-                        }
+                            // Other Container Volumes - Preboot/VM/Recovery (Purple)
+                            if otherRatio > 0.005 {
+                                Capsule()
+                                    .fill(Color.purple)
+                                    .frame(width: max(2, width * otherRatio), height: 7)
+                            }
 
-                        // Other Container Volumes - Preboot/VM/Recovery (Purple)
-                        if otherRatio > 0.005 {
-                            Capsule()
-                                .fill(Color.purple)
-                                .frame(width: max(2, width * otherRatio), height: 7)
-                        }
+                            // Hidden System Data & Caches (Slate)
+                            if hiddenRatio > 0.005 {
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.75))
+                                    .frame(width: max(2, width * hiddenRatio), height: 7)
+                            }
 
-                        // Hidden System Data & Caches (Slate)
-                        if hiddenRatio > 0.005 {
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.75))
-                                .frame(width: max(2, width * hiddenRatio), height: 7)
-                        }
-
-                        // Purgeable (Amber)
-                        if purgeRatio > 0.005 {
-                            Capsule()
-                                .fill(VeloraTheme.amber)
-                                .frame(width: max(2, width * purgeRatio), height: 7)
+                            // Purgeable (Amber)
+                            if purgeRatio > 0.005 {
+                                Capsule()
+                                    .fill(VeloraTheme.amber)
+                                    .frame(width: max(2, width * purgeRatio), height: 7)
+                            }
                         }
                     }
                 }
-            }
-            .frame(height: 7)
+                .clipShape(Capsule())
 
             // Free Space Caption
             HStack {
@@ -181,6 +180,7 @@ public struct ApfsStorageCardView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
