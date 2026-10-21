@@ -61,105 +61,129 @@ public struct OrphanedLeftoversView: View {
     private func categoryColor(_ category: String) -> Color {
         switch category {
         case "Application Support":
-            return VeloraTheme.teal
+            return VeloraTheme.accentBlue
         case "Caches & Logs":
-            return VeloraTheme.amber
+            return VeloraTheme.accentAmber
         case "Sandboxed Container":
-            return Color.purple
+            return VeloraTheme.accentViolet
         case "Preferences":
-            return VeloraTheme.mint
+            return VeloraTheme.accentEmerald
         default:
-            return .secondary
+            return VeloraTheme.accentPink
         }
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "trash.circle")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color.red.opacity(0.85))
-                        Text("Leftovers & Residue Hunter")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                    }
-
-                    Text("Detects residual caches, containers, and support files from previously uninstalled applications")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                if totalLeftoverBytes > 0 {
-                    Button(action: {
-                        if allFilteredStaged {
-                            for item in filteredResidues {
-                                viewModel.removeCollected(path: item.path)
+            ToolHeaderView(
+                title: "Leftovers & Residue Hunter",
+                subtitle: "Detects residual caches, containers, and support files from previously uninstalled applications",
+                systemImage: "trash.circle.fill",
+                accentColor: VeloraTheme.accentPink
+            ) {
+                HStack(spacing: 10) {
+                    if totalLeftoverBytes > 0 {
+                        Button(action: {
+                            if allFilteredStaged {
+                                for item in filteredResidues {
+                                    viewModel.removeCollected(path: item.path)
+                                }
+                            } else {
+                                for item in filteredResidues {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
                             }
-                        } else {
-                            for item in filteredResidues {
-                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: allFilteredStaged ? "checkmark.circle.fill" : "sparkles")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text(allFilteredStaged ? "Unstage All Leftovers" : "Collect All Leftovers (\(formatBytes(totalLeftoverBytes)))")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
                             }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                LinearGradient(
+                                    colors: allFilteredStaged
+                                        ? [VeloraTheme.accentEmerald, VeloraTheme.accentCyan]
+                                        : [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: Capsule()
+                            )
+                            .shadow(color: (allFilteredStaged ? VeloraTheme.accentEmerald : VeloraTheme.accentPink).opacity(0.35), radius: 6, x: 0, y: 2)
                         }
-                    }) {
-                        Label(
-                            allFilteredStaged ? "Unstage All Leftovers" : "Collect All Leftovers (\(formatBytes(totalLeftoverBytes)))",
-                            systemImage: allFilteredStaged ? "checkmark.circle.fill" : "sparkles"
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(allFilteredStaged ? VeloraTheme.teal : .red.opacity(0.85))
-                    .controlSize(.regular)
-                }
 
-                Button(action: {
-                    viewModel.loadOrphanedResidues()
-                }) {
-                    Image(systemName: "arrow.clockwise")
+                    Button(action: {
+                        viewModel.loadOrphanedResidues()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(8)
+                            .background(VeloraTheme.obsidianElevated, in: Circle())
+                            .overlay(Circle().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rescan orphaned leftovers")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Rescan orphaned leftovers")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial)
-
-            Divider()
 
             // Filter Chips Bar
             HStack(spacing: 8) {
-                FilterChip(title: "All", count: viewModel.orphanedResidues.count, isSelected: selectedFilter == "All") {
+                ToolFilterChip(
+                    title: "All (\(viewModel.orphanedResidues.count))",
+                    isSelected: selectedFilter == "All",
+                    accentColor: VeloraTheme.accentPink
+                ) {
                     selectedFilter = "All"
                 }
 
                 let appSupportCount = viewModel.orphanedResidues.filter { $0.categoryName == "Application Support" }.count
                 if appSupportCount > 0 {
-                    FilterChip(title: "App Support", count: appSupportCount, isSelected: selectedFilter == "Application Support") {
+                    ToolFilterChip(
+                        title: "App Support (\(appSupportCount))",
+                        isSelected: selectedFilter == "Application Support",
+                        accentColor: VeloraTheme.accentBlue
+                    ) {
                         selectedFilter = "Application Support"
                     }
                 }
 
                 let cachesCount = viewModel.orphanedResidues.filter { $0.categoryName == "Caches & Logs" }.count
                 if cachesCount > 0 {
-                    FilterChip(title: "Caches & Logs", count: cachesCount, isSelected: selectedFilter == "Caches & Logs") {
+                    ToolFilterChip(
+                        title: "Caches & Logs (\(cachesCount))",
+                        isSelected: selectedFilter == "Caches & Logs",
+                        accentColor: VeloraTheme.accentAmber
+                    ) {
                         selectedFilter = "Caches & Logs"
                     }
                 }
 
                 let containerCount = viewModel.orphanedResidues.filter { $0.categoryName == "Sandboxed Container" }.count
                 if containerCount > 0 {
-                    FilterChip(title: "Containers", count: containerCount, isSelected: selectedFilter == "Sandboxed Container") {
+                    ToolFilterChip(
+                        title: "Containers (\(containerCount))",
+                        isSelected: selectedFilter == "Sandboxed Container",
+                        accentColor: VeloraTheme.accentViolet
+                    ) {
                         selectedFilter = "Sandboxed Container"
                     }
                 }
 
                 let prefCount = viewModel.orphanedResidues.filter { $0.categoryName == "Preferences" }.count
                 if prefCount > 0 {
-                    FilterChip(title: "Preferences", count: prefCount, isSelected: selectedFilter == "Preferences") {
+                    ToolFilterChip(
+                        title: "Preferences (\(prefCount))",
+                        isSelected: selectedFilter == "Preferences",
+                        accentColor: VeloraTheme.accentEmerald
+                    ) {
                         selectedFilter = "Preferences"
                     }
                 }
@@ -168,49 +192,64 @@ public struct OrphanedLeftoversView: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
                     TextField("Search leftovers...", text: $searchFilter)
                         .textFieldStyle(.plain)
+                        .foregroundColor(VeloraTheme.textPrimary)
                         .frame(width: 140)
                     if !searchFilter.isEmpty {
                         Button(action: { searchFilter = "" }) {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(VeloraTheme.textSecondary)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial.opacity(0.5))
-
-            Divider()
+            .background(VeloraTheme.obsidianElevated.opacity(0.6))
+            .overlay(alignment: .bottom) {
+                Divider().overlay(VeloraTheme.cardBorder)
+            }
 
             if viewModel.isLoadingOrphans {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
+                    Spacer()
                     ProgressView()
-                        .controlSize(.large)
+                        .controlSize(.regular)
                     Text("Scanning Library directories for abandoned footprints...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else if filteredResidues.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 42))
-                        .foregroundColor(VeloraTheme.mint)
+                VStack(spacing: 14) {
+                    Spacer()
+                    ZStack {
+                        Circle()
+                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 32))
+                            .foregroundColor(VeloraTheme.accentEmerald)
+                    }
                     Text("No Orphaned Leftovers Found")
-                        .font(.title3.weight(.bold))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Text("Your ~/Library is free from residual traces of uninstalled applications.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else {
                 List {
                     ForEach(filteredResidues) { item in
@@ -233,9 +272,12 @@ public struct OrphanedLeftoversView: View {
                         .listRowSeparator(.hidden)
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(VeloraTheme.obsidianBase)
                 .listStyle(.plain)
             }
         }
+        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.orphanedResidues.isEmpty {
                 viewModel.loadOrphanedResidues()
@@ -263,48 +305,50 @@ private struct OrphanCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(item.name)
-                        .font(.system(.body, design: .rounded, weight: .bold))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
 
                     Text(item.categoryName)
-                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundColor(categoryColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(categoryColor.opacity(0.12), in: Capsule())
+                        .background(categoryColor.opacity(0.15), in: Capsule())
 
                     if isStaged {
                         Text("STAGED")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(VeloraTheme.teal)
+                            .foregroundColor(VeloraTheme.accentCyan)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(VeloraTheme.teal.opacity(0.15), in: Capsule())
+                            .background(VeloraTheme.accentCyan.opacity(0.18), in: Capsule())
                     }
 
                     if !item.inferredBundleId.isEmpty && item.inferredBundleId != item.name {
                         Text("(\(item.inferredBundleId))")
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(VeloraTheme.textMuted)
                     }
                 }
 
                 HStack(spacing: 10) {
                     Text(item.path)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(VeloraTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
 
                     Text("• Modified \(formatDate(item.modifiedSecs))")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundColor(VeloraTheme.textSecondary)
                 }
             }
 
             Spacer()
 
             Text(formatBytes(item.sizeBytes))
-                .font(.system(.subheadline, design: .monospaced, weight: .bold))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundColor(VeloraTheme.textPrimary)
 
             // Reveal in Finder
             Button(action: {
@@ -312,9 +356,9 @@ private struct OrphanCard: View {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }) {
                 Image(systemName: "arrow.right.circle")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("Reveal in Finder")
 
             // QuickLook preview
@@ -323,15 +367,15 @@ private struct OrphanCard: View {
                 QuickLookCoordinator.shared.togglePreview(for: url)
             }) {
                 Image(systemName: "eye")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("QuickLook preview")
 
             // Stage into Collector / Remove
             Button(action: onToggleCollect) {
                 Image(systemName: isStaged ? "checkmark.circle.fill" : "plus.circle.fill")
-                    .foregroundColor(isStaged ? VeloraTheme.teal : .orange)
+                    .foregroundColor(isStaged ? VeloraTheme.accentCyan : VeloraTheme.accentPink)
                     .font(.title3)
             }
             .buttonStyle(.plain)
@@ -340,48 +384,18 @@ private struct OrphanCard: View {
         .padding(12)
         .background(
             isStaged
-                ? VeloraTheme.teal.opacity(0.06)
-                : Color(nsColor: .controlBackgroundColor).opacity(0.5),
-            in: RoundedRectangle(cornerRadius: 10)
+                ? VeloraTheme.accentCyan.opacity(0.08)
+                : VeloraTheme.obsidianSurface,
+            in: RoundedRectangle(cornerRadius: 12)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(
                     isStaged
-                        ? VeloraTheme.teal.opacity(0.4)
-                        : Color.primary.opacity(0.06),
-                    lineWidth: isStaged ? 1.5 : 1
+                        ? VeloraTheme.accentCyan.opacity(0.4)
+                        : VeloraTheme.cardBorder,
+                    lineWidth: 1
                 )
         )
-    }
-}
-
-// MARK: - Reusable Filter Chip
-
-private struct FilterChip: View {
-    let title: String
-    let count: Int
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(isSelected ? .bold : .medium)
-                Text("\(count)")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(
-                isSelected ? VeloraTheme.teal : Color.secondary.opacity(0.12),
-                in: Capsule()
-            )
-            .foregroundColor(isSelected ? .white : .primary)
-        }
-        .buttonStyle(.plain)
     }
 }

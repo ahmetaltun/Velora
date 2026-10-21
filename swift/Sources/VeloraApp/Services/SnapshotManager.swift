@@ -36,6 +36,15 @@ public final class SnapshotManager: @unchecked Sendable {
         return files.contains { $0.pathExtension.lowercased() == "bin" }
     }
 
+    /// Formatted file size of the existing catalog.bin file if present on disk.
+    public var snapshotFileSizeFormatted: String? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: snapshotURL.path),
+              let size = attrs[.size] as? UInt64, size > 0 else {
+            return nil
+        }
+        return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+
     /// Ensures the parent storage directory exists on disk.
     public func ensureDirectoryExists() throws {
         if !FileManager.default.fileExists(atPath: directoryURL.path) {

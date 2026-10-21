@@ -69,89 +69,99 @@ public struct LargeOldFilesMatrixView: View {
     private func categoryColor(for category: String) -> Color {
         switch category {
         case "Developer", "DevCaches":
-            return VeloraTheme.amber
+            return VeloraTheme.accentAmber
         case "Media":
-            return Color.blue
+            return VeloraTheme.accentBlue
         case "Documents":
-            return VeloraTheme.mint
+            return VeloraTheme.accentEmerald
         case "Archives":
-            return Color.purple
+            return VeloraTheme.accentViolet
         case "System Purgeable":
-            return Color.red
+            return VeloraTheme.accentPink
         default:
-            return VeloraTheme.teal
+            return VeloraTheme.accentCyan
         }
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 16))
-                            .foregroundColor(VeloraTheme.amber)
-                        Text("Large & Old Files Matrix")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                    }
-                    Text("Instant 2D Temporal × Size matrix computed in RAM from the indexed catalog")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            ToolHeaderView(
+                title: "Large & Old Files Matrix",
+                subtitle: "Instant 2D Temporal × Size matrix computed in RAM from the indexed catalog",
+                systemImage: "calendar.badge.clock",
+                accentColor: VeloraTheme.accentPink
+            ) {
+                HStack(spacing: 12) {
+                    if let summary = summary, summary.totalFiles > 0 {
+                        Text("\(summary.totalFiles) files (\(formatBytes(summary.totalBytes)))")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(VeloraTheme.textMuted)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(VeloraTheme.obsidianElevated, in: Capsule())
+                            .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
-                Spacer()
-
-                if let summary = summary, summary.totalFiles > 0 {
-                    Text("\(summary.totalFiles) files (\(formatBytes(summary.totalBytes)))")
-                        .font(.system(.caption, design: .monospaced, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(.quaternary, in: Capsule())
-
-                    if ancientTotalBytes > 0 {
-                        Button(action: {
-                            let ancientFiles = summary.files.filter { $0.ageIdx == 3 }
-                            for file in ancientFiles {
-                                viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                        if ancientTotalBytes > 0 {
+                            Button(action: {
+                                let ancientFiles = summary.files.filter { $0.ageIdx == 3 }
+                                for file in ancientFiles {
+                                    viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                                }
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("Collect Ancient (\(formatBytes(ancientTotalBytes)))")
+                                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(
+                                    LinearGradient(
+                                        colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    in: Capsule()
+                                )
+                                .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
                             }
-                        }) {
-                            Label("Collect Ancient (\(formatBytes(ancientTotalBytes)))", systemImage: "sparkles")
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red.opacity(0.85))
-                        .controlSize(.regular)
                     }
-                }
 
-                Button(action: {
-                    viewModel.loadLargeOldMatrix()
-                }) {
-                    Image(systemName: "arrow.clockwise")
+                    Button(action: {
+                        viewModel.loadLargeOldMatrix()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(8)
+                            .background(VeloraTheme.obsidianElevated, in: Circle())
+                            .overlay(Circle().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Recompute matrix")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Recompute matrix")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial)
-
-            Divider()
 
             if viewModel.isLoadingLargeOldMatrix {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
+                    Spacer()
                     ProgressView()
-                        .controlSize(.large)
+                        .controlSize(.regular)
                     Text("Analyzing catalog records for large and dormant files...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else if let summary = summary, summary.totalFiles > 0 {
                 // PINNED CONTROLS AREA (4x4 Grid & Filter Bar)
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     // 4x4 Heatmap Matrix Grid Card
                     MatrixHeatmapGrid(
                         cells: summary.cells,
@@ -161,19 +171,19 @@ public struct LargeOldFilesMatrixView: View {
 
                     // Filter Chips Bar
                     HStack(spacing: 8) {
-                        CategoryChip(title: "All", isSelected: selectedCategory == "All") {
+                        ToolFilterChip(title: "All", isSelected: selectedCategory == "All", accentColor: VeloraTheme.accentPink) {
                             selectedCategory = "All"
                         }
-                        CategoryChip(title: "Media", isSelected: selectedCategory == "Media") {
+                        ToolFilterChip(title: "Media", isSelected: selectedCategory == "Media", accentColor: VeloraTheme.accentBlue) {
                             selectedCategory = "Media"
                         }
-                        CategoryChip(title: "Archives", isSelected: selectedCategory == "Archives") {
+                        ToolFilterChip(title: "Archives", isSelected: selectedCategory == "Archives", accentColor: VeloraTheme.accentViolet) {
                             selectedCategory = "Archives"
                         }
-                        CategoryChip(title: "Documents", isSelected: selectedCategory == "Documents") {
+                        ToolFilterChip(title: "Documents", isSelected: selectedCategory == "Documents", accentColor: VeloraTheme.accentEmerald) {
                             selectedCategory = "Documents"
                         }
-                        CategoryChip(title: "Developer", isSelected: selectedCategory == "Developer") {
+                        ToolFilterChip(title: "Developer", isSelected: selectedCategory == "Developer", accentColor: VeloraTheme.accentAmber) {
                             selectedCategory = "Developer"
                         }
 
@@ -181,52 +191,58 @@ public struct LargeOldFilesMatrixView: View {
                             Button("Reset Cell Filter") {
                                 selectedCellId = nil
                             }
-                            .buttonStyle(.borderless)
-                            .font(.caption)
-                            .foregroundColor(VeloraTheme.teal)
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(VeloraTheme.accentCyan)
+                            .padding(.horizontal, 8)
                         }
 
                         Spacer()
 
                         HStack(spacing: 6) {
                             Image(systemName: "magnifyingglass")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(VeloraTheme.textSecondary)
                             TextField("Filter files...", text: $searchFilter)
                                 .textFieldStyle(.plain)
+                                .foregroundColor(VeloraTheme.textPrimary)
                                 .frame(width: 140)
                             if !searchFilter.isEmpty {
                                 Button(action: { searchFilter = "" }) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(VeloraTheme.textSecondary)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 10)
-                .background(.ultraThinMaterial)
-
-                Divider()
+                .padding(.top, 12)
+                .padding(.bottom, 12)
+                .background(VeloraTheme.obsidianElevated.opacity(0.6))
+                .overlay(alignment: .bottom) {
+                    Divider().overlay(VeloraTheme.cardBorder)
+                }
 
                 // DEDICATED SCROLLABLE VIRTUALIZED FILE LIST
                 if filteredFiles.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                             .font(.system(size: 36))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundColor(VeloraTheme.textMuted)
                         Text("No Files Match Selected Filter")
-                            .font(.headline)
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
                         Text("Try selecting a different quadrant in the matrix or clearing the category filter.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(VeloraTheme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(VeloraTheme.obsidianBase)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 6) {
@@ -244,21 +260,30 @@ public struct LargeOldFilesMatrixView: View {
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
                     }
+                    .background(VeloraTheme.obsidianBase)
                 }
             } else {
                 VStack(spacing: 12) {
-                    Image(systemName: "shippingbox.circle")
-                        .font(.system(size: 42))
-                        .foregroundColor(VeloraTheme.mint)
+                    ZStack {
+                        Circle()
+                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(VeloraTheme.accentEmerald)
+                    }
                     Text("No Large Files (> 50MB) Detected")
-                        .font(.title3.weight(.bold))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Text("Your indexed storage has no files exceeding the 50MB threshold.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(VeloraTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             }
         }
+        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.largeOldMatrix == nil {
                 viewModel.loadLargeOldMatrix()
@@ -285,13 +310,13 @@ private struct MatrixHeatmapGrid: View {
         VStack(alignment: .leading, spacing: 3) {
             // Size Column Headers
             HStack(spacing: 4) {
-                Text("") // Top-left blank corner
+                Text("")
                     .frame(width: 65)
 
                 ForEach(sizeHeaders, id: \.self) { header in
                     Text(header)
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -300,8 +325,8 @@ private struct MatrixHeatmapGrid: View {
             ForEach(0..<4, id: \.self) { ageIdx in
                 HStack(spacing: 4) {
                     Text(ageHeaders[ageIdx])
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
                         .frame(width: 65, alignment: .leading)
 
                     ForEach(0..<4, id: \.self) { sizeIdx in
@@ -327,11 +352,11 @@ private struct MatrixHeatmapGrid: View {
                 }
             }
         }
-        .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .padding(10)
+        .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(VeloraTheme.cardBorder, lineWidth: 1)
         )
     }
 }
@@ -355,31 +380,31 @@ private struct HeatmapCell: View {
             VStack(spacing: 1) {
                 Text(cell.fileCount > 0 ? "\(cell.fileCount)" : "—")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(cell.fileCount > 0 ? .primary : .secondary.opacity(0.4))
+                    .foregroundColor(cell.fileCount > 0 ? VeloraTheme.textPrimary : VeloraTheme.textMuted)
 
                 Text(cell.totalBytes > 0 ? formatBytes(cell.totalBytes) : "0 B")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(cell.totalBytes > 0 ? VeloraTheme.textSecondary : VeloraTheme.textMuted.opacity(0.6))
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 30)
+            .frame(height: 32)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(
                         isSelected
-                            ? VeloraTheme.teal.opacity(0.35)
+                            ? VeloraTheme.accentCyan.opacity(0.35)
                             : (cell.totalBytes > 0
                                 ? (cell.ageIdx == 3
-                                    ? Color.red.opacity(0.12 + 0.3 * intensity)
-                                    : VeloraTheme.amber.opacity(0.10 + 0.25 * intensity))
-                                : Color.primary.opacity(0.03))
+                                    ? VeloraTheme.accentPink.opacity(0.15 + 0.35 * intensity)
+                                    : VeloraTheme.accentAmber.opacity(0.12 + 0.28 * intensity))
+                                : Color.white.opacity(0.02))
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(
-                        isSelected ? VeloraTheme.teal : Color.clear,
-                        lineWidth: isSelected ? 1.5 : 0
+                        isSelected ? VeloraTheme.accentCyan : VeloraTheme.cardBorder,
+                        lineWidth: isSelected ? 1.5 : 0.8
                     )
             )
         }
@@ -404,27 +429,28 @@ private struct LargeFileCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(file.name)
-                        .font(.system(.body, design: .rounded, weight: .bold))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                         .lineLimit(1)
 
                     Text(file.categoryName)
-                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundColor(categoryColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(categoryColor.opacity(0.12), in: Capsule())
+                        .background(categoryColor.opacity(0.15), in: Capsule())
 
                     Text(file.ageLabel)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(file.ageIdx == 3 ? .red : .secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background((file.ageIdx == 3 ? Color.red : Color.secondary).opacity(0.1), in: Capsule())
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(file.ageIdx == 3 ? VeloraTheme.accentPink : VeloraTheme.textMuted)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background((file.ageIdx == 3 ? VeloraTheme.accentPink : Color.white.opacity(0.08)).opacity(0.15), in: Capsule())
                 }
 
                 Text(file.path)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(VeloraTheme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -432,7 +458,8 @@ private struct LargeFileCard: View {
             Spacer()
 
             Text(formatBytes(file.sizeBytes))
-                .font(.system(.subheadline, design: .monospaced, weight: .bold))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundColor(VeloraTheme.textPrimary)
 
             // Reveal in Finder
             Button(action: {
@@ -440,9 +467,9 @@ private struct LargeFileCard: View {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }) {
                 Image(systemName: "arrow.right.circle")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("Reveal in Finder")
 
             // QuickLook preview
@@ -451,52 +478,25 @@ private struct LargeFileCard: View {
                 QuickLookCoordinator.shared.togglePreview(for: url)
             }) {
                 Image(systemName: "eye")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("QuickLook preview")
 
             // Stage into Collector
             Button(action: onCollect) {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(VeloraTheme.accentCyan)
                     .font(.title3)
             }
             .buttonStyle(.plain)
             .help("Stage into Collector Tray")
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-        )
+        .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(VeloraTheme.cardBorder, lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Category Chip
-
-private struct CategoryChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(isSelected ? .bold : .medium)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? VeloraTheme.teal : Color.secondary.opacity(0.12),
-                    in: Capsule()
-                )
-                .foregroundColor(isSelected ? .white : .primary)
-        }
-        .buttonStyle(.plain)
     }
 }

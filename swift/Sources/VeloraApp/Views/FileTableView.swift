@@ -103,6 +103,8 @@ public struct FileTableView: View {
                 .width(min: 150, ideal: 260)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
+            .scrollContentBackground(.hidden)
+            .background(VeloraTheme.obsidianBase)
             .contextMenu(forSelectionType: String.self) { selectedIds in
                 if let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
                     itemContextMenu(for: item, selectedIds: selectedIds)

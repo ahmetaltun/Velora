@@ -38,141 +38,174 @@ public struct PackageCachesView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "shippingbox.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(VeloraTheme.teal)
-                        Text("Package & Container Caches")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                    }
-
-                    Text("Homebrew bottles, Cargo registry, npm/yarn, pip/uv wheels, Gradle, and Docker VM")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                // Prune Docker Button
-                Button(action: {
-                    viewModel.pruneDocker()
-                }) {
-                    Label("Prune Docker", systemImage: "cylinder.split.1x2")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Prunes dangling Docker images and build cache via docker system prune")
-
-                // Collect All Collectable Caches
-                if totalBytes > 0 {
+            ToolHeaderView(
+                title: "Package & Container Caches",
+                subtitle: "Homebrew bottles, Cargo registry, npm/yarn, pip/uv wheels, Gradle, and Docker VM",
+                systemImage: "shippingbox.circle.fill",
+                accentColor: VeloraTheme.accentAmber
+            ) {
+                HStack(spacing: 10) {
+                    // Prune Docker Button
                     Button(action: {
-                        if let items = summary?.items {
-                            for item in items where item.canCollect {
-                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
-                            }
-                        }
+                        viewModel.pruneDocker()
                     }) {
-                        Label("Collect All (\(formatBytes(totalBytes)))", systemImage: "tray.and.arrow.down.fill")
+                        HStack(spacing: 6) {
+                            Image(systemName: "cylinder.split.1x2")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Prune Docker")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                        }
+                        .foregroundColor(VeloraTheme.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(VeloraTheme.obsidianElevated, in: Capsule())
+                        .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(VeloraTheme.teal)
-                    .controlSize(.regular)
-                }
+                    .buttonStyle(.plain)
+                    .help("Prunes dangling Docker images and build cache via docker system prune")
 
-                Button(action: {
-                    viewModel.loadPackageCaches()
-                }) {
-                    Image(systemName: "arrow.clockwise")
+                    // Collect All Collectable Caches
+                    if totalBytes > 0 {
+                        Button(action: {
+                            if let items = summary?.items {
+                                for item in items where item.canCollect {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "tray.and.arrow.down.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Collect All (\(formatBytes(totalBytes)))")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                LinearGradient(
+                                    colors: [VeloraTheme.accentAmber, Color(hex: "#FF8C00")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: Capsule()
+                            )
+                            .shadow(color: VeloraTheme.accentAmber.opacity(0.35), radius: 6, x: 0, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {
+                        viewModel.loadPackageCaches()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(8)
+                            .background(VeloraTheme.obsidianElevated, in: Circle())
+                            .overlay(Circle().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rescan package caches")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Rescan package caches")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial)
-
-            Divider()
 
             // Docker Prune Status banner
             if let status = viewModel.dockerPruneStatus {
-                HStack {
-                    Image(systemName: "info.circle")
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(VeloraTheme.accentCyan)
                     Text(status)
-                        .font(.caption)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Spacer()
                     Button("Dismiss") {
                         viewModel.dockerPruneStatus = nil
                     }
                     .buttonStyle(.plain)
-                    .font(.caption2)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(VeloraTheme.textSecondary)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.12))
+                .padding(.vertical, 8)
+                .background(VeloraTheme.accentBlue.opacity(0.15))
+                .overlay(alignment: .bottom) {
+                    Divider().overlay(VeloraTheme.cardBorder)
+                }
             }
 
             // Ecosystem Filter Chips
             HStack(spacing: 8) {
-                CacheFilterChip(title: "All", isSelected: selectedEcosystem == "All") { selectedEcosystem = "All" }
-                CacheFilterChip(title: "Homebrew", isSelected: selectedEcosystem == "Homebrew") { selectedEcosystem = "Homebrew" }
-                CacheFilterChip(title: "Cargo (Rust)", isSelected: selectedEcosystem == "Cargo") { selectedEcosystem = "Cargo" }
-                CacheFilterChip(title: "NPM / Yarn", isSelected: selectedEcosystem == "Node") { selectedEcosystem = "Node" }
-                CacheFilterChip(title: "Python (pip/uv)", isSelected: selectedEcosystem == "Python") { selectedEcosystem = "Python" }
-                CacheFilterChip(title: "JVM (Gradle)", isSelected: selectedEcosystem == "JVM") { selectedEcosystem = "JVM" }
-                CacheFilterChip(title: "Docker", isSelected: selectedEcosystem == "Docker") { selectedEcosystem = "Docker" }
+                ToolFilterChip(title: "All", isSelected: selectedEcosystem == "All", accentColor: VeloraTheme.accentAmber) { selectedEcosystem = "All" }
+                ToolFilterChip(title: "Homebrew", isSelected: selectedEcosystem == "Homebrew", accentColor: VeloraTheme.accentAmber) { selectedEcosystem = "Homebrew" }
+                ToolFilterChip(title: "Cargo (Rust)", isSelected: selectedEcosystem == "Cargo", accentColor: Color(hex: "#DEA584")) { selectedEcosystem = "Cargo" }
+                ToolFilterChip(title: "NPM / Yarn", isSelected: selectedEcosystem == "Node", accentColor: VeloraTheme.accentEmerald) { selectedEcosystem = "Node" }
+                ToolFilterChip(title: "Python (pip/uv)", isSelected: selectedEcosystem == "Python", accentColor: VeloraTheme.accentBlue) { selectedEcosystem = "Python" }
+                ToolFilterChip(title: "JVM (Gradle)", isSelected: selectedEcosystem == "JVM", accentColor: VeloraTheme.accentViolet) { selectedEcosystem = "JVM" }
+                ToolFilterChip(title: "Docker", isSelected: selectedEcosystem == "Docker", accentColor: VeloraTheme.accentCyan) { selectedEcosystem = "Docker" }
 
                 Spacer()
 
                 Text("Total: \(formatBytes(totalBytes))")
-                    .font(.system(.caption, design: .monospaced, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(VeloraTheme.textMuted)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.02))
-
-            Divider()
+            .padding(.vertical, 10)
+            .background(VeloraTheme.obsidianElevated.opacity(0.6))
+            .overlay(alignment: .bottom) {
+                Divider().overlay(VeloraTheme.cardBorder)
+            }
 
             // Content Table
             if viewModel.isLoadingPackageCaches {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     Spacer()
                     ProgressView()
+                        .controlSize(.regular)
                     Text("Scanning package manager and container caches...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else if filteredItems.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     Spacer()
-                    Image(systemName: "cube.box.fill")
-                        .font(.system(size: 36))
-                        .foregroundColor(VeloraTheme.teal)
+                    ZStack {
+                        Circle()
+                            .fill(VeloraTheme.accentAmber.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "cube.box.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(VeloraTheme.accentAmber)
+                    }
                     Text("No Caches Detected")
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Text("Your global package manager directories are clean.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(VeloraTheme.textSecondary)
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else {
                 Table(filteredItems, selection: $selectedItemIds) {
                     TableColumn("Cache Target") { item in
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Circle()
                                 .fill(Color(hex: item.colorHex))
                                 .frame(width: 8, height: 8)
 
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                    .font(.system(.body, design: .rounded, weight: .semibold))
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(VeloraTheme.textPrimary)
                                 Text(item.path)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(VeloraTheme.textMuted)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
@@ -182,35 +215,48 @@ public struct PackageCachesView: View {
 
                     TableColumn("Ecosystem") { item in
                         Text(item.ecosystemName)
-                            .font(.system(.caption, design: .rounded))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color(hex: item.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(hex: item.colorHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
                     }
                     .width(min: 140, ideal: 180)
 
                     TableColumn("Size") { item in
                         Text(formatBytes(item.sizeBytes))
-                            .font(.system(.body, design: .monospaced, weight: .medium))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
                     }
                     .width(min: 90, ideal: 110)
 
                     TableColumn("Action") { item in
                         if item.canCollect {
-                            Button("Collect") {
+                            Button(action: {
                                 viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                            }) {
+                                Text("Collect")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundColor(VeloraTheme.textSecondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(VeloraTheme.obsidianElevated, in: Capsule())
+                                    .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
+                            .buttonStyle(.plain)
                         } else {
-                            Text("Protected")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                            Text("Locked")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(VeloraTheme.textMuted)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.white.opacity(0.04), in: Capsule())
                         }
                     }
                     .width(min: 70, ideal: 80)
                 }
-                .tableStyle(.inset(alternatesRowBackgrounds: true))
+                .scrollContentBackground(.hidden)
+                .background(VeloraTheme.obsidianBase)
                 .onKeyPress(.space) {
                     if let firstId = selectedItemIds.first, let item = filteredItems.first(where: { $0.id == firstId }) {
                         QuickLookCoordinator.shared.togglePreview(for: item.path)
@@ -242,31 +288,11 @@ public struct PackageCachesView: View {
                 }
             }
         }
+        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.packageCacheSummary == nil {
                 viewModel.loadPackageCaches()
             }
         }
-    }
-}
-
-private struct CacheFilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(.caption, design: .rounded, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : .secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? VeloraTheme.teal : Color.secondary.opacity(0.12),
-                    in: Capsule()
-                )
-        }
-        .buttonStyle(.plain)
     }
 }

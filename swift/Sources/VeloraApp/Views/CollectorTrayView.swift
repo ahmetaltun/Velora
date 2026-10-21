@@ -14,27 +14,27 @@ public struct CollectorTrayView: View {
     public var body: some View {
         if !viewModel.collectorItems.isEmpty || viewModel.isCleaning {
             VStack(spacing: 0) {
-                Divider()
+                Divider().overlay(VeloraTheme.cardBorder)
 
                 if let errorMsg = viewModel.cleaningErrorMessage {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.yellow)
+                            .foregroundColor(VeloraTheme.accentAmber)
                         Text(errorMsg)
-                            .font(.caption)
-                            .foregroundColor(.primary)
+                            .font(.system(size: 12))
+                            .foregroundColor(VeloraTheme.textPrimary)
                             .lineLimit(1)
                         Spacer()
                         Button(action: { viewModel.cleaningErrorMessage = nil }) {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(VeloraTheme.textSecondary)
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
-                    .background(Color.yellow.opacity(0.12))
-                    Divider()
+                    .padding(.vertical, 8)
+                    .background(VeloraTheme.accentAmber.opacity(0.18))
+                    Divider().overlay(VeloraTheme.cardBorder)
                 }
 
                 if viewModel.isCleaning {
@@ -46,21 +46,22 @@ public struct CollectorTrayView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text("Trashing \(viewModel.cleaningDisplayIndex) of \(viewModel.cleaningTotalCount) items...")
-                                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(VeloraTheme.textPrimary)
 
                                 if !viewModel.cleaningCurrentFileName.isEmpty {
                                     Text("•")
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(VeloraTheme.textMuted)
                                     Text(viewModel.cleaningCurrentFileName)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(VeloraTheme.textSecondary)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                             }
 
                             ProgressView(value: viewModel.cleaningProgress)
-                                .tint(.orange)
+                                .tint(VeloraTheme.accentPink)
                         }
 
                         // Remaining time and freed capacity badge
@@ -69,42 +70,53 @@ public struct CollectorTrayView: View {
                                 Image(systemName: "hourglass")
                                     .font(.system(size: 10))
                                 Text(formatETA(viewModel.cleaningEstimatedSecondsRemaining))
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
                             }
-                            .foregroundColor(.orange)
+                            .foregroundColor(VeloraTheme.accentAmber)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color.orange.opacity(0.12), in: Capsule())
+                            .background(VeloraTheme.accentAmber.opacity(0.15), in: Capsule())
 
                             Text("\(formatBytes(viewModel.cleaningFreedBytes)) / \(formatBytes(viewModel.cleaningTotalBytes))")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(VeloraTheme.textSecondary)
                         }
 
                         Button("Stop") {
                             viewModel.cancelCleaning()
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(VeloraTheme.obsidianSurface, in: Capsule())
+                        .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
+                    .background(VeloraTheme.obsidianElevated)
                 } else {
                     // Standard Staging & Actions Bar
                     HStack(spacing: 16) {
                         // Collector Icon & Badge
-                        HStack(spacing: 8) {
-                            Image(systemName: "trash.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.orange)
+                        HStack(spacing: 10) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(VeloraTheme.accentPink.opacity(0.18))
+                                    .frame(width: 32, height: 32)
+                                Image(systemName: "trash.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(VeloraTheme.accentPink)
+                            }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Collector Tray")
-                                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-                                Text("\(viewModel.collectorItems.count) items staged (Ready to free \(formatBytes(viewModel.collectorTotalSize)))")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(VeloraTheme.textPrimary)
+                                Text("\(viewModel.collectorItems.count) items staged (Free \(formatBytes(viewModel.collectorTotalSize)))")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(VeloraTheme.textSecondary)
                             }
                         }
 
@@ -116,29 +128,32 @@ public struct CollectorTrayView: View {
                                 ForEach(viewModel.collectorItems, id: \.path) { item in
                                     HStack(spacing: 6) {
                                         Image(systemName: item.isDir ? "folder.fill" : "doc.fill")
-                                            .font(.caption)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(VeloraTheme.accentCyan)
                                         Text((item.path as NSString).lastPathComponent)
-                                            .font(.caption)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(VeloraTheme.textPrimary)
                                             .lineLimit(1)
                                         Text(formatBytes(item.sizeBytes))
-                                            .font(.system(.caption2, design: .monospaced))
-                                            .foregroundColor(.secondary)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundColor(VeloraTheme.textMuted)
                                         Button(action: {
                                             viewModel.removeCollected(path: item.path)
                                         }) {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(VeloraTheme.textSecondary)
                                         }
                                         .buttonStyle(.plain)
                                     }
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(.quaternary, in: Capsule())
+                                    .padding(.vertical, 5)
+                                    .background(VeloraTheme.obsidianSurface, in: Capsule())
+                                    .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                                 }
                             }
                         }
-                        .frame(maxWidth: 400)
+                        .frame(maxWidth: 420)
 
                         // Actions
                         HStack(spacing: 10) {
@@ -146,39 +161,65 @@ public struct CollectorTrayView: View {
                                 cancelCountdown()
                                 viewModel.clearCollector()
                             }
-                            .controlSize(.small)
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(VeloraTheme.obsidianSurface, in: Capsule())
+                            .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
                             if isCountdownActive {
                                 Button(action: cancelCountdown) {
                                     HStack(spacing: 6) {
                                         Text("Cancel (\(countdownRemaining)s)")
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
                                         ProgressView()
                                             .controlSize(.mini)
                                     }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 6)
+                                    .background(VeloraTheme.obsidianSurface, in: Capsule())
+                                    .overlay(Capsule().stroke(VeloraTheme.accentPink, lineWidth: 1))
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.red)
-                                .controlSize(.small)
+                                .buttonStyle(.plain)
                             } else {
                                 Button(action: startCountdown) {
                                     HStack(spacing: 6) {
                                         Image(systemName: "trash.fill")
+                                            .font(.system(size: 11, weight: .bold))
                                         Text("Free Space")
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
                                     }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        in: Capsule()
+                                    )
+                                    .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.red)
-                                .controlSize(.small)
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
+                    .background(VeloraTheme.obsidianElevated)
                 }
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+
+    private func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
     private func formatETA(_ seconds: Double?) -> String {

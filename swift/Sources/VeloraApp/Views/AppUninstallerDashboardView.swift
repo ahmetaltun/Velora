@@ -88,66 +88,74 @@ public struct AppUninstallerDashboardView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "app.badge.checkmark")
-                            .font(.system(size: 16))
-                            .foregroundColor(VeloraTheme.teal)
-                        Text("App Uninstaller")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
+            ToolHeaderView(
+                title: "App Uninstaller",
+                subtitle: "Deep footprint analysis: Bundle, Application Support, Containers, Caches & Preferences",
+                systemImage: "app.badge.checkmark",
+                accentColor: VeloraTheme.accentBlue
+            ) {
+                HStack(spacing: 12) {
+                    Text("\(filteredApps.count) apps (\(formatBytes(totalAppsFootprint)))")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(VeloraTheme.textMuted)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(VeloraTheme.obsidianElevated, in: Capsule())
+                        .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+
+                    Button(action: {
+                        viewModel.loadInstalledApps()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(8)
+                            .background(VeloraTheme.obsidianElevated, in: Circle())
+                            .overlay(Circle().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                     }
-                    Text("Deep footprint analysis: Bundle, Application Support, Containers, Caches & Preferences")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    .buttonStyle(.plain)
+                    .help("Rescan installed applications")
                 }
-
-                Spacer()
-
-                Text("\(filteredApps.count) apps (\(formatBytes(totalAppsFootprint)))")
-                    .font(.system(.caption, design: .monospaced, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: Capsule())
-
-                Button(action: {
-                    viewModel.loadInstalledApps()
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Rescan installed applications")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial)
-
-            Divider()
 
             if viewModel.isLoadingApps {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
+                    Spacer()
                     ProgressView()
-                        .controlSize(.large)
+                        .controlSize(.regular)
                     Text("Analyzing application footprints and Library containers...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else if viewModel.installedApps.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "app.dashed")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
+                VStack(spacing: 14) {
+                    Spacer()
+                    ZStack {
+                        Circle()
+                            .fill(VeloraTheme.accentBlue.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "app.dashed")
+                            .font(.system(size: 32))
+                            .foregroundColor(VeloraTheme.accentBlue)
+                    }
                     Text("No applications discovered")
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Button("Scan Applications") {
                         viewModel.loadInstalledApps()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.plain)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(VeloraTheme.ctaGradient, in: Capsule())
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else {
                 HSplitView {
                     // Left Column: App List & Filter
@@ -156,20 +164,22 @@ public struct AppUninstallerDashboardView: View {
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 Image(systemName: "magnifyingglass")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(VeloraTheme.textSecondary)
                                 TextField("Filter apps...", text: $searchFilter)
                                     .textFieldStyle(.plain)
+                                    .foregroundColor(VeloraTheme.textPrimary)
                                 if !searchFilter.isEmpty {
                                     Button(action: { searchFilter = "" }) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(VeloraTheme.textSecondary)
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                            .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
                             Picker("", selection: $filterMode) {
                                 Text("User Apps").tag("User")
@@ -179,8 +189,9 @@ public struct AppUninstallerDashboardView: View {
                             .pickerStyle(.segmented)
                         }
                         .padding(12)
+                        .background(VeloraTheme.obsidianSidebar)
 
-                        Divider()
+                        Divider().overlay(VeloraTheme.cardBorder)
 
                         List(filteredApps, selection: $selectedAppId) { app in
                             AppRow(
@@ -191,7 +202,8 @@ public struct AppUninstallerDashboardView: View {
                             )
                             .tag(app.id)
                         }
-                        .listStyle(.inset)
+                        .scrollContentBackground(.hidden)
+                        .background(VeloraTheme.obsidianSidebar)
                     }
                     .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
 
@@ -211,16 +223,18 @@ public struct AppUninstallerDashboardView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "sidebar.right")
                                 .font(.system(size: 36))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(VeloraTheme.textMuted)
                             Text("Select an application to inspect its full footprint")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(VeloraTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(VeloraTheme.obsidianBase)
                     }
                 }
             }
         }
+        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.installedApps.isEmpty {
                 viewModel.loadInstalledApps()
@@ -245,34 +259,35 @@ private struct AppRow: View {
         HStack(spacing: 10) {
             Image(nsImage: icon)
                 .resizable()
-                .frame(width: 32, height: 32)
+                .frame(width: 30, height: 30)
                 .cornerRadius(6)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(app.name)
-                        .font(.system(.subheadline, weight: .semibold))
+                        .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
+                        .foregroundColor(isSelected ? .white : VeloraTheme.textPrimary)
                         .lineLimit(1)
 
                     if isRunning {
                         Circle()
-                            .fill(VeloraTheme.mint)
+                            .fill(VeloraTheme.accentEmerald)
                             .frame(width: 6, height: 6)
-                            .help("Application is currently running")
                     }
                 }
 
                 HStack(spacing: 6) {
                     Text(app.version.isEmpty ? "v1.0" : "v\(app.version)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundColor(VeloraTheme.textMuted)
 
                     if app.isSystemApp {
                         Text("System")
                             .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(VeloraTheme.textSecondary)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.2), in: Capsule())
+                            .background(Color.white.opacity(0.08), in: Capsule())
                     }
                 }
             }
@@ -280,10 +295,15 @@ private struct AppRow: View {
             Spacer()
 
             Text(formatBytes(app.totalSizeBytes))
-                .font(.system(.caption, design: .monospaced, weight: .medium))
-                .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(isSelected ? .white.opacity(0.85) : VeloraTheme.textMuted)
         }
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .background(
+            isSelected ? VeloraTheme.obsidianElevated : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
         .contentShape(Rectangle())
     }
 }
@@ -305,48 +325,49 @@ private struct AppDetailView: View {
             HStack(spacing: 16) {
                 Image(nsImage: icon)
                     .resizable()
-                    .frame(width: 52, height: 52)
+                    .frame(width: 48, height: 48)
                     .cornerRadius(10)
-                    .shadow(radius: 2)
+                    .shadow(radius: 4)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(app.name)
-                            .font(.system(.title3, design: .rounded, weight: .bold))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
 
                         if isRunning {
                             HStack(spacing: 4) {
                                 Circle()
-                                    .fill(VeloraTheme.mint)
+                                    .fill(VeloraTheme.accentEmerald)
                                     .frame(width: 6, height: 6)
                                 Text("Running")
-                                    .font(.caption2)
-                                    .foregroundColor(VeloraTheme.mint)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(VeloraTheme.accentEmerald)
                             }
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(VeloraTheme.mint.opacity(0.12), in: Capsule())
+                            .background(VeloraTheme.accentEmerald.opacity(0.15), in: Capsule())
                         }
 
                         if app.isSystemApp {
                             Text("System Protected")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(VeloraTheme.textMuted)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.quaternary, in: Capsule())
+                                .background(Color.white.opacity(0.06), in: Capsule())
                         }
                     }
 
                     HStack(spacing: 10) {
                         Text(app.bundleId)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(VeloraTheme.textMuted)
 
                         if !app.version.isEmpty {
-                            Text("•  Version \(app.version)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Text("• Version \(app.version)")
+                                .font(.system(size: 11))
+                                .foregroundColor(VeloraTheme.textSecondary)
                         }
                     }
                 }
@@ -356,35 +377,53 @@ private struct AppDetailView: View {
                 // Actions: Stage Complete App
                 VStack(alignment: .trailing, spacing: 6) {
                     Text(formatBytes(app.totalSizeBytes))
-                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
 
                     Button(action: {
                         for part in app.parts {
                             viewModel.collect(path: part.path, size: part.sizeBytes, isDir: true)
                         }
                     }) {
-                        Label("Stage App (\(formatBytes(app.totalSizeBytes)))", systemImage: "trash.circle")
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Stage App")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            LinearGradient(
+                                colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: Capsule()
+                        )
+                        .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .controlSize(.regular)
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(20)
-            .background(.ultraThinMaterial)
-
-            Divider()
+            .padding(18)
+            .background(VeloraTheme.obsidianElevated)
+            .overlay(alignment: .bottom) {
+                Divider().overlay(VeloraTheme.cardBorder)
+            }
 
             // Parts List: Categorized Breakdown
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text("Categorized Storage Breakdown")
-                            .font(.system(.subheadline, design: .rounded, weight: .bold))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
                         Spacer()
                         Text("\(app.parts.count) components found")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(VeloraTheme.textMuted)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -405,6 +444,7 @@ private struct AppDetailView: View {
                     .padding(.bottom, 20)
                 }
             }
+            .background(VeloraTheme.obsidianBase)
         }
     }
 }
@@ -421,22 +461,22 @@ private struct AppPartCard: View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(color)
-                .frame(width: 4, height: 38)
+                .frame(width: 4, height: 36)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(part.kindName)
-                        .font(.system(.caption, design: .rounded, weight: .bold))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(color)
 
                     Text("— \(part.name)")
-                        .font(.caption)
-                        .foregroundColor(.primary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(VeloraTheme.textPrimary)
                 }
 
                 Text(part.path)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(VeloraTheme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -444,7 +484,8 @@ private struct AppPartCard: View {
             Spacer()
 
             Text(formatBytes(part.sizeBytes))
-                .font(.system(.caption, design: .monospaced, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(VeloraTheme.textPrimary)
 
             // Reveal in Finder
             Button(action: {
@@ -452,9 +493,9 @@ private struct AppPartCard: View {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }) {
                 Image(systemName: "arrow.right.circle")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("Reveal in Finder")
 
             // QuickLook preview
@@ -463,21 +504,25 @@ private struct AppPartCard: View {
                 QuickLookCoordinator.shared.togglePreview(for: url)
             }) {
                 Image(systemName: "eye")
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.secondary)
             .help("QuickLook preview")
 
             // Stage to Collector
             Button(action: onCollect) {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(VeloraTheme.accentCyan)
             }
             .buttonStyle(.plain)
             .help("Stage into Collector Tray")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(VeloraTheme.cardBorder, lineWidth: 1)
+        )
     }
 }

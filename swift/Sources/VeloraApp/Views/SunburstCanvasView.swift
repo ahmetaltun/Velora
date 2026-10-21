@@ -90,10 +90,10 @@ public struct SunburstCanvasView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                .stroke(VeloraTheme.cardBorder, lineWidth: 1)
                         )
                         .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
                         .padding(.horizontal, 24)
@@ -102,6 +102,7 @@ public struct SunburstCanvasView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .background(VeloraTheme.obsidianBase)
         }
         .onKeyPress(.space) {
             if let hovered = hoveredSector {

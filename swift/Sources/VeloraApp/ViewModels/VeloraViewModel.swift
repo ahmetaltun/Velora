@@ -88,6 +88,11 @@ public final class VeloraViewModel {
         SnapshotManager.shared.hasAnyBinaryIndexFile
     }
 
+    /// Formatted file size of the cached catalog.bin on disk if present.
+    public var catalogFileSizeString: String? {
+        SnapshotManager.shared.snapshotFileSizeFormatted
+    }
+
     /// Indicates whether the engine currently holds indexed volume data in memory.
     public var hasIndexedData: Bool {
         scannedCount > 0 || currentSunburst != nil || engine.totalFiles() > 0
@@ -133,6 +138,7 @@ public final class VeloraViewModel {
                     self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
+                    self.loadAllHygieneMetrics()
                 }
             } else {
                 DispatchQueue.main.async {
@@ -268,6 +274,54 @@ public final class VeloraViewModel {
         }
     }
 
+    /// Triggers parallel background calculation of all hygiene scanners once catalog.bin is in memory or after a scan completes.
+    public func loadAllHygieneMetrics() {
+        loadDevArtifacts()
+        loadXcodeSummary()
+        loadPackageCaches()
+        loadInstalledApps()
+        loadOrphanedResidues()
+        loadLargeOldMatrix()
+        loadDuplicates()
+        refreshStorageReconciliation()
+    }
+
+    public var devArtifactsBytes: UInt64? {
+        if isLoadingDevArtifacts || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && devArtifacts.isEmpty { return nil }
+        return devArtifacts.reduce(UInt64(0)) { $0 + $1.sizeBytes }
+    }
+
+    public var appLeftoversBytes: UInt64? {
+        if isLoadingOrphans || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && orphanedResidues.isEmpty { return nil }
+        return orphanedResidues.reduce(UInt64(0)) { $0 + $1.sizeBytes }
+    }
+
+    public var xcodeStorageBytes: UInt64? {
+        if isLoadingXcode || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && xcodeSummary == nil { return nil }
+        return xcodeSummary?.totalBytes
+    }
+
+    public var packageCachesBytes: UInt64? {
+        if isLoadingPackageCaches || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && packageCacheSummary == nil { return nil }
+        return packageCacheSummary?.totalBytes
+    }
+
+    public var duplicatesBytes: UInt64? {
+        if isLoadingDuplicates || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && duplicateSummary == nil { return nil }
+        return duplicateSummary?.totalWastedBytes
+    }
+
+    public var largeOldMatrixBytes: UInt64? {
+        if isLoadingLargeOldMatrix || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && largeOldMatrix == nil { return nil }
+        return largeOldMatrix?.totalBytes
+    }
+
     public func scanCurrentPath() {
         let path = currentPath
         isScanning = true
@@ -318,6 +372,7 @@ public final class VeloraViewModel {
                         self.scanStatusMessage = "\(total) items indexed"
                         self.refreshTableItems()
                         self.refreshStorageReconciliation()
+                        self.loadAllHygieneMetrics()
                     } else {
                         self.scanStatusMessage = "Scan failed or permission denied: Unable to access \(path)"
                     }

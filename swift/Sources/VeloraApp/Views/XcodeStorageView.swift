@@ -34,149 +34,184 @@ public struct XcodeStorageView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wrench.and.screwdriver.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.blue)
-                        Text("Xcode Storage Inspector")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                    }
-
-                    Text("DerivedData, build archives, device symbol caches, and simulator runtimes")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                // Prune Simulators Button
-                Button(action: {
-                    viewModel.pruneUnavailableSimulators()
-                }) {
-                    Label("Prune Simulators", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Deletes unavailable CoreSimulator runtimes via xcrun simctl")
-
-                // Collect All DerivedData
-                if let ddBytes = summary?.derivedDataBytes, ddBytes > 0 {
+            ToolHeaderView(
+                title: "Xcode Storage Inspector",
+                subtitle: "DerivedData, build archives, device symbol caches, and simulator runtimes",
+                systemImage: "wrench.and.screwdriver.fill",
+                accentColor: VeloraTheme.accentEmerald
+            ) {
+                HStack(spacing: 10) {
+                    // Prune Simulators Button
                     Button(action: {
-                        if let items = summary?.items {
-                            for item in items where item.categoryName.contains("DerivedData") {
-                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
-                            }
-                        }
+                        viewModel.pruneUnavailableSimulators()
                     }) {
-                        Label("Collect DerivedData (\(formatBytes(ddBytes)))", systemImage: "shippingbox")
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Prune Simulators")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                        }
+                        .foregroundColor(VeloraTheme.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(VeloraTheme.obsidianElevated, in: Capsule())
+                        .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue.opacity(0.85))
-                    .controlSize(.regular)
-                }
+                    .buttonStyle(.plain)
+                    .help("Deletes unavailable CoreSimulator runtimes via xcrun simctl")
 
-                Button(action: {
-                    viewModel.loadXcodeSummary()
-                }) {
-                    Image(systemName: "arrow.clockwise")
+                    // Collect All DerivedData
+                    if let ddBytes = summary?.derivedDataBytes, ddBytes > 0 {
+                        Button(action: {
+                            if let items = summary?.items {
+                                for item in items where item.categoryName.contains("DerivedData") {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "shippingbox.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Collect DerivedData (\(formatBytes(ddBytes)))")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                LinearGradient(
+                                    colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: Capsule()
+                            )
+                            .shadow(color: VeloraTheme.accentBlue.opacity(0.35), radius: 6, x: 0, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {
+                        viewModel.loadXcodeSummary()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                            .padding(8)
+                            .background(VeloraTheme.obsidianElevated, in: Circle())
+                            .overlay(Circle().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rescan Xcode storage")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Rescan Xcode storage")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.ultraThinMaterial)
-
-            Divider()
 
             // Metric Cards Row
             if let s = summary {
                 HStack(spacing: 12) {
-                    MetricCard(title: "Total Xcode", value: formatBytes(s.totalBytes), color: .primary)
-                    MetricCard(title: "DerivedData", value: formatBytes(s.derivedDataBytes), color: .blue)
-                    MetricCard(title: "Archives", value: formatBytes(s.archivesBytes), color: .purple)
-                    MetricCard(title: "Device Support", value: formatBytes(s.deviceSupportBytes), color: .orange)
-                    MetricCard(title: "Simulators", value: formatBytes(s.simulatorBytes), color: .green)
+                    ToolMetricCardView(title: "Total Xcode", value: formatBytes(s.totalBytes), accentColor: VeloraTheme.textPrimary)
+                    ToolMetricCardView(title: "DerivedData", value: formatBytes(s.derivedDataBytes), accentColor: VeloraTheme.accentBlue)
+                    ToolMetricCardView(title: "Archives", value: formatBytes(s.archivesBytes), accentColor: VeloraTheme.accentViolet)
+                    ToolMetricCardView(title: "Device Support", value: formatBytes(s.deviceSupportBytes), accentColor: VeloraTheme.accentAmber)
+                    ToolMetricCardView(title: "Simulators", value: formatBytes(s.simulatorBytes), accentColor: VeloraTheme.accentEmerald)
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.02))
-
-                Divider()
+                .padding(.vertical, 12)
+                .background(VeloraTheme.obsidianElevated.opacity(0.4))
+                .overlay(alignment: .bottom) {
+                    Divider().overlay(VeloraTheme.cardBorder)
+                }
             }
 
             // Prune status notification banner
             if let status = viewModel.pruneSimulatorsStatus {
-                HStack {
-                    Image(systemName: "info.circle")
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(VeloraTheme.accentCyan)
                     Text(status)
-                        .font(.caption)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Spacer()
                     Button("Dismiss") {
                         viewModel.pruneSimulatorsStatus = nil
                     }
                     .buttonStyle(.plain)
-                    .font(.caption2)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(VeloraTheme.textSecondary)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(Color.accentColor.opacity(0.12))
+                .padding(.vertical, 8)
+                .background(VeloraTheme.accentBlue.opacity(0.15))
+                .overlay(alignment: .bottom) {
+                    Divider().overlay(VeloraTheme.cardBorder)
+                }
             }
 
             // Category Filter Bar
             HStack(spacing: 8) {
-                FilterTab(title: "All", isSelected: selectedCategory == "All") { selectedCategory = "All" }
-                FilterTab(title: "DerivedData", isSelected: selectedCategory == "DerivedData") { selectedCategory = "DerivedData" }
-                FilterTab(title: "Archives", isSelected: selectedCategory == "Archives") { selectedCategory = "Archives" }
-                FilterTab(title: "Device Support", isSelected: selectedCategory == "Device") { selectedCategory = "Device" }
-                FilterTab(title: "Simulators", isSelected: selectedCategory == "Simulator") { selectedCategory = "Simulator" }
+                ToolFilterChip(title: "All", isSelected: selectedCategory == "All", accentColor: VeloraTheme.accentEmerald) { selectedCategory = "All" }
+                ToolFilterChip(title: "DerivedData", isSelected: selectedCategory == "DerivedData", accentColor: VeloraTheme.accentBlue) { selectedCategory = "DerivedData" }
+                ToolFilterChip(title: "Archives", isSelected: selectedCategory == "Archives", accentColor: VeloraTheme.accentViolet) { selectedCategory = "Archives" }
+                ToolFilterChip(title: "Device Support", isSelected: selectedCategory == "Device", accentColor: VeloraTheme.accentAmber) { selectedCategory = "Device" }
+                ToolFilterChip(title: "Simulators", isSelected: selectedCategory == "Simulator", accentColor: VeloraTheme.accentEmerald) { selectedCategory = "Simulator" }
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-
-            Divider()
+            .padding(.vertical, 10)
+            .background(VeloraTheme.obsidianElevated.opacity(0.6))
+            .overlay(alignment: .bottom) {
+                Divider().overlay(VeloraTheme.cardBorder)
+            }
 
             // Content Table
             if viewModel.isLoadingXcode {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     Spacer()
                     ProgressView()
+                        .controlSize(.regular)
                     Text("Analyzing Xcode storage directories...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else if filteredItems.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     Spacer()
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 36))
-                        .foregroundColor(.blue)
+                    ZStack {
+                        Circle()
+                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 32))
+                            .foregroundColor(VeloraTheme.accentEmerald)
+                    }
                     Text("No Items in This Category")
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
                     Text("Xcode developer directory has zero caches here.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(VeloraTheme.textSecondary)
                     Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
             } else {
                 Table(filteredItems, selection: $selectedItemIds) {
                     TableColumn("Target / Project") { item in
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Circle()
                                 .fill(Color(hex: item.colorHex))
                                 .frame(width: 8, height: 8)
 
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                    .font(.system(.body, design: .rounded, weight: .semibold))
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(VeloraTheme.textPrimary)
                                 Text(item.path)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(VeloraTheme.textMuted)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
@@ -186,29 +221,39 @@ public struct XcodeStorageView: View {
 
                     TableColumn("Category") { item in
                         Text(item.categoryName)
-                            .font(.system(.caption, design: .rounded))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color(hex: item.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(hex: item.colorHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
                     }
                     .width(min: 140, ideal: 180)
 
                     TableColumn("Size") { item in
                         Text(formatBytes(item.sizeBytes))
-                            .font(.system(.body, design: .monospaced, weight: .medium))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
                     }
                     .width(min: 90, ideal: 110)
 
                     TableColumn("Action") { item in
-                        Button("Collect") {
+                        Button(action: {
                             viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                        }) {
+                            Text("Collect")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(VeloraTheme.textSecondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(VeloraTheme.obsidianElevated, in: Capsule())
+                                .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
+                        .buttonStyle(.plain)
                     }
                     .width(min: 70, ideal: 80)
                 }
-                .tableStyle(.inset(alternatesRowBackgrounds: true))
+                .scrollContentBackground(.hidden)
+                .background(VeloraTheme.obsidianBase)
                 .onKeyPress(.space) {
                     if let firstId = selectedItemIds.first, let item = filteredItems.first(where: { $0.id == firstId }) {
                         QuickLookCoordinator.shared.togglePreview(for: item.path)
@@ -239,52 +284,11 @@ public struct XcodeStorageView: View {
                 }
             }
         }
+        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.xcodeSummary == nil {
                 viewModel.loadXcodeSummary()
             }
         }
-    }
-}
-
-private struct MetricCard: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct FilterTab: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(.caption, design: .rounded, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : .secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? Color.blue : Color.clear,
-                    in: Capsule()
-                )
-        }
-        .buttonStyle(.plain)
     }
 }

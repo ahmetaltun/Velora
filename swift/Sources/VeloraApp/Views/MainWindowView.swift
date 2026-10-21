@@ -28,7 +28,9 @@ public struct MainWindowView: View {
 
                 // Main Workspace Canvas
                 Group {
-                    if viewModel.activeSidebarId == "tool_dev_artifacts" {
+                    if viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root" {
+                        SmartScanDashboardView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_dev_artifacts" {
                         DevArtifactsHunterView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "tool_xcode" {
                         XcodeStorageView(viewModel: viewModel)
@@ -42,9 +44,11 @@ public struct MainWindowView: View {
                         LargeOldFilesMatrixView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "tool_duplicates" {
                         DuplicateFinderView(viewModel: viewModel)
-                    } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
-                        ScanHeroWelcomeView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "storage_volumes" {
+                        ApfsStorageCardView(viewModel: viewModel)
                             .padding(24)
+                    } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
+                        SmartScanDashboardView(viewModel: viewModel)
                     } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
                         FileTableView(viewModel: viewModel)
                     } else {
@@ -52,6 +56,7 @@ public struct MainWindowView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(VeloraTheme.obsidianBase)
 
                 // Bottom DaisyDisk-style Collector Drawer
                 CollectorTrayView(viewModel: viewModel)
@@ -79,25 +84,34 @@ public struct MainWindowView: View {
                     // Current Path Pill
                     HStack(spacing: 6) {
                         Image(systemName: "folder")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(VeloraTheme.textSecondary)
                         Text((viewModel.currentPath as NSString).lastPathComponent.isEmpty ? "Macintosh HD" : (viewModel.currentPath as NSString).lastPathComponent)
                             .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            .foregroundColor(VeloraTheme.textPrimary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(VeloraTheme.cardBorder, lineWidth: 1)
+                    )
 
                     if viewModel.isLoadingSnapshot {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             ProgressView()
                                 .controlSize(.mini)
-                            Text("Indexing...")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                            Text("Loading catalog.bin...")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(VeloraTheme.accentCyan)
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 9)
                         .padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
+                        .background(VeloraTheme.obsidianElevated, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(VeloraTheme.accentCyan.opacity(0.35), lineWidth: 1)
+                        )
                     }
                 }
 
@@ -105,10 +119,11 @@ public struct MainWindowView: View {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(VeloraTheme.textSecondary)
 
                         TextField("Search anything (e.g. ext:rs size:>10MB !target)...", text: $viewModel.searchQuery)
                             .textFieldStyle(.plain)
+                            .foregroundColor(VeloraTheme.textPrimary)
                             .onChange(of: viewModel.searchQuery) { _, newValue in
                                 viewModel.performSearch(query: newValue, debounce: true)
                             }
@@ -122,7 +137,7 @@ public struct MainWindowView: View {
                                 viewModel.performSearch(query: "")
                             }) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(VeloraTheme.textSecondary)
                             }
                             .buttonStyle(.plain)
                         }
@@ -130,10 +145,10 @@ public struct MainWindowView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            .stroke(VeloraTheme.cardBorder, lineWidth: 1)
                     )
                 }
 
@@ -159,5 +174,14 @@ public struct MainWindowView: View {
         .onAppear {
             viewModel.loadCachedSnapshotIfAvailable()
         }
+        .background(
+            WindowAccessor { window in
+                window.titlebarAppearsTransparent = true
+                window.isOpaque = false
+                window.backgroundColor = NSColor(red: 22/255.0, green: 25/255.0, blue: 46/255.0, alpha: 1.0)
+                window.toolbar?.showsBaselineSeparator = false
+            }
+        )
+        .background(VeloraTheme.obsidianBase)
     }
 }
