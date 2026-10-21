@@ -85,37 +85,64 @@ impl VolumeIndex {
         0
     }
 
-    /// Marks all records matching the given path or inside the directory prefix as deleted.
-    /// Returns the total bytes freed by this tombstoning operation.
-    pub fn mark_deleted_by_path(&mut self, target_path: &str) -> u64 {
-        let clean_target = target_path.trim_end_matches('/');
+    /// Marks all records matching any of the given paths or inside any directory prefix as deleted.
+    /// Performs a single-pass index traversal matching against an in-memory hash set and prefix list.
+    /// Returns the total bytes freed by this batch tombstoning operation.
+    pub fn mark_deleted_batch(&mut self, target_paths: &[String]) -> u64 {
+        if target_paths.is_empty() {
+            return 0;
+        }
+
+        let mut exact_set = std::collections::HashSet::with_capacity(target_paths.len());
+        let mut dir_prefixes = Vec::new();
+
+        for p in target_paths {
+            let clean = p.trim_end_matches('/');
+            if !clean.is_empty() {
+                exact_set.insert(clean);
+                dir_prefixes.push(format!("{}/", clean));
+            }
+        }
+
         let mut freed_bytes = 0u64;
+        let mut full_path = String::with_capacity(256);
 
         for record in &mut self.records {
             if record.is_deleted() {
                 continue;
             }
 
-            let full_path = {
-                let mut path = String::with_capacity(128);
-                self.dirs.build_full_path(record.parent_dir, &self.pool, &mut path);
-                if !path.ends_with('/') {
-                    path.push('/');
-                }
-                path.push_str(self.pool.get(record.name_offset, record.name_len));
-                path
-            };
+            full_path.clear();
+            self.dirs.build_full_path(record.parent_dir, &self.pool, &mut full_path);
+            if !full_path.ends_with('/') {
+                full_path.push('/');
+            }
+            full_path.push_str(self.pool.get(record.name_offset, record.name_len));
 
             let clean_full = full_path.trim_end_matches('/');
-            if clean_full == clean_target
-                || clean_full.starts_with(&format!("{}/", clean_target))
-            {
+
+            if exact_set.contains(clean_full) {
                 record.mark_deleted();
                 freed_bytes += record.size;
+                continue;
+            }
+
+            for prefix in &dir_prefixes {
+                if clean_full.starts_with(prefix) {
+                    record.mark_deleted();
+                    freed_bytes += record.size;
+                    break;
+                }
             }
         }
 
         freed_bytes
+    }
+
+    /// Marks all records matching the given path or inside the directory prefix as deleted.
+    /// Returns the total bytes freed by this tombstoning operation.
+    pub fn mark_deleted_by_path(&mut self, target_path: &str) -> u64 {
+        self.mark_deleted_batch(&[target_path.to_string()])
     }
 
     pub fn resolve_full_path(&self, record: &FileRecord) -> String {

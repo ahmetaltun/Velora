@@ -363,6 +363,10 @@ impl VeloraEngine {
         self.volume.write().mark_deleted_by_path(&path)
     }
 
+    pub fn mark_deleted_batch(&self, paths: Vec<String>) -> u64 {
+        self.volume.write().mark_deleted_batch(&paths)
+    }
+
     pub fn active_files(&self) -> u64 {
         self.volume.read().active_files() as u64
     }

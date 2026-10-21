@@ -546,6 +546,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func loadOfflineSnapshot(srcPath: String)  -> Bool
     
+    func markDeletedBatch(paths: [String])  -> UInt64
+    
     func markDeletedByPath(path: String)  -> UInt64
     
     func pruneDocker()  -> Bool
@@ -741,6 +743,14 @@ open func loadOfflineSnapshot(srcPath: String) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_load_offline_snapshot(self.uniffiClonePointer(),
         FfiConverterString.lower(srcPath),$0
+    )
+})
+}
+    
+open func markDeletedBatch(paths: [String]) -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_mark_deleted_batch(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(paths),$0
     )
 })
 }
@@ -2884,6 +2894,31 @@ fileprivate struct FfiConverterOptionCallbackInterfaceScanProgressCallback: FfiC
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]
+
+    public static func write(_ value: [String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterString.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [String]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeAppPartRecord: FfiConverterRustBuffer {
     typealias SwiftType = [AppPartRecord]
 
@@ -3292,6 +3327,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_load_offline_snapshot() != 27215) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_mark_deleted_batch() != 41095) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_mark_deleted_by_path() != 52147) {

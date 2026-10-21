@@ -93,3 +93,55 @@ fn test_tombstone_deletion_and_snapshot() {
 
     let _ = std::fs::remove_file(snapshot_file);
 }
+
+#[test]
+fn test_mark_deleted_batch() {
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (d_off, d_len) = volume.pool.push("Documents");
+    let docs_dir = volume.dirs.insert(d_off, d_len, None);
+
+    let (f1_off, f1_len) = volume.pool.push("file1.pdf");
+    volume.add_file(FileRecord::new(
+        f1_off,
+        f1_len,
+        FileFlags::empty(),
+        docs_dir,
+        1000,
+        1700000000,
+    ));
+
+    let (f2_off, f2_len) = volume.pool.push("file2.pdf");
+    volume.add_file(FileRecord::new(
+        f2_off,
+        f2_len,
+        FileFlags::empty(),
+        docs_dir,
+        2000,
+        1700000000,
+    ));
+
+    let (f3_off, f3_len) = volume.pool.push("file3.pdf");
+    volume.add_file(FileRecord::new(
+        f3_off,
+        f3_len,
+        FileFlags::empty(),
+        docs_dir,
+        3000,
+        1700000000,
+    ));
+
+    assert_eq!(volume.active_files(), 3);
+    assert_eq!(volume.active_bytes(), 6000);
+
+    let batch = vec![
+        "/Documents/file1.pdf".to_string(),
+        "/Documents/file3.pdf".to_string(),
+    ];
+    let freed = volume.mark_deleted_batch(&batch);
+    assert_eq!(freed, 4000);
+    assert_eq!(volume.active_files(), 1);
+    assert_eq!(volume.active_bytes(), 2000);
+    assert!(volume.records[0].is_deleted());
+    assert!(!volume.records[1].is_deleted());
+    assert!(volume.records[2].is_deleted());
+}

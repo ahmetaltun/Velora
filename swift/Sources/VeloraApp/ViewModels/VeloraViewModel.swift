@@ -46,6 +46,24 @@ public final class VeloraViewModel {
     public var isLoadingLargeOldMatrix: Bool = false
     public var duplicateSummary: DuplicateSummaryRecord?
     public var isLoadingDuplicates: Bool = false
+    public var isCleaning: Bool = false
+    public var cleaningCurrentIndex: Int = 0
+    public var cleaningTotalCount: Int = 0
+    public var cleaningFreedBytes: UInt64 = 0
+    public var cleaningTotalBytes: UInt64 = 0
+    public var cleaningCurrentFileName: String = ""
+    public var cleaningEstimatedSecondsRemaining: Double? = nil
+    public var cleaningErrorMessage: String? = nil
+    public var cancelCleaningRequested: Bool = false
+
+    public var cleaningProgress: Double {
+        guard cleaningTotalCount > 0 else { return 0.0 }
+        return Double(cleaningCurrentIndex) / Double(cleaningTotalCount)
+    }
+
+    public func cancelCleaning() {
+        cancelCleaningRequested = true
+    }
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
 
@@ -580,82 +598,155 @@ public final class VeloraViewModel {
     }
 
     public func cleanStagedItems() {
-        let deletedPaths = Set(collectorItems.map { $0.path })
+        guard !isCleaning, !collectorItems.isEmpty else { return }
 
-        for item in collectorItems {
-            let url = URL(fileURLWithPath: item.path)
-            try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            _ = engine.markDeletedByPath(path: item.path)
-        }
-        clearCollector()
+        let itemsToClean = collectorItems
+        let totalCount = itemsToClean.count
+        let totalBytes = collectorTotalSize
 
-        // Asynchronously persist the updated index with tombstoned files to catalog.bin
-        SnapshotManager.shared.saveSnapshot(engine: self.engine)
+        isCleaning = true
+        cleaningCurrentIndex = 0
+        cleaningTotalCount = totalCount
+        cleaningFreedBytes = 0
+        cleaningTotalBytes = totalBytes
+        cleaningCurrentFileName = (itemsToClean.first?.path as NSString?)?.lastPathComponent ?? ""
+        cleaningEstimatedSecondsRemaining = nil
+        cleaningErrorMessage = nil
+        cancelCleaningRequested = false
 
-        // Instant in-memory refresh without scanning physical disk
-        self.scannedCount = engine.activeFiles()
-        self.currentSunburst = engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
-        if let root = self.currentSunburst {
-            self.sectorStack = [root]
-        }
-        self.refreshTableItems()
-        self.refreshStorageReconciliation()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
 
-        // Also update apps and leftovers cache if loaded
-        if !installedApps.isEmpty {
-            loadInstalledApps()
-        }
-        if !orphanedResidues.isEmpty {
-            loadOrphanedResidues()
-        }
+            var trashedPaths: [String] = []
+            var trashedBytes: UInt64 = 0
+            var errors: [String] = []
+            let startTime = Date()
+            var lastUiUpdate = Date()
 
-        // Optimistically update duplicateSummary and re-sync with engine
-        if let currentSummary = duplicateSummary {
-            var updatedGroups: [DuplicateGroupRecord] = []
-            var newTotalFiles: UInt32 = 0
-            var newTotalWasted: UInt64 = 0
+            for (index, item) in itemsToClean.enumerated() {
+                if self.cancelCleaningRequested {
+                    break
+                }
 
-            for group in currentSummary.groups {
-                var remaining = group.files.filter { !deletedPaths.contains($0.path) }
-                if remaining.count >= 2 {
-                    // Ensure the oldest remaining file is marked as original if original was deleted
-                    remaining.sort(by: { $0.modifiedSecs < $1.modifiedSecs })
-                    for i in 0..<remaining.count {
-                        remaining[i].isOriginal = (i == 0)
+                let url = URL(fileURLWithPath: item.path)
+                let fileName = url.lastPathComponent
+
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    trashedPaths.append(item.path)
+                    trashedBytes += item.sizeBytes
+                } catch {
+                    errors.append("Failed to trash '\(fileName)': \(error.localizedDescription)")
+                }
+
+                let completed = index + 1
+                let now = Date()
+                let elapsed = max(0.01, now.timeIntervalSince(startTime))
+                let itemsPerSec = Double(completed) / elapsed
+                let remaining = totalCount - completed
+                let eta = itemsPerSec > 0.2 ? Double(remaining) / itemsPerSec : nil
+
+                // Throttle UI updates to keep UI smooth and reduce main thread dispatch overhead
+                if completed == totalCount || self.cancelCleaningRequested || now.timeIntervalSince(lastUiUpdate) >= 0.05 {
+                    lastUiUpdate = now
+                    DispatchQueue.main.async {
+                        self.cleaningCurrentIndex = completed
+                        self.cleaningFreedBytes = trashedBytes
+                        self.cleaningCurrentFileName = fileName
+                        self.cleaningEstimatedSecondsRemaining = eta
                     }
-
-                    let groupWasted = group.sizeBytes * UInt64(remaining.count - 1)
-                    let updatedGroup = DuplicateGroupRecord(
-                        groupId: group.groupId,
-                        hashHex: group.hashHex,
-                        sizeBytes: group.sizeBytes,
-                        totalWastedBytes: groupWasted,
-                        fileCount: UInt32(remaining.count),
-                        files: remaining
-                    )
-                    updatedGroups.append(updatedGroup)
-                    newTotalFiles += UInt32(remaining.count)
-                    newTotalWasted += groupWasted
                 }
             }
 
-            self.duplicateSummary = DuplicateSummaryRecord(
-                totalDuplicateFiles: newTotalFiles,
-                totalDuplicateGroups: UInt32(updatedGroups.count),
-                totalWastedBytes: newTotalWasted,
-                groups: updatedGroups
-            )
-        }
+            // Batch tombstone successfully trashed items in the Rust index with a single write lock
+            let deletedPaths = Set(trashedPaths)
+            if !trashedPaths.isEmpty {
+                _ = self.engine.markDeletedBatch(paths: trashedPaths)
+            }
 
-        // Refresh developer artifacts and large old matrix if loaded
-        if !devArtifacts.isEmpty {
-            loadDevArtifacts()
-        }
-        if largeOldMatrix != nil {
-            loadLargeOldMatrix()
-        }
-        if packageCacheSummary != nil {
-            loadPackageCaches()
+            // Remove successfully trashed items from the Collector Tray in Rust and memory
+            for path in trashedPaths {
+                self.engine.removeCollected(path: path)
+            }
+
+            // Asynchronously persist the updated index with tombstoned files to catalog.bin
+            SnapshotManager.shared.saveSnapshot(engine: self.engine)
+
+            DispatchQueue.main.async {
+                self.syncCollectorState()
+
+                // Instant in-memory refresh without scanning physical disk
+                self.scannedCount = self.engine.activeFiles()
+                self.currentSunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+                if let root = self.currentSunburst {
+                    self.sectorStack = [root]
+                }
+                self.refreshTableItems()
+                self.refreshStorageReconciliation()
+
+                // Also update apps and leftovers cache if loaded
+                if !self.installedApps.isEmpty {
+                    self.loadInstalledApps()
+                }
+                if !self.orphanedResidues.isEmpty {
+                    self.loadOrphanedResidues()
+                }
+
+                // Optimistically update duplicateSummary and re-sync with engine
+                if let currentSummary = self.duplicateSummary {
+                    var updatedGroups: [DuplicateGroupRecord] = []
+                    var newTotalFiles: UInt32 = 0
+                    var newTotalWasted: UInt64 = 0
+
+                    for group in currentSummary.groups {
+                        var remaining = group.files.filter { !deletedPaths.contains($0.path) }
+                        if remaining.count >= 2 {
+                            // Ensure the oldest remaining file is marked as original if original was deleted
+                            remaining.sort(by: { $0.modifiedSecs < $1.modifiedSecs })
+                            for i in 0..<remaining.count {
+                                remaining[i].isOriginal = (i == 0)
+                            }
+
+                            let groupWasted = group.sizeBytes * UInt64(remaining.count - 1)
+                            let updatedGroup = DuplicateGroupRecord(
+                                groupId: group.groupId,
+                                hashHex: group.hashHex,
+                                sizeBytes: group.sizeBytes,
+                                totalWastedBytes: groupWasted,
+                                fileCount: UInt32(remaining.count),
+                                files: remaining
+                            )
+                            updatedGroups.append(updatedGroup)
+                            newTotalFiles += UInt32(remaining.count)
+                            newTotalWasted += groupWasted
+                        }
+                    }
+
+                    self.duplicateSummary = DuplicateSummaryRecord(
+                        totalDuplicateFiles: newTotalFiles,
+                        totalDuplicateGroups: UInt32(updatedGroups.count),
+                        totalWastedBytes: newTotalWasted,
+                        groups: updatedGroups
+                    )
+                }
+
+                // Refresh developer artifacts and large old matrix if loaded
+                if !self.devArtifacts.isEmpty {
+                    self.loadDevArtifacts()
+                }
+                if self.largeOldMatrix != nil {
+                    self.loadLargeOldMatrix()
+                }
+                if self.packageCacheSummary != nil {
+                    self.loadPackageCaches()
+                }
+
+                if !errors.isEmpty {
+                    self.cleaningErrorMessage = "\(errors.count) items could not be moved to Trash. \(errors.first ?? "")"
+                }
+
+                self.isCleaning = false
+            }
         }
     }
 }
