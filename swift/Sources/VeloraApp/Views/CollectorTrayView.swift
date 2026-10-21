@@ -45,7 +45,7 @@ public struct CollectorTrayView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
-                                Text("Trashing \(viewModel.cleaningCurrentIndex) of \(viewModel.cleaningTotalCount) items...")
+                                Text("Trashing \(viewModel.cleaningDisplayIndex) of \(viewModel.cleaningTotalCount) items...")
                                     .font(.system(.subheadline, design: .rounded, weight: .bold))
 
                                 if !viewModel.cleaningCurrentFileName.isEmpty {

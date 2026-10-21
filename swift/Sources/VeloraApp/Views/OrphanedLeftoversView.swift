@@ -34,6 +34,14 @@ public struct OrphanedLeftoversView: View {
         return result
     }
 
+    private var stagedPaths: Set<String> {
+        Set(viewModel.collectorItems.map { $0.path })
+    }
+
+    private var allFilteredStaged: Bool {
+        !filteredResidues.isEmpty && filteredResidues.allSatisfy { stagedPaths.contains($0.path) }
+    }
+
     private var totalLeftoverBytes: UInt64 {
         filteredResidues.reduce(0) { $0 + $1.sizeBytes }
     }
@@ -87,14 +95,23 @@ public struct OrphanedLeftoversView: View {
 
                 if totalLeftoverBytes > 0 {
                     Button(action: {
-                        for item in filteredResidues {
-                            viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                        if allFilteredStaged {
+                            for item in filteredResidues {
+                                viewModel.removeCollected(path: item.path)
+                            }
+                        } else {
+                            for item in filteredResidues {
+                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                            }
                         }
                     }) {
-                        Label("Collect All Leftovers (\(formatBytes(totalLeftoverBytes)))", systemImage: "sparkles")
+                        Label(
+                            allFilteredStaged ? "Unstage All Leftovers" : "Collect All Leftovers (\(formatBytes(totalLeftoverBytes)))",
+                            systemImage: allFilteredStaged ? "checkmark.circle.fill" : "sparkles"
+                        )
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red.opacity(0.85))
+                    .tint(allFilteredStaged ? VeloraTheme.teal : .red.opacity(0.85))
                     .controlSize(.regular)
                 }
 
@@ -197,13 +214,19 @@ public struct OrphanedLeftoversView: View {
             } else {
                 List {
                     ForEach(filteredResidues) { item in
+                        let isStaged = stagedPaths.contains(item.path)
                         OrphanCard(
                             item: item,
+                            isStaged: isStaged,
                             categoryColor: categoryColor(item.categoryName),
                             formatBytes: formatBytes,
                             formatDate: formatRelativeDate,
-                            onCollect: {
-                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                            onToggleCollect: {
+                                if isStaged {
+                                    viewModel.removeCollected(path: item.path)
+                                } else {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
                             }
                         )
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -225,10 +248,11 @@ public struct OrphanedLeftoversView: View {
 
 private struct OrphanCard: View {
     let item: OrphanedResidueRecord
+    let isStaged: Bool
     let categoryColor: Color
     let formatBytes: (UInt64) -> String
     let formatDate: (UInt64) -> String
-    let onCollect: () -> Void
+    let onToggleCollect: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -247,6 +271,15 @@ private struct OrphanCard: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(categoryColor.opacity(0.12), in: Capsule())
+
+                    if isStaged {
+                        Text("STAGED")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(VeloraTheme.teal)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(VeloraTheme.teal.opacity(0.15), in: Capsule())
+                    }
 
                     if !item.inferredBundleId.isEmpty && item.inferredBundleId != item.name {
                         Text("(\(item.inferredBundleId))")
@@ -295,20 +328,30 @@ private struct OrphanCard: View {
             .foregroundColor(.secondary)
             .help("QuickLook preview")
 
-            // Stage into Collector
-            Button(action: onCollect) {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
+            // Stage into Collector / Remove
+            Button(action: onToggleCollect) {
+                Image(systemName: isStaged ? "checkmark.circle.fill" : "plus.circle.fill")
+                    .foregroundColor(isStaged ? VeloraTheme.teal : .orange)
                     .font(.title3)
             }
             .buttonStyle(.plain)
-            .help("Stage into Collector Tray")
+            .help(isStaged ? "Remove from Collector Tray" : "Stage into Collector Tray")
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background(
+            isStaged
+                ? VeloraTheme.teal.opacity(0.06)
+                : Color(nsColor: .controlBackgroundColor).opacity(0.5),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(
+                    isStaged
+                        ? VeloraTheme.teal.opacity(0.4)
+                        : Color.primary.opacity(0.06),
+                    lineWidth: isStaged ? 1.5 : 1
+                )
         )
     }
 }

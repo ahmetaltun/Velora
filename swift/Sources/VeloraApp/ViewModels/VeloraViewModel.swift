@@ -61,8 +61,16 @@ public final class VeloraViewModel {
         return Double(cleaningCurrentIndex) / Double(cleaningTotalCount)
     }
 
+    public var cleaningDisplayIndex: Int {
+        guard cleaningTotalCount > 0 else { return 0 }
+        return min(cleaningCurrentIndex + 1, cleaningTotalCount)
+    }
+
+    private var activeCleaningQueue: OperationQueue?
+
     public func cancelCleaning() {
         cancelCleaningRequested = true
+        activeCleaningQueue?.cancelAllOperations()
     }
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
@@ -614,6 +622,12 @@ public final class VeloraViewModel {
         cleaningErrorMessage = nil
         cancelCleaningRequested = false
 
+        let queue = OperationQueue()
+        queue.name = "com.velora.concurrentTrashQueue"
+        queue.maxConcurrentOperationCount = min(8, max(4, ProcessInfo.processInfo.activeProcessorCount * 2))
+        queue.qualityOfService = .userInitiated
+        self.activeCleaningQueue = queue
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -622,41 +636,66 @@ public final class VeloraViewModel {
             var errors: [String] = []
             let startTime = Date()
             var lastUiUpdate = Date()
+            let lock = NSLock()
+            var completedCount = 0
 
-            for (index, item) in itemsToClean.enumerated() {
-                if self.cancelCleaningRequested {
-                    break
-                }
+            for item in itemsToClean {
+                queue.addOperation { [weak self] in
+                    guard let self = self, !self.cancelCleaningRequested else { return }
 
-                let url = URL(fileURLWithPath: item.path)
-                let fileName = url.lastPathComponent
+                    let url = URL(fileURLWithPath: item.path)
+                    let fileName = url.lastPathComponent
+                    var trashedSuccess = false
+                    var errorMsg: String? = nil
 
-                do {
-                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                    trashedPaths.append(item.path)
-                    trashedBytes += item.sizeBytes
-                } catch {
-                    errors.append("Failed to trash '\(fileName)': \(error.localizedDescription)")
-                }
+                    do {
+                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                        trashedSuccess = true
+                    } catch let nsErr as NSError {
+                        // If file was already deleted (e.g. parent folder was trashed), treat as success
+                        if nsErr.domain == NSCocoaErrorDomain && nsErr.code == NSFileNoSuchFileError {
+                            trashedSuccess = true
+                        } else {
+                            errorMsg = "Failed to trash '\(fileName)': \(nsErr.localizedDescription)"
+                        }
+                    }
 
-                let completed = index + 1
-                let now = Date()
-                let elapsed = max(0.01, now.timeIntervalSince(startTime))
-                let itemsPerSec = Double(completed) / elapsed
-                let remaining = totalCount - completed
-                let eta = itemsPerSec > 0.2 ? Double(remaining) / itemsPerSec : nil
+                    lock.lock()
+                    completedCount += 1
+                    let currentCompleted = completedCount
+                    if trashedSuccess {
+                        trashedPaths.append(item.path)
+                        trashedBytes += item.sizeBytes
+                    } else if let errorMsg = errorMsg {
+                        errors.append(errorMsg)
+                    }
+                    let currentFreed = trashedBytes
+                    let isCanceled = self.cancelCleaningRequested
+                    let now = Date()
+                    let shouldUpdate = currentCompleted == totalCount || isCanceled || now.timeIntervalSince(lastUiUpdate) >= 0.05
+                    if shouldUpdate {
+                        lastUiUpdate = now
+                    }
+                    lock.unlock()
 
-                // Throttle UI updates to keep UI smooth and reduce main thread dispatch overhead
-                if completed == totalCount || self.cancelCleaningRequested || now.timeIntervalSince(lastUiUpdate) >= 0.05 {
-                    lastUiUpdate = now
-                    DispatchQueue.main.async {
-                        self.cleaningCurrentIndex = completed
-                        self.cleaningFreedBytes = trashedBytes
-                        self.cleaningCurrentFileName = fileName
-                        self.cleaningEstimatedSecondsRemaining = eta
+                    if shouldUpdate {
+                        let elapsed = max(0.01, now.timeIntervalSince(startTime))
+                        let itemsPerSec = Double(currentCompleted) / elapsed
+                        let remaining = totalCount - currentCompleted
+                        let eta = itemsPerSec > 0.2 ? Double(remaining) / itemsPerSec : nil
+
+                        DispatchQueue.main.async {
+                            self.cleaningCurrentIndex = currentCompleted
+                            self.cleaningFreedBytes = currentFreed
+                            self.cleaningCurrentFileName = fileName
+                            self.cleaningEstimatedSecondsRemaining = eta
+                        }
                     }
                 }
             }
+
+            queue.waitUntilAllOperationsAreFinished()
+            self.activeCleaningQueue = nil
 
             // Batch tombstone successfully trashed items in the Rust index with a single write lock
             let deletedPaths = Set(trashedPaths)
@@ -688,8 +727,9 @@ public final class VeloraViewModel {
                 if !self.installedApps.isEmpty {
                     self.loadInstalledApps()
                 }
+                // Prune deleted leftovers in-memory without initiating a disk rescan
                 if !self.orphanedResidues.isEmpty {
-                    self.loadOrphanedResidues()
+                    self.orphanedResidues.removeAll { deletedPaths.contains($0.path) }
                 }
 
                 // Optimistically update duplicateSummary and re-sync with engine
