@@ -554,11 +554,17 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func pruneUnavailableSimulators()  -> Bool
     
+    func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String])  -> Bool
+    
     func reconcileStorage(mountPoint: String)  -> StorageReconciliationItem
     
     func removeCollected(path: String) 
     
+    func restoreQuarantinedThreat(homePath: String, id: String)  -> Bool
+    
     func saveSnapshot(destPath: String)  -> Bool
+    
+    func scanSecurity(homePath: String)  -> SecuritySummaryRecord
     
     func scanVolume(mountPoint: String, volumeName: String, callback: ScanProgressCallback?)  -> Bool
     
@@ -777,6 +783,17 @@ open func pruneUnavailableSimulators() -> Bool {
 })
 }
     
+open func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String]) -> Bool {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_quarantine_threat(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(targetPath),
+        FfiConverterSequenceString.lower(associatedPaths),$0
+    )
+})
+}
+    
 open func reconcileStorage(mountPoint: String) -> StorageReconciliationItem {
     return try!  FfiConverterTypeStorageReconciliationItem.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_reconcile_storage(self.uniffiClonePointer(),
@@ -792,10 +809,27 @@ open func removeCollected(path: String) {try! rustCall() {
 }
 }
     
+open func restoreQuarantinedThreat(homePath: String, id: String) -> Bool {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_restore_quarantined_threat(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
 open func saveSnapshot(destPath: String) -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_save_snapshot(self.uniffiClonePointer(),
         FfiConverterString.lower(destPath),$0
+    )
+})
+}
+    
+open func scanSecurity(homePath: String) -> SecuritySummaryRecord {
+    return try!  FfiConverterTypeSecuritySummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_scan_security(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
     )
 })
 }
@@ -2221,6 +2255,250 @@ public func FfiConverterTypeSearchResultItem_lower(_ value: SearchResultItem) ->
 }
 
 
+public struct SecuritySummaryRecord {
+    public var totalCandidatesTriaged: UInt32
+    public var totalAsepInspected: UInt32
+    public var threatCount: UInt32
+    public var threats: [SecurityThreatRecord]
+    public var scanDurationMs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalCandidatesTriaged: UInt32, totalAsepInspected: UInt32, threatCount: UInt32, threats: [SecurityThreatRecord], scanDurationMs: UInt64) {
+        self.totalCandidatesTriaged = totalCandidatesTriaged
+        self.totalAsepInspected = totalAsepInspected
+        self.threatCount = threatCount
+        self.threats = threats
+        self.scanDurationMs = scanDurationMs
+    }
+}
+
+
+
+extension SecuritySummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: SecuritySummaryRecord, rhs: SecuritySummaryRecord) -> Bool {
+        if lhs.totalCandidatesTriaged != rhs.totalCandidatesTriaged {
+            return false
+        }
+        if lhs.totalAsepInspected != rhs.totalAsepInspected {
+            return false
+        }
+        if lhs.threatCount != rhs.threatCount {
+            return false
+        }
+        if lhs.threats != rhs.threats {
+            return false
+        }
+        if lhs.scanDurationMs != rhs.scanDurationMs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalCandidatesTriaged)
+        hasher.combine(totalAsepInspected)
+        hasher.combine(threatCount)
+        hasher.combine(threats)
+        hasher.combine(scanDurationMs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSecuritySummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SecuritySummaryRecord {
+        return
+            try SecuritySummaryRecord(
+                totalCandidatesTriaged: FfiConverterUInt32.read(from: &buf), 
+                totalAsepInspected: FfiConverterUInt32.read(from: &buf), 
+                threatCount: FfiConverterUInt32.read(from: &buf), 
+                threats: FfiConverterSequenceTypeSecurityThreatRecord.read(from: &buf), 
+                scanDurationMs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SecuritySummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.totalCandidatesTriaged, into: &buf)
+        FfiConverterUInt32.write(value.totalAsepInspected, into: &buf)
+        FfiConverterUInt32.write(value.threatCount, into: &buf)
+        FfiConverterSequenceTypeSecurityThreatRecord.write(value.threats, into: &buf)
+        FfiConverterUInt64.write(value.scanDurationMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecuritySummaryRecord_lift(_ buf: RustBuffer) throws -> SecuritySummaryRecord {
+    return try FfiConverterTypeSecuritySummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecuritySummaryRecord_lower(_ value: SecuritySummaryRecord) -> RustBuffer {
+    return FfiConverterTypeSecuritySummaryRecord.lower(value)
+}
+
+
+public struct SecurityThreatRecord {
+    public var id: String
+    public var name: String
+    public var categoryName: String
+    public var severityName: String
+    public var severityColorHex: String
+    public var targetPath: String
+    public var associatedPaths: [String]
+    public var fileSize: UInt64
+    public var sha256Hex: String
+    public var signingStatus: String
+    public var description: String
+    public var detectionMethod: String
+    public var canQuarantine: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, categoryName: String, severityName: String, severityColorHex: String, targetPath: String, associatedPaths: [String], fileSize: UInt64, sha256Hex: String, signingStatus: String, description: String, detectionMethod: String, canQuarantine: Bool) {
+        self.id = id
+        self.name = name
+        self.categoryName = categoryName
+        self.severityName = severityName
+        self.severityColorHex = severityColorHex
+        self.targetPath = targetPath
+        self.associatedPaths = associatedPaths
+        self.fileSize = fileSize
+        self.sha256Hex = sha256Hex
+        self.signingStatus = signingStatus
+        self.description = description
+        self.detectionMethod = detectionMethod
+        self.canQuarantine = canQuarantine
+    }
+}
+
+
+
+extension SecurityThreatRecord: Equatable, Hashable {
+    public static func ==(lhs: SecurityThreatRecord, rhs: SecurityThreatRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.categoryName != rhs.categoryName {
+            return false
+        }
+        if lhs.severityName != rhs.severityName {
+            return false
+        }
+        if lhs.severityColorHex != rhs.severityColorHex {
+            return false
+        }
+        if lhs.targetPath != rhs.targetPath {
+            return false
+        }
+        if lhs.associatedPaths != rhs.associatedPaths {
+            return false
+        }
+        if lhs.fileSize != rhs.fileSize {
+            return false
+        }
+        if lhs.sha256Hex != rhs.sha256Hex {
+            return false
+        }
+        if lhs.signingStatus != rhs.signingStatus {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.detectionMethod != rhs.detectionMethod {
+            return false
+        }
+        if lhs.canQuarantine != rhs.canQuarantine {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(categoryName)
+        hasher.combine(severityName)
+        hasher.combine(severityColorHex)
+        hasher.combine(targetPath)
+        hasher.combine(associatedPaths)
+        hasher.combine(fileSize)
+        hasher.combine(sha256Hex)
+        hasher.combine(signingStatus)
+        hasher.combine(description)
+        hasher.combine(detectionMethod)
+        hasher.combine(canQuarantine)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSecurityThreatRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SecurityThreatRecord {
+        return
+            try SecurityThreatRecord(
+                id: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                categoryName: FfiConverterString.read(from: &buf), 
+                severityName: FfiConverterString.read(from: &buf), 
+                severityColorHex: FfiConverterString.read(from: &buf), 
+                targetPath: FfiConverterString.read(from: &buf), 
+                associatedPaths: FfiConverterSequenceString.read(from: &buf), 
+                fileSize: FfiConverterUInt64.read(from: &buf), 
+                sha256Hex: FfiConverterString.read(from: &buf), 
+                signingStatus: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                detectionMethod: FfiConverterString.read(from: &buf), 
+                canQuarantine: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SecurityThreatRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.categoryName, into: &buf)
+        FfiConverterString.write(value.severityName, into: &buf)
+        FfiConverterString.write(value.severityColorHex, into: &buf)
+        FfiConverterString.write(value.targetPath, into: &buf)
+        FfiConverterSequenceString.write(value.associatedPaths, into: &buf)
+        FfiConverterUInt64.write(value.fileSize, into: &buf)
+        FfiConverterString.write(value.sha256Hex, into: &buf)
+        FfiConverterString.write(value.signingStatus, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterString.write(value.detectionMethod, into: &buf)
+        FfiConverterBool.write(value.canQuarantine, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecurityThreatRecord_lift(_ buf: RustBuffer) throws -> SecurityThreatRecord {
+    return try FfiConverterTypeSecurityThreatRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecurityThreatRecord_lower(_ value: SecurityThreatRecord) -> RustBuffer {
+    return FfiConverterTypeSecurityThreatRecord.lower(value)
+}
+
+
 public struct StorageReconciliationItem {
     public var containerTotalBytes: UInt64
     public var containerFreeBytes: UInt64
@@ -3194,6 +3472,31 @@ fileprivate struct FfiConverterSequenceTypeSearchResultItem: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeSecurityThreatRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [SecurityThreatRecord]
+
+    public static func write(_ value: [SecurityThreatRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSecurityThreatRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SecurityThreatRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SecurityThreatRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSecurityThreatRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeStorageSnapshotItem: FfiConverterRustBuffer {
     typealias SwiftType = [StorageSnapshotItem]
 
@@ -3341,13 +3644,22 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_prune_unavailable_simulators() != 15692) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_quarantine_threat() != 19129) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_reconcile_storage() != 38095) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_remove_collected() != 54207) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_restore_quarantined_threat() != 43062) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_save_snapshot() != 347) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_scan_security() != 52951) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_scan_volume() != 44556) {

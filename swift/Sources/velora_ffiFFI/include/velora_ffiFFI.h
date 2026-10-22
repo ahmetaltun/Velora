@@ -382,6 +382,11 @@ int8_t uniffi_velora_ffi_fn_method_veloraengine_prune_docker(void*_Nonnull ptr, 
 int8_t uniffi_velora_ffi_fn_method_veloraengine_prune_unavailable_simulators(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_QUARANTINE_THREAT
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_QUARANTINE_THREAT
+int8_t uniffi_velora_ffi_fn_method_veloraengine_quarantine_threat(void*_Nonnull ptr, RustBuffer home_path, RustBuffer id, RustBuffer target_path, RustBuffer associated_paths, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_RECONCILE_STORAGE
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_RECONCILE_STORAGE
 RustBuffer uniffi_velora_ffi_fn_method_veloraengine_reconcile_storage(void*_Nonnull ptr, RustBuffer mount_point, RustCallStatus *_Nonnull out_status
@@ -392,9 +397,19 @@ RustBuffer uniffi_velora_ffi_fn_method_veloraengine_reconcile_storage(void*_Nonn
 void uniffi_velora_ffi_fn_method_veloraengine_remove_collected(void*_Nonnull ptr, RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_RESTORE_QUARANTINED_THREAT
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_RESTORE_QUARANTINED_THREAT
+int8_t uniffi_velora_ffi_fn_method_veloraengine_restore_quarantined_threat(void*_Nonnull ptr, RustBuffer home_path, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SAVE_SNAPSHOT
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SAVE_SNAPSHOT
 int8_t uniffi_velora_ffi_fn_method_veloraengine_save_snapshot(void*_Nonnull ptr, RustBuffer dest_path, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SCAN_SECURITY
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SCAN_SECURITY
+RustBuffer uniffi_velora_ffi_fn_method_veloraengine_scan_security(void*_Nonnull ptr, RustBuffer home_path, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_FN_METHOD_VELORAENGINE_SCAN_VOLUME
@@ -817,6 +832,12 @@ uint16_t uniffi_velora_ffi_checksum_method_veloraengine_prune_unavailable_simula
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_QUARANTINE_THREAT
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_QUARANTINE_THREAT
+uint16_t uniffi_velora_ffi_checksum_method_veloraengine_quarantine_threat(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_RECONCILE_STORAGE
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_RECONCILE_STORAGE
 uint16_t uniffi_velora_ffi_checksum_method_veloraengine_reconcile_storage(void
@@ -829,9 +850,21 @@ uint16_t uniffi_velora_ffi_checksum_method_veloraengine_remove_collected(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_RESTORE_QUARANTINED_THREAT
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_RESTORE_QUARANTINED_THREAT
+uint16_t uniffi_velora_ffi_checksum_method_veloraengine_restore_quarantined_threat(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_SAVE_SNAPSHOT
 #define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_SAVE_SNAPSHOT
 uint16_t uniffi_velora_ffi_checksum_method_veloraengine_save_snapshot(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_SCAN_SECURITY
+#define UNIFFI_FFIDEF_UNIFFI_VELORA_FFI_CHECKSUM_METHOD_VELORAENGINE_SCAN_SECURITY
+uint16_t uniffi_velora_ffi_checksum_method_veloraengine_scan_security(void
     
 );
 #endif

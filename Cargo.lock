@@ -1184,6 +1184,7 @@ dependencies = [
  "velora-ops",
  "velora-scanner",
  "velora-search",
+ "velora-security",
  "velora-watcher",
 ]
 
@@ -1233,6 +1234,17 @@ dependencies = [
  "memchr",
  "rayon",
  "regex",
+ "velora-index",
+]
+
+[[package]]
+name = "velora-security"
+version = "0.1.0"
+dependencies = [
+ "plist",
+ "rayon",
+ "serde",
+ "serde_json",
  "velora-index",
 ]
 

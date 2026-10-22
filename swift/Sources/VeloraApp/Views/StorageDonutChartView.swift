@@ -43,6 +43,7 @@ public struct StorageDonutChartView: View {
         guard hasCatalog else { return [] }
 
         let system = rec?.systemVolumeBytes ?? 0
+        let userScanned = rec?.userScannedBytes ?? 0
         let apps = viewModel.installedApps.reduce(UInt64(0)) { $0 + $1.totalSizeBytes }
         let dev = viewModel.devArtifacts.reduce(UInt64(0)) { $0 + $1.sizeBytes }
         let caches = (viewModel.packageCacheSummary?.totalBytes ?? 0) + (viewModel.xcodeSummary?.totalBytes ?? 0)
@@ -52,17 +53,27 @@ public struct StorageDonutChartView: View {
         if system > 0 {
             list.append(SliceItem(id: "system", title: "System", bytes: system, color: VeloraTheme.accentBlue))
         }
-        if apps > 0 {
-            list.append(SliceItem(id: "apps", title: "Applications", bytes: apps, color: VeloraTheme.accentPink))
+
+        let subtotalCategorized = apps + dev + caches
+        if subtotalCategorized > 0 {
+            if apps > 0 {
+                list.append(SliceItem(id: "apps", title: "Applications", bytes: apps, color: VeloraTheme.accentPink))
+            }
+            if dev > 0 {
+                list.append(SliceItem(id: "dev", title: "Developer", bytes: dev, color: VeloraTheme.accentEmerald))
+            }
+            if caches > 0 {
+                list.append(SliceItem(id: "caches", title: "Caches", bytes: caches, color: VeloraTheme.accentAmber))
+            }
+            if userScanned > subtotalCategorized {
+                list.append(SliceItem(id: "user_other", title: "Other Files", bytes: userScanned - subtotalCategorized, color: VeloraTheme.accentCyan))
+            }
+        } else if userScanned > 0 {
+            list.append(SliceItem(id: "user", title: "User Data", bytes: userScanned, color: VeloraTheme.accentCyan))
         }
-        if dev > 0 {
-            list.append(SliceItem(id: "dev", title: "Developer", bytes: dev, color: VeloraTheme.accentEmerald))
-        }
-        if caches > 0 {
-            list.append(SliceItem(id: "caches", title: "Caches", bytes: caches, color: VeloraTheme.accentAmber))
-        }
+
         if other > 0 {
-            list.append(SliceItem(id: "other", title: "Other", bytes: other, color: VeloraTheme.accentPurple))
+            list.append(SliceItem(id: "other", title: "Other Volumes", bytes: other, color: VeloraTheme.accentPurple))
         }
         return list
     }

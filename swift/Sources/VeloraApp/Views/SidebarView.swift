@@ -18,6 +18,16 @@ public struct SidebarView: View {
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
+    private func formatThreatBadge(_ count: Int?, isLoading: Bool) -> String? {
+        if isLoading {
+            return "..."
+        }
+        guard let count = count, count > 0 else {
+            return nil
+        }
+        return "\(count) alert\(count == 1 ? "" : "s")"
+    }
+
     private var isBusy: Bool {
         viewModel.isScanning || viewModel.isLoadingSnapshot
     }
@@ -58,10 +68,10 @@ public struct SidebarView: View {
             .padding(.top, 14)
             .padding(.bottom, 12)
 
-            // Primary Smart Scan Action
+            // Primary Overview / Action Center Action
             SidebarRowItem(
-                title: "Smart Scan",
-                systemImage: "sparkles",
+                title: "Overview",
+                systemImage: "gauge.with.dots.needle.bottom.50percent",
                 accentColor: VeloraTheme.accentCyan,
                 badge: nil,
                 isSelected: viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root"
@@ -83,7 +93,7 @@ public struct SidebarView: View {
                         title: "Build Junk",
                         systemImage: "gearshape.2.fill",
                         accentColor: VeloraTheme.accentViolet,
-                        badge: formatBadge(viewModel.devArtifactsBytes, isLoading: isBusy || viewModel.isLoadingDevArtifacts),
+                        badge: formatBadge(viewModel.devArtifactsBytes, isLoading: viewModel.isLoadingDevArtifacts),
                         isSelected: viewModel.activeSidebarId == "tool_dev_artifacts"
                     ) {
                         viewModel.activeSidebarId = "tool_dev_artifacts"
@@ -96,7 +106,7 @@ public struct SidebarView: View {
                         title: "App Leftovers",
                         systemImage: "trash.circle.fill",
                         accentColor: VeloraTheme.accentPink,
-                        badge: formatBadge(viewModel.appLeftoversBytes, isLoading: isBusy || viewModel.isLoadingOrphans),
+                        badge: formatBadge(viewModel.appLeftoversBytes, isLoading: viewModel.isLoadingOrphans),
                         isSelected: viewModel.activeSidebarId == "tool_orphans"
                     ) {
                         viewModel.activeSidebarId = "tool_orphans"
@@ -109,7 +119,7 @@ public struct SidebarView: View {
                         title: "Xcode Storage",
                         systemImage: "hammer.circle.fill",
                         accentColor: VeloraTheme.accentEmerald,
-                        badge: formatBadge(viewModel.xcodeStorageBytes, isLoading: isBusy || viewModel.isLoadingXcode),
+                        badge: formatBadge(viewModel.xcodeStorageBytes, isLoading: viewModel.isLoadingXcode),
                         isSelected: viewModel.activeSidebarId == "tool_xcode"
                     ) {
                         viewModel.activeSidebarId = "tool_xcode"
@@ -122,12 +132,27 @@ public struct SidebarView: View {
                         title: "Package Caches",
                         systemImage: "shippingbox.circle.fill",
                         accentColor: VeloraTheme.accentAmber,
-                        badge: formatBadge(viewModel.packageCachesBytes, isLoading: isBusy || viewModel.isLoadingPackageCaches),
+                        badge: formatBadge(viewModel.packageCachesBytes, isLoading: viewModel.isLoadingPackageCaches),
                         isSelected: viewModel.activeSidebarId == "tool_package_caches"
                     ) {
                         viewModel.activeSidebarId = "tool_package_caches"
                         if viewModel.packageCacheSummary == nil {
                             viewModel.loadPackageCaches()
+                        }
+                    }
+                }
+
+                Section("Protection") {
+                    SidebarRowItem(
+                        title: "Malware & Threats",
+                        systemImage: "shield.lefthalf.filled",
+                        accentColor: (viewModel.securityThreatsCount ?? 0) > 0 ? VeloraTheme.accentPink : VeloraTheme.accentEmerald,
+                        badge: formatThreatBadge(viewModel.securityThreatsCount, isLoading: viewModel.isLoadingSecurity),
+                        isSelected: viewModel.activeSidebarId == "tool_security"
+                    ) {
+                        viewModel.activeSidebarId = "tool_security"
+                        if viewModel.securitySummary == nil {
+                            viewModel.loadSecurityScan()
                         }
                     }
                 }
@@ -150,7 +175,7 @@ public struct SidebarView: View {
                         title: "Large & Old Matrix",
                         systemImage: "calendar.badge.clock",
                         accentColor: VeloraTheme.accentPink,
-                        badge: formatBadge(viewModel.largeOldMatrixBytes, isLoading: isBusy || viewModel.isLoadingLargeOldMatrix),
+                        badge: formatBadge(viewModel.largeOldMatrixBytes, isLoading: viewModel.isLoadingLargeOldMatrix),
                         isSelected: viewModel.activeSidebarId == "tool_large_old_matrix"
                     ) {
                         viewModel.activeSidebarId = "tool_large_old_matrix"
@@ -163,7 +188,7 @@ public struct SidebarView: View {
                         title: "Duplicate Finder",
                         systemImage: "doc.on.doc.fill",
                         accentColor: VeloraTheme.accentCyan,
-                        badge: formatBadge(viewModel.duplicatesBytes, isLoading: isBusy || viewModel.isLoadingDuplicates),
+                        badge: formatBadge(viewModel.duplicatesBytes, isLoading: viewModel.isLoadingDuplicates),
                         isSelected: viewModel.activeSidebarId == "tool_duplicates"
                     ) {
                         viewModel.activeSidebarId = "tool_duplicates"

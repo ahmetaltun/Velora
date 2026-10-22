@@ -46,6 +46,9 @@ public final class VeloraViewModel {
     public var isLoadingLargeOldMatrix: Bool = false
     public var duplicateSummary: DuplicateSummaryRecord?
     public var isLoadingDuplicates: Bool = false
+    public var securitySummary: SecuritySummaryRecord?
+    public var isLoadingSecurity: Bool = false
+    public var quarantinedThreatIds: Set<String> = []
     public var isCleaning: Bool = false
     public var cleaningCurrentIndex: Int = 0
     public var cleaningTotalCount: Int = 0
@@ -138,7 +141,6 @@ public final class VeloraViewModel {
                     self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
-                    self.loadAllHygieneMetrics()
                 }
             } else {
                 DispatchQueue.main.async {
@@ -274,6 +276,40 @@ public final class VeloraViewModel {
         }
     }
 
+    public func loadSecurityScan() {
+        isLoadingSecurity = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.scanSecurity(homePath: home)
+            DispatchQueue.main.async {
+                self.securitySummary = summary
+                self.isLoadingSecurity = false
+            }
+        }
+    }
+
+    public func quarantineThreat(_ threat: SecurityThreatRecord) {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let success = self.engine.quarantineThreat(
+            homePath: home,
+            id: threat.id,
+            targetPath: threat.targetPath,
+            associatedPaths: threat.associatedPaths
+        )
+        if success {
+            self.quarantinedThreatIds.insert(threat.id)
+        }
+    }
+
+    public func restoreThreat(_ threat: SecurityThreatRecord) {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let success = self.engine.restoreQuarantinedThreat(homePath: home, id: threat.id)
+        if success {
+            self.quarantinedThreatIds.remove(threat.id)
+        }
+    }
+
     /// Triggers parallel background calculation of all hygiene scanners once catalog.bin is in memory or after a scan completes.
     public func loadAllHygieneMetrics() {
         loadDevArtifacts()
@@ -283,6 +319,7 @@ public final class VeloraViewModel {
         loadOrphanedResidues()
         loadLargeOldMatrix()
         loadDuplicates()
+        loadSecurityScan()
         refreshStorageReconciliation()
     }
 
@@ -320,6 +357,13 @@ public final class VeloraViewModel {
         if isLoadingLargeOldMatrix || isLoadingSnapshot || isScanning { return nil }
         if !hasBinaryIndex && !hasIndexedData && largeOldMatrix == nil { return nil }
         return largeOldMatrix?.totalBytes
+    }
+
+    public var securityThreatsCount: Int? {
+        if isLoadingSecurity || isLoadingSnapshot || isScanning { return nil }
+        guard let summary = securitySummary else { return nil }
+        let active = summary.threats.filter { !quarantinedThreatIds.contains($0.id) }
+        return active.count
     }
 
     public func scanCurrentPath() {
@@ -372,7 +416,6 @@ public final class VeloraViewModel {
                         self.scanStatusMessage = "\(total) items indexed"
                         self.refreshTableItems()
                         self.refreshStorageReconciliation()
-                        self.loadAllHygieneMetrics()
                     } else {
                         self.scanStatusMessage = "Scan failed or permission denied: Unable to access \(path)"
                     }

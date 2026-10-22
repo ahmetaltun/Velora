@@ -44,6 +44,8 @@ public struct MainWindowView: View {
                         LargeOldFilesMatrixView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "tool_duplicates" {
                         DuplicateFinderView(viewModel: viewModel)
+                    } else if viewModel.activeSidebarId == "tool_security" {
+                        MalwareScannerView(viewModel: viewModel)
                     } else if viewModel.activeSidebarId == "storage_volumes" {
                         ApfsStorageCardView(viewModel: viewModel)
                             .padding(24)

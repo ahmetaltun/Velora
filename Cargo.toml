@@ -11,6 +11,7 @@ members = [
     "crates/velora-dev",
     "crates/velora-apps",
     "crates/velora-hygiene",
+    "crates/velora-security",
     "crates/velora-ffi",
 ]
 

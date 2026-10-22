@@ -214,6 +214,32 @@ pub struct DuplicateSummaryRecord {
     pub groups: Vec<DuplicateGroupRecord>,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SecurityThreatRecord {
+    pub id: String,
+    pub name: String,
+    pub category_name: String,
+    pub severity_name: String,
+    pub severity_color_hex: String,
+    pub target_path: String,
+    pub associated_paths: Vec<String>,
+    pub file_size: u64,
+    pub sha256_hex: String,
+    pub signing_status: String,
+    pub description: String,
+    pub detection_method: String,
+    pub can_quarantine: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SecuritySummaryRecord {
+    pub total_candidates_triaged: u32,
+    pub total_asep_inspected: u32,
+    pub threat_count: u32,
+    pub threats: Vec<SecurityThreatRecord>,
+    pub scan_duration_ms: u64,
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -579,5 +605,53 @@ impl VeloraEngine {
                 })
                 .collect(),
         }
+    }
+
+    pub fn scan_security(&self, home_path: String) -> SecuritySummaryRecord {
+        let vol = self.volume.read();
+        let summary = velora_security::SecurityScanner::scan(&vol, Path::new(&home_path));
+        SecuritySummaryRecord {
+            total_candidates_triaged: summary.total_candidates_triaged,
+            total_asep_inspected: summary.total_asep_inspected,
+            threat_count: summary.threat_count,
+            threats: summary
+                .threats
+                .into_iter()
+                .map(|t| SecurityThreatRecord {
+                    id: t.id,
+                    name: t.name,
+                    category_name: t.category.display_name().to_string(),
+                    severity_name: t.severity.display_name().to_string(),
+                    severity_color_hex: t.severity.color_hex().to_string(),
+                    target_path: t.target_path,
+                    associated_paths: t.associated_paths,
+                    file_size: t.file_size,
+                    sha256_hex: t.sha256_hex,
+                    signing_status: t.signing_status,
+                    description: t.description,
+                    detection_method: t.detection_method,
+                    can_quarantine: t.can_quarantine,
+                })
+                .collect(),
+            scan_duration_ms: summary.scan_duration_ms,
+        }
+    }
+
+    pub fn quarantine_threat(
+        &self,
+        home_path: String,
+        id: String,
+        target_path: String,
+        associated_paths: Vec<String>,
+    ) -> bool {
+        let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
+        vault
+            .quarantine(&id, Path::new(&target_path), &associated_paths)
+            .is_ok()
+    }
+
+    pub fn restore_quarantined_threat(&self, home_path: String, id: String) -> bool {
+        let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
+        vault.restore(&id).unwrap_or(false)
     }
 }

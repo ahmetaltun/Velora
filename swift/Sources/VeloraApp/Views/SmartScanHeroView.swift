@@ -14,39 +14,43 @@ public struct SmartScanHeroView: View {
         if viewModel.isScanning {
             return "Indexing your Mac..."
         } else if viewModel.isLoadingSnapshot {
-            return "Loading Disk Catalog..."
+            return "Loading File Catalog..."
         } else if viewModel.hasBinaryIndex || viewModel.hasIndexedData {
-            return "Your Mac looks great!"
+            return "File Catalog Active"
         } else {
-            return "Ready to analyze your Mac"
+            return "Ready to Index Your Mac"
         }
     }
 
     private var heroSubtitle: String {
         if viewModel.isScanning {
-            return "Indexing files into catalog.bin with near-instant speed. You can cancel at any time."
+            return "Indexing files into catalog.bin with high throughput. Sub-millisecond search and memory traversal will be available."
         } else if viewModel.isLoadingSnapshot {
             if let size = viewModel.catalogFileSizeString {
-                return "Found cached catalog.bin (\(size)) on disk. Deserializing indexed volume into memory for instant search..."
+                return "Loading cached catalog.bin (\(size)) into RAM for instant search..."
             } else {
-                return "Found cached catalog.bin on disk. Deserializing indexed volume into memory..."
+                return "Loading cached catalog.bin into RAM for instant search..."
             }
         } else if viewModel.hasBinaryIndex || viewModel.hasIndexedData {
-            return "Your disk catalog is active. We found items you can clean to free up space and keep your Mac running smoothly."
+            if viewModel.scannedCount > 0 {
+                return "\(viewModel.scannedCount.formatted()) files indexed in memory. Sub-millisecond search is active. Explore tools below or rescan to refresh catalog.bin."
+            } else {
+                return "Your disk catalog is loaded in memory. Explore tools below or rescan to refresh catalog.bin."
+            }
         } else {
-            return "No catalog index found yet. Scan all files to build catalog.bin and enable instant sub-millisecond search."
+            return "No catalog index found. Scan your disk to create catalog.bin and enable instant search and disk analytics."
         }
     }
 
     private var buttonTitle: String {
         if viewModel.isScanning {
-            return "Scanning..."
+            return "Indexing..."
         } else if viewModel.isLoadingSnapshot {
             return "Loading Catalog..."
         } else if viewModel.hasBinaryIndex || viewModel.hasIndexedData {
             return "Rescan All Files"
         } else {
-            return "Scan All Files"
+            return "Index All Files"
         }
     }
 
@@ -88,10 +92,10 @@ public struct SmartScanHeroView: View {
                                 Text(buttonTitle)
                                     .font(.system(size: 14, weight: .bold, design: .rounded))
                             } else {
+                                Image(systemName: buttonIcon)
+                                    .font(.system(size: 13, weight: .bold))
                                 Text(buttonTitle)
                                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 12, weight: .bold))
                             }
                         }
                         .foregroundColor(.white)
