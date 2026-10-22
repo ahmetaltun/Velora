@@ -182,6 +182,7 @@ public struct MainWindowView: View {
                 window.isOpaque = false
                 window.backgroundColor = NSColor(red: 22/255.0, green: 25/255.0, blue: 46/255.0, alpha: 1.0)
                 window.toolbar?.showsBaselineSeparator = false
+                window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
             }
         )
         .background(VeloraTheme.obsidianBase)

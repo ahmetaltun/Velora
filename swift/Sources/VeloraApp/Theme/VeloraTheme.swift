@@ -1,6 +1,10 @@
 import SwiftUI
 
 public enum VeloraTheme {
+    // MARK: - Window & Layout Dimensions
+    public static let minWindowWidth: CGFloat = 1227
+    public static let minWindowHeight: CGFloat = 780
+
     // MARK: - Deep Midnight Obsidian Palette
     public static let obsidianBase = Color(hex: "#16192E")
     public static let obsidianSidebar = Color(hex: "#131627")
