@@ -1,0 +1,163 @@
+name: Release Velora
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Sign, Notarize & Release
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "CLEAN_VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Build Release App Bundle
+        run: |
+          chmod +x scripts/build_release.sh
+          ./scripts/build_release.sh "${{ steps.version.outputs.CLEAN_VERSION }}"
+
+      - name: Check for Apple Signing Secrets
+        id: check-secrets
+        run: |
+          if [ -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] && [ -n "${{ secrets.APPLE_API_KEY_BASE64 }}" ]; then
+            echo "SIGNING_ENABLED=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Apple signing and notarization credentials detected."
+          else
+            echo "SIGNING_ENABLED=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Apple signing credentials missing. Generating unsigned artifact."
+          fi
+
+      - name: Install Apple Certificate into Disposable Keychain
+        if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Code Sign Velora.app with Hardened Runtime
+        if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
+        env:
+          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+        run: |
+          codesign --deep --force --options runtime \
+            --entitlements Velora.entitlements \
+            --sign "$DEVELOPER_ID" \
+            --keychain "$KEYCHAIN_PATH" \
+            build/Velora.app
+
+          echo "Verifying signature..."
+          codesign --verify --deep --strict --verbose=2 build/Velora.app
+
+      - name: Create DMG Image
+        run: |
+          DMG_STAGE="build/dmg_stage"
+          DMG_FILE="build/Velora-${{ steps.version.outputs.TAG }}.dmg"
+
+          rm -rf "$DMG_STAGE" "$DMG_FILE"
+          mkdir -p "$DMG_STAGE"
+
+          cp -R build/Velora.app "$DMG_STAGE/"
+          ln -s /Applications "$DMG_STAGE/Applications"
+
+          hdiutil create \
+            -volname "Velora" \
+            -srcfolder "$DMG_STAGE" \
+            -ov \
+            -format UDZO \
+            "$DMG_FILE"
+
+          rm -rf "$DMG_STAGE"
+          echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
+
+      - name: Code Sign DMG
+        if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
+        env:
+          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+        run: |
+          codesign --force --sign "$DEVELOPER_ID" --keychain "$KEYCHAIN_PATH" "$DMG_FILE"
+
+      - name: Notarize DMG with Apple Notary Service
+        if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
+        env:
+          API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${KEY_ID}.p8"
+          echo "$API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+
+          echo "Submitting DMG to Apple Notary Service..."
+          xcrun notarytool submit "$DMG_FILE" \
+            --key "$API_KEY_PATH" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            --wait
+
+          echo "Stapling notarization ticket to DMG..."
+          xcrun stapler staple "$DMG_FILE"
+
+          echo "Validating Gatekeeper acceptance..."
+          spctl -a -t open --context context:primary-signature -v "$DMG_FILE"
+
+      - name: Create GitHub Release and Upload DMG
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: Velora ${{ steps.version.outputs.TAG }}
+          files: ${{ env.DMG_FILE }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Clean up temporary credentials
+        if: always()
+        run: |
+          if [ -n "${{ env.KEYCHAIN_PATH }}" ] && [ -f "${{ env.KEYCHAIN_PATH }}" ]; then
+            security delete-keychain "${{ env.KEYCHAIN_PATH }}" || true
+          fi
+          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP"/AuthKey_*.p8

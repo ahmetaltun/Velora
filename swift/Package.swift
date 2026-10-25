@@ -25,9 +25,12 @@ let package = Package(
             path: "Sources/VeloraApp",
             linkerSettings: [
                 .unsafeFlags([
+                    "../target/release/libvelora_ffi.a"
+                ], .when(configuration: .release)),
+                .unsafeFlags([
                     "-L../target/debug",
                     "-lvelora_ffi"
-                ])
+                ], .when(configuration: .debug))
             ]
         )
     ]
