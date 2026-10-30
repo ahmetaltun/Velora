@@ -10,15 +10,15 @@ public struct SmartScanDashboardView: View {
 
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 24) {
+            VStack(spacing: 19) {
                 // Tier 1: Hero Banner (Catalog Status & Indexing Action)
                 SmartScanHeroView(viewModel: viewModel)
                     .background(
                         VeloraTheme.obsidianElevated,
-                        in: RoundedRectangle(cornerRadius: 18)
+                        in: RoundedRectangle(cornerRadius: 16)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(VeloraTheme.cardBorder, lineWidth: 1)
                     )
 
@@ -97,11 +97,11 @@ public struct SmartScanDashboardView: View {
 
                     LazyVGrid(
                         columns: [
-                            GridItem(.flexible(), spacing: 14),
-                            GridItem(.flexible(), spacing: 14),
-                            GridItem(.flexible(), spacing: 14)
+                            GridItem(.flexible(), spacing: 11),
+                            GridItem(.flexible(), spacing: 11),
+                            GridItem(.flexible(), spacing: 11)
                         ],
-                        spacing: 14
+                        spacing: 11
                     ) {
                         QuickToolLauncherTile(
                             title: "Build Junk",
@@ -159,7 +159,7 @@ public struct SmartScanDashboardView: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(20)
         }
         .background(VeloraTheme.obsidianBase)
     }
@@ -211,10 +211,10 @@ private struct QuickToolLauncherTile: View {
             .padding(.vertical, 12)
             .background(
                 isHovering ? VeloraTheme.obsidianElevated.opacity(0.9) : VeloraTheme.obsidianElevated,
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: 12)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(isHovering ? accentColor.opacity(0.4) : VeloraTheme.cardBorder, lineWidth: 1)
             )
             .shadow(color: isHovering ? accentColor.opacity(0.12) : Color.clear, radius: 8, x: 0, y: 3)

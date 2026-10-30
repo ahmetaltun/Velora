@@ -29,10 +29,10 @@ public struct SecurityHeroPostureView: View {
 
     public var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(VeloraTheme.obsidianElevated)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(
                             isClean
                                 ? VeloraTheme.accentEmerald.opacity(0.35)
@@ -51,7 +51,7 @@ public struct SecurityHeroPostureView: View {
                 startRadius: 20,
                 endRadius: 260
             )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
 
             VStack(spacing: 16) {
                 // Top row: Shield + Posture Grade + Actions

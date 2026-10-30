@@ -76,7 +76,7 @@ public struct OrphanedLeftoversView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Leftovers & Residue Hunter",
                 subtitle: "Detects residual caches, containers, and support files from previously uninstalled applications",
                 systemImage: "trash.circle.fill",
@@ -108,13 +108,13 @@ public struct OrphanedLeftoversView: View {
                                 LinearGradient(
                                     colors: allFilteredStaged
                                         ? [VeloraTheme.accentEmerald, VeloraTheme.accentCyan]
-                                        : [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                        : [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: (allFilteredStaged ? VeloraTheme.accentEmerald : VeloraTheme.accentPink).opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: (allFilteredStaged ? VeloraTheme.accentEmerald : VeloraTheme.accentViolet).opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }

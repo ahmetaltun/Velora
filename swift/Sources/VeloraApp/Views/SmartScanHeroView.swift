@@ -106,7 +106,7 @@ public struct SmartScanHeroView: View {
                             in: Capsule()
                         )
                         .shadow(
-                            color: VeloraTheme.accentBlue.opacity(isHoveringCTA ? 0.6 : 0.35),
+                            color: VeloraTheme.accentViolet.opacity(isHoveringCTA ? 0.6 : 0.35),
                             radius: isHoveringCTA ? 14 : 8,
                             x: 0,
                             y: isHoveringCTA ? 4 : 2

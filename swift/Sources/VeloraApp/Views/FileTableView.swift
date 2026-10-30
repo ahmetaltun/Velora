@@ -42,7 +42,7 @@ public struct FileTableView: View {
                     HStack(spacing: 8) {
                         Text(formatBytes(item.sizeBytes))
                             .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.primary)
+                            .foregroundColor(VeloraTheme.textPrimary)
                             .frame(minWidth: 72, alignment: .trailing)
 
                         if viewModel.currentFolderTotalSize > 0 {
@@ -51,7 +51,7 @@ public struct FileTableView: View {
 
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.secondary.opacity(0.16))
+                                    .fill(VeloraTheme.textSecondary.opacity(0.16))
                                 Capsule()
                                     .fill(
                                         LinearGradient(
@@ -66,7 +66,7 @@ public struct FileTableView: View {
 
                             Text(String(format: "%4.1f%%", (Double(item.sizeBytes) / Double(viewModel.currentFolderTotalSize)) * 100))
                                 .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(VeloraTheme.textSecondary)
                                 .frame(width: 44, alignment: .trailing)
                         }
                     }
@@ -77,10 +77,10 @@ public struct FileTableView: View {
                 TableColumn("Kind", value: \.colorHex) { item in
                     Text(kindDescription(for: item))
                         .font(.system(.caption, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
+                        .background(VeloraTheme.textSecondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
                 }
                 .width(min: 80, ideal: 100)
 
@@ -88,7 +88,7 @@ public struct FileTableView: View {
                 TableColumn("Modified", value: \.modifiedSecs) { item in
                     Text(formatTimestamp(item.modifiedSecs))
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
                 }
                 .width(min: 110, ideal: 140)
 
@@ -96,7 +96,7 @@ public struct FileTableView: View {
                 TableColumn("Path", value: \.path) { item in
                     Text(item.path)
                         .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }

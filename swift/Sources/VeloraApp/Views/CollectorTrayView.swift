@@ -61,7 +61,7 @@ public struct CollectorTrayView: View {
                             }
 
                             ProgressView(value: viewModel.cleaningProgress)
-                                .tint(VeloraTheme.accentPink)
+                                .tint(VeloraTheme.accentViolet)
                         }
 
                         // Remaining time and freed capacity badge
@@ -103,15 +103,15 @@ public struct CollectorTrayView: View {
                         HStack(spacing: 10) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(VeloraTheme.accentPink.opacity(0.18))
+                                    .fill(VeloraTheme.accentViolet.opacity(0.18))
                                     .frame(width: 32, height: 32)
                                 Image(systemName: "trash.fill")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(VeloraTheme.accentPink)
+                                    .foregroundColor(VeloraTheme.accentViolet)
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Collector Tray")
+                                Text("Cleanup basket")
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundColor(VeloraTheme.textPrimary)
                                 Text("\(viewModel.collectorItems.count) items staged (Free \(formatBytes(viewModel.collectorTotalSize)))")
@@ -197,13 +197,13 @@ public struct CollectorTrayView: View {
                                     .padding(.vertical, 6)
                                     .background(
                                         LinearGradient(
-                                            colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                            colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),
                                         in: Capsule()
                                     )
-                                    .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
+                                    .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                                 }
                                 .buttonStyle(.plain)
                             }

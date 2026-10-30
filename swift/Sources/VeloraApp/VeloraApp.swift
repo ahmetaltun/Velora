@@ -27,23 +27,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureAndCenterWindows() {
         for window in NSApp.windows {
             window.titlebarAppearsTransparent = true
-            window.backgroundColor = NSColor(red: 22/255.0, green: 25/255.0, blue: 46/255.0, alpha: 1.0)
+            window.backgroundColor = NSColor(red: 32/255.0, green: 32/255.0, blue: 49/255.0, alpha: 1.0)
             window.toolbar?.showsBaselineSeparator = false
 
             // Set minimum window bounds
             window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
 
-            // Ensure window is at least the minimum size
-            var frame = window.frame
-            if frame.width < VeloraTheme.minWindowWidth || frame.height < VeloraTheme.minWindowHeight {
-                frame.size.width = max(frame.width, VeloraTheme.minWindowWidth)
-                frame.size.height = max(frame.height, VeloraTheme.minWindowHeight)
+            // Ensure window is at least minimum size and fits within visible screen
+            if let screen = window.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                var frame = window.frame
+                frame.size.width = min(visible.width, max(frame.size.width, VeloraTheme.minWindowWidth))
+                frame.size.height = min(visible.height, max(frame.size.height, VeloraTheme.minWindowHeight))
+                if frame.maxY > visible.maxY {
+                    frame.origin.y = visible.maxY - frame.size.height
+                }
+                if frame.origin.x < visible.origin.x {
+                    frame.origin.x = visible.origin.x
+                }
                 window.setFrame(frame, display: true)
             }
-
-            // Center window on screen at startup
-            window.center()
-            window.makeKeyAndOrderFront(nil)
         }
     }
 }
@@ -57,17 +60,15 @@ struct VeloraApp: App {
             MainWindowView()
                 .frame(
                     minWidth: VeloraTheme.minWindowWidth,
-                    idealWidth: VeloraTheme.minWindowWidth,
-                    minHeight: VeloraTheme.minWindowHeight,
-                    idealHeight: VeloraTheme.minWindowHeight
+                    minHeight: VeloraTheme.minWindowHeight
                 )
                 .background(VeloraTheme.obsidianBase)
                 .preferredColorScheme(.dark)
+                .tint(VeloraTheme.accentViolet)
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
+        .defaultSize(width: 1350, height: 780)
         .commands {
             SidebarCommands()
             CommandGroup(replacing: .appInfo) {

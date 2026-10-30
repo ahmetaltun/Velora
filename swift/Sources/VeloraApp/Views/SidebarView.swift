@@ -38,15 +38,16 @@ public struct SidebarView: View {
             Button {
                 AppAssetLoader.openAboutPanel()
             } label: {
-                HStack(spacing: 10) {
-                    VeloraLogoView(size: 34)
+                HStack(spacing: 11) {
+                    VeloraLogoView(size: 38)
+                        .clipShape(RoundedRectangle(cornerRadius: 11))
 
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Velora")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(VeloraTheme.textPrimary)
 
-                        Text("Disk Intelligence")
+                        Text("Space to breathe")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(VeloraTheme.textSecondary)
                     }
@@ -244,6 +245,7 @@ public struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
         }
         .background(VeloraTheme.obsidianSidebar)
     }
@@ -262,31 +264,31 @@ private struct SidebarRowItem: View {
             HStack(spacing: 9) {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : accentColor)
+                    .foregroundColor(isSelected ? VeloraTheme.accentViolet : accentColor)
                     .frame(width: 20)
 
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
-                    .foregroundColor(isSelected ? .white : VeloraTheme.textPrimary)
+                    .foregroundColor(VeloraTheme.textPrimary)
 
                 Spacer(minLength: 4)
 
                 if let badge = badge {
                     Text(badge)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(isSelected ? .white.opacity(0.85) : VeloraTheme.textMuted)
+                        .foregroundColor(isSelected ? VeloraTheme.accentViolet : VeloraTheme.textMuted)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isSelected ? VeloraTheme.obsidianElevated : Color.clear,
-                in: RoundedRectangle(cornerRadius: 8)
+                isSelected ? VeloraTheme.accentViolet.opacity(0.14) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 10)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? VeloraTheme.cardBorderHover : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? VeloraTheme.accentViolet.opacity(0.28) : Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }

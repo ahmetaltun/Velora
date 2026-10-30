@@ -34,7 +34,7 @@ public struct XcodeStorageView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Xcode Storage Inspector",
                 subtitle: "DerivedData, build archives, device symbol caches, and simulator runtimes",
                 systemImage: "wrench.and.screwdriver.fill",
@@ -80,13 +80,13 @@ public struct XcodeStorageView: View {
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
+                                    colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: VeloraTheme.accentBlue.opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }

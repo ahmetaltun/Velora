@@ -49,7 +49,7 @@ public struct DevArtifactsHunterView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Build Artifact Hunter",
                 subtitle: "Verified workspace build directories (target/, node_modules, .venv, .build)",
                 systemImage: "hammer.fill",
@@ -74,13 +74,13 @@ public struct DevArtifactsHunterView: View {
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                    colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }

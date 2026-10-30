@@ -86,7 +86,7 @@ public struct LargeOldFilesMatrixView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Large & Old Files Matrix",
                 subtitle: "Instant 2D Temporal × Size matrix computed in RAM from the indexed catalog",
                 systemImage: "calendar.badge.clock",
@@ -120,13 +120,13 @@ public struct LargeOldFilesMatrixView: View {
                                 .padding(.vertical, 7)
                                 .background(
                                     LinearGradient(
-                                        colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                        colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     ),
                                     in: Capsule()
                                 )
-                                .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
+                                .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                             }
                             .buttonStyle(.plain)
                         }

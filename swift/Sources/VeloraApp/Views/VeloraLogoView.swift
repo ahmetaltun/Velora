@@ -94,7 +94,7 @@ public struct VeloraLogoView: View {
                 RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
+                            colors: [VeloraTheme.accentViolet, VeloraTheme.accentPink],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

@@ -2,46 +2,46 @@ import SwiftUI
 
 public enum VeloraTheme {
     // MARK: - Window & Layout Dimensions
-    public static let minWindowWidth: CGFloat = 1227
-    public static let minWindowHeight: CGFloat = 780
+    public static let minWindowWidth: CGFloat = 1000
+    public static let minWindowHeight: CGFloat = 600
 
-    // MARK: - Deep Midnight Obsidian Palette
-    public static let obsidianBase = Color(hex: "#16192E")
-    public static let obsidianSidebar = Color(hex: "#131627")
-    public static let obsidianElevated = Color(hex: "#1D2140")
-    public static let obsidianSurface = Color(hex: "#22274B")
-    public static let obsidianSubsurface = Color(hex: "#282E56")
+    // MARK: - Velora Bloom Soft Charcoal-Violet Palette
+    public static let obsidianBase = Color(hex: "#202031")
+    public static let obsidianSidebar = Color(hex: "#252438")
+    public static let obsidianElevated = Color(hex: "#2A293E")
+    public static let obsidianSurface = Color(hex: "#302F47")
+    public static let obsidianSubsurface = Color(hex: "#37344D")
 
-    // MARK: - Jewel Accent Palette (MacCleaner / Modern Utility Style)
-    public static let accentBlue = Color(hex: "#0A84FF")
-    public static let accentCyan = Color(hex: "#00C7FF")
-    public static let accentViolet = Color(hex: "#9065FE")
-    public static let accentPink = Color(hex: "#F43F5E")
-    public static let accentEmerald = Color(hex: "#10B981")
-    public static let accentAmber = Color(hex: "#F59E0B")
-    public static let accentPurple = Color(hex: "#A855F7")
+    // MARK: - Velora Bloom Accent Palette (Soft Violet, Periwinkle, Mint, Coral & Warm Ivory)
+    public static let accentBlue = Color(hex: "#93C3FA")      // Periwinkle / Soft Blue
+    public static let accentCyan = Color(hex: "#84BFEC")      // Soft Sky
+    public static let accentViolet = Color(hex: "#A695FF")    // Brand Lavender / Soft Violet
+    public static let accentPink = Color(hex: "#F68DAB")      // Coral Rose
+    public static let accentEmerald = Color(hex: "#70D3BD")   // Mint
+    public static let accentAmber = Color(hex: "#FEC787")     // Apricot / Warm Ivory
+    public static let accentPurple = Color(hex: "#B7A0FF")    // Iris / Soft Violet
 
     // MARK: - Typography & Semantic Foreground Tokens
-    public static let textPrimary = Color.white
-    public static let textSecondary = Color(hex: "#9BA1C7")
-    public static let textMuted = Color(hex: "#6D7297")
+    public static let textPrimary = Color(hex: "#F6F2FF")     // Warm Ivory Primary Ink
+    public static let textSecondary = Color(hex: "#A8A3BF")   // Muted Ink
+    public static let textMuted = Color(hex: "#817D9B")       // Quiet Ink
 
     // MARK: - Glass & Border Tokens
-    public static let cardBorder = Color.white.opacity(0.08)
-    public static let cardBorderHover = Color.white.opacity(0.20)
-    public static let glassBorder = Color.white.opacity(0.12)
+    public static let cardBorder = Color(hex: "#4A455F").opacity(0.70)
+    public static let cardBorderHover = accentViolet.opacity(0.45)
+    public static let glassBorder = Color(hex: "#59516F").opacity(0.70)
 
     // MARK: - Legacy / High-Tech Palette Support
-    public static let mint = Color(hex: "#00FFA3")
-    public static let mintDark = Color(hex: "#05D59E")
-    public static let teal = Color(hex: "#00E5FF")
-    public static let amber = Color(hex: "#FBBF24")
-    public static let glow = Color(hex: "#00FFA3").opacity(0.25)
+    public static let mint = Color(hex: "#70D3BD")
+    public static let mintDark = Color(hex: "#58C7AC")
+    public static let teal = Color(hex: "#84BFEC")
+    public static let amber = Color(hex: "#FEC787")
+    public static let glow = Color(hex: "#70D3BD").opacity(0.25)
 
     // MARK: - Gradients
     public static var ctaGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#007AFF"), Color(hex: "#00C7FF")],
+            colors: [accentViolet, Color(hex: "#C69DFC")],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -49,7 +49,7 @@ public enum VeloraTheme {
 
     public static var ctaHoverGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#1A8CFF"), Color(hex: "#33D4FF")],
+            colors: [Color(hex: "#B7A7FF"), Color(hex: "#E4B9F9")],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -59,7 +59,7 @@ public enum VeloraTheme {
         RadialGradient(
             gradient: Gradient(colors: [
                 accentViolet.opacity(0.35),
-                accentBlue.opacity(0.20),
+                Color(hex: "#93C3FA").opacity(0.20),
                 Color.clear
             ]),
             center: .center,
@@ -84,11 +84,20 @@ public enum VeloraTheme {
         LinearGradient(
             colors: [
                 Color.white.opacity(0.28),
-                mint.opacity(0.35),
+                accentViolet.opacity(0.22),
                 Color.clear
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
+        )
+    }
+
+    // Storage Gauge Gradient (Soft Violet to Coral)
+    public static var storageGauge: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#9381F3"), Color(hex: "#F2A2BC")],
+            startPoint: .leading,
+            endPoint: .trailing
         )
     }
 

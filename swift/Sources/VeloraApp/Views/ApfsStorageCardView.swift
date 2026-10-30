@@ -42,22 +42,22 @@ public struct ApfsStorageCardView: View {
             HStack(spacing: 8) {
                 Image(systemName: "internaldrive.fill")
                     .font(.system(size: 15))
-                    .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .blue)
+                    .foregroundColor(viewModel.activeSidebarId == "volume_root" ? VeloraTheme.accentViolet : VeloraTheme.accentBlue)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Macintosh HD")
                         .font(.system(.body, design: .rounded, weight: .semibold))
-                        .foregroundColor(viewModel.activeSidebarId == "volume_root" ? .accentColor : .primary)
+                        .foregroundColor(viewModel.activeSidebarId == "volume_root" ? VeloraTheme.accentViolet : VeloraTheme.textPrimary)
                     Text("APFS Container")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
                 }
 
                 Spacer()
 
                 Text("\(usedPercent)%")
                     .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(VeloraTheme.textSecondary)
             }
 
             // Multi-segment Segmented Bar
@@ -183,11 +183,11 @@ public struct ApfsStorageCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(viewModel.activeSidebarId == "volume_root" ? Color.accentColor.opacity(0.10) : Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(viewModel.activeSidebarId == "volume_root" ? VeloraTheme.accentViolet.opacity(0.14) : VeloraTheme.obsidianElevated)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(viewModel.activeSidebarId == "volume_root" ? VeloraTheme.accentViolet.opacity(0.28) : VeloraTheme.cardBorder, lineWidth: 1)
                 )
         )
         .contentShape(Rectangle())

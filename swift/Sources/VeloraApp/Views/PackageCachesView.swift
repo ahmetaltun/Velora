@@ -38,7 +38,7 @@ public struct PackageCachesView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Package & Container Caches",
                 subtitle: "Homebrew bottles, Cargo registry, npm/yarn, pip/uv wheels, Gradle, and Docker VM",
                 systemImage: "shippingbox.circle.fill",
@@ -84,13 +84,13 @@ public struct PackageCachesView: View {
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [VeloraTheme.accentAmber, Color(hex: "#FF8C00")],
+                                    colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: VeloraTheme.accentAmber.opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }

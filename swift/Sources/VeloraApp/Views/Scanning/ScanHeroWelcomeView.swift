@@ -18,8 +18,8 @@ public struct ScanHeroWelcomeView: View {
             // Ambient Cybernetic Radial Background
             RadialGradient(
                 gradient: Gradient(colors: [
-                    VeloraTheme.mint.opacity(0.14),
-                    VeloraTheme.teal.opacity(0.06),
+                    VeloraTheme.accentViolet.opacity(0.18),
+                    VeloraTheme.accentBlue.opacity(0.08),
                     Color.clear
                 ]),
                 center: .center,
@@ -35,7 +35,7 @@ public struct ScanHeroWelcomeView: View {
                     Circle()
                         .stroke(
                             LinearGradient(
-                                colors: [VeloraTheme.mint.opacity(0.4), VeloraTheme.teal.opacity(0.1)],
+                                colors: [VeloraTheme.accentViolet.opacity(0.4), VeloraTheme.accentBlue.opacity(0.1)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -62,7 +62,7 @@ public struct ScanHeroWelcomeView: View {
                             Circle()
                                 .stroke(VeloraTheme.specularRim, lineWidth: 1.5)
                         )
-                        .shadow(color: VeloraTheme.mint.opacity(0.35), radius: 18, x: 0, y: 0)
+                        .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 18, x: 0, y: 0)
 
                     // Core pulsing orb
                     PulsingOrbView(isScanning: true, size: 28)
@@ -75,7 +75,7 @@ public struct ScanHeroWelcomeView: View {
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.primary, VeloraTheme.mint],
+                                colors: [VeloraTheme.textPrimary, VeloraTheme.accentViolet],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -84,7 +84,7 @@ public struct ScanHeroWelcomeView: View {
                     Text("Velora indexes files with near-instant speed. Your catalog will be saved\nlocally in Application Support and refreshed on demand.")
                         .font(.system(size: 13, weight: .regular))
                         .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
                         .frame(maxWidth: 460)
                 }
 
@@ -92,11 +92,11 @@ public struct ScanHeroWelcomeView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "internaldrive")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(VeloraTheme.mint)
+                        .foregroundColor(VeloraTheme.accentViolet)
 
                     Text("Ready to analyze:")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(VeloraTheme.textSecondary)
 
                     Text(viewModel.currentPath)
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -130,23 +130,15 @@ public struct ScanHeroWelcomeView: View {
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                         }
                     }
-                    .foregroundColor(viewModel.isScanning ? .secondary : .black)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .background(
-                        LinearGradient(
-                            colors: viewModel.isScanning
-                                ? [VeloraTheme.mintDark.opacity(0.5), VeloraTheme.mint.opacity(0.5)]
-                                : (isHoveringButton
-                                    ? [VeloraTheme.mint, VeloraTheme.teal]
-                                    : [VeloraTheme.mintDark, VeloraTheme.mint]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
+                        isHoveringButton ? VeloraTheme.ctaHoverGradient : VeloraTheme.ctaGradient,
                         in: RoundedRectangle(cornerRadius: 12)
                     )
                     .shadow(
-                        color: VeloraTheme.mint.opacity(isHoveringButton && !viewModel.isScanning ? 0.65 : 0.35),
+                        color: VeloraTheme.accentViolet.opacity(isHoveringButton && !viewModel.isScanning ? 0.65 : 0.35),
                         radius: isHoveringButton && !viewModel.isScanning ? 16 : 8,
                         x: 0,
                         y: 0

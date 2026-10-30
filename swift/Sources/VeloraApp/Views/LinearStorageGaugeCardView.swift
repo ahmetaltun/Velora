@@ -49,12 +49,12 @@ public struct LinearStorageGaugeCardView: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(VeloraTheme.accentBlue.opacity(0.18))
+                        .fill(VeloraTheme.accentViolet.opacity(0.18))
                         .frame(width: 34, height: 34)
 
                     Image(systemName: "internaldrive.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(VeloraTheme.accentBlue)
+                        .foregroundColor(VeloraTheme.accentViolet)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -93,15 +93,9 @@ public struct LinearStorageGaugeCardView: View {
 
                     if usedRatio > 0 {
                         Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(VeloraTheme.storageGauge)
                             .frame(width: max(8, geo.size.width * usedRatio), height: 8)
-                            .shadow(color: VeloraTheme.accentCyan.opacity(0.35), radius: 4, x: 0, y: 0)
+                            .shadow(color: Color(hex: "#9381F3").opacity(0.35), radius: 4, x: 0, y: 0)
                     }
                 }
             }
@@ -140,12 +134,12 @@ public struct LinearStorageGaugeCardView: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(VeloraTheme.accentBlue.opacity(0.2))
+                        .fill(VeloraTheme.accentViolet.opacity(0.18))
                         .frame(width: 36, height: 36)
 
-                    Image(systemName: "flame.fill")
+                    Image(systemName: "sparkles")
                         .font(.system(size: 16))
-                        .foregroundColor(VeloraTheme.accentCyan)
+                        .foregroundColor(VeloraTheme.accentViolet)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {

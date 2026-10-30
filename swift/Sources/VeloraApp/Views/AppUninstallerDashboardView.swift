@@ -88,7 +88,7 @@ public struct AppUninstallerDashboardView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "App Uninstaller",
                 subtitle: "Deep footprint analysis: Bundle, Application Support, Containers, Caches & Preferences",
                 systemImage: "app.badge.checkmark",
@@ -396,13 +396,13 @@ private struct AppDetailView: View {
                         .padding(.vertical, 6)
                         .background(
                             LinearGradient(
-                                colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
+                                colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             ),
                             in: Capsule()
                         )
-                        .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
+                        .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
                 }

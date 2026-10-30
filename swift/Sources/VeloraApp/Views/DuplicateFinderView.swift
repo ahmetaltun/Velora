@@ -69,7 +69,7 @@ public struct DuplicateFinderView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            ToolHeaderView(
+            BloomToolHeaderView(
                 title: "Duplicate Finder",
                 subtitle: "3-Tier Progressive Pipeline: Exact Size → 4KB Prefix Probe → Cryptographic SHA-256 Stream",
                 systemImage: "doc.on.doc.fill",
@@ -103,13 +103,13 @@ public struct DuplicateFinderView: View {
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
+                                    colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: VeloraTheme.accentCyan.opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }

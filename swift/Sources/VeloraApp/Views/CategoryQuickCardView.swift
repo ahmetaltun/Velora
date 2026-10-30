@@ -74,10 +74,10 @@ public struct CategoryQuickCardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 VeloraTheme.cardTintGradient(accent: data.accentColor),
-                in: RoundedRectangle(cornerRadius: 14)
+                in: RoundedRectangle(cornerRadius: 12)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(isHovering ? VeloraTheme.cardBorderHover : VeloraTheme.cardBorder, lineWidth: 1)
             )
             .shadow(

@@ -155,12 +155,12 @@ public struct AmbientFluidMeshView: View {
                         .font(.system(size: size * 0.19, weight: .light))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "#FF70A6"), Color(hex: "#70D6FF")],
+                                colors: [VeloraTheme.accentViolet, VeloraTheme.accentPink],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .shadow(color: Color(hex: "#FF70A6").opacity(0.5), radius: 8)
+                        .shadow(color: VeloraTheme.accentViolet.opacity(0.5), radius: 8)
                 }
             }
 

@@ -3,66 +3,79 @@ import VeloraCore
 
 public struct MainWindowView: View {
     @State public var viewModel = VeloraViewModel()
+    @State private var showBloomInspector: Bool = true
 
     public init() {}
 
     public var body: some View {
         NavigationSplitView {
             SidebarView(viewModel: viewModel)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+                .navigationSplitViewColumnWidth(min: 205, ideal: 232, max: 268)
         } detail: {
-            VStack(spacing: 0) {
-                // CleanMyMac-style Floating Scan Banner
-                if viewModel.isScanning {
-                    CleanScanBannerView(viewModel: viewModel)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
-                        .padding(.bottom, 6)
-                        .transition(
-                            .asymmetric(
-                                insertion: .move(edge: .top).combined(with: .opacity),
-                                removal: .scale(scale: 0.96).combined(with: .opacity)
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    // CleanMyMac-style Floating Scan Banner
+                    if viewModel.isScanning {
+                        CleanScanBannerView(viewModel: viewModel)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+                            .padding(.bottom, 6)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .scale(scale: 0.96).combined(with: .opacity)
+                                )
                             )
-                        )
-                }
-
-                // Main Workspace Canvas
-                Group {
-                    if viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root" {
-                        SmartScanDashboardView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_dev_artifacts" {
-                        DevArtifactsHunterView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_xcode" {
-                        XcodeStorageView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_package_caches" {
-                        PackageCachesView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_apps" {
-                        AppUninstallerDashboardView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_orphans" {
-                        OrphanedLeftoversView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_large_old_matrix" {
-                        LargeOldFilesMatrixView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_duplicates" {
-                        DuplicateFinderView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "tool_security" {
-                        MalwareScannerView(viewModel: viewModel)
-                    } else if viewModel.activeSidebarId == "storage_volumes" {
-                        ApfsStorageCardView(viewModel: viewModel)
-                            .padding(24)
-                    } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
-                        SmartScanDashboardView(viewModel: viewModel)
-                    } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
-                        FileTableView(viewModel: viewModel)
-                    } else {
-                        SunburstCanvasView(viewModel: viewModel)
                     }
+
+                    // Main Workspace Canvas
+                    Group {
+                        if viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root" {
+                            SmartScanDashboardView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_dev_artifacts" {
+                            DevArtifactsHunterView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_xcode" {
+                            XcodeStorageView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_package_caches" {
+                            PackageCachesView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_apps" {
+                            AppUninstallerDashboardView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_orphans" {
+                            OrphanedLeftoversView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_large_old_matrix" {
+                            LargeOldFilesMatrixView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_duplicates" {
+                            DuplicateFinderView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_security" {
+                            MalwareScannerView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "storage_volumes" {
+                            ApfsStorageCardView(viewModel: viewModel)
+                                .padding(24)
+                        } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
+                            SmartScanDashboardView(viewModel: viewModel)
+                        } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
+                            FileTableView(viewModel: viewModel)
+                        } else {
+                            SunburstCanvasView(viewModel: viewModel)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(VeloraTheme.obsidianBase)
+
+                    // Bottom DaisyDisk-style Collector Drawer
+                    CollectorTrayView(viewModel: viewModel)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
 
-                // Bottom DaisyDisk-style Collector Drawer
-                CollectorTrayView(viewModel: viewModel)
+                if showBloomInspector {
+                    Divider()
+                        .overlay(VeloraTheme.cardBorder)
+                    BloomInspectorView(viewModel: viewModel)
+                        .frame(width: 278)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showBloomInspector)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.isScanning)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.shouldShowScanUI)
             .toolbar {
@@ -146,16 +159,26 @@ public struct MainWindowView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .frame(minWidth: 280, idealWidth: 380, maxWidth: 500)
-                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 10))
+                    .frame(minWidth: 220, idealWidth: 330, maxWidth: 440)
+                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 12)
                             .stroke(VeloraTheme.cardBorder, lineWidth: 1)
                     )
                 }
 
                 // View Mode & Actions
                 ToolbarItemGroup(placement: .primaryAction) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showBloomInspector.toggle()
+                        }
+                    }) {
+                        Image(systemName: "sidebar.right")
+                            .foregroundStyle(showBloomInspector ? VeloraTheme.accentViolet : VeloraTheme.textSecondary)
+                    }
+                    .help("Toggle cleanup inspector")
+
                     Picker("View", selection: $viewModel.selectedViewMode) {
                         ForEach(ViewMode.allCases) { mode in
                             Label(mode.rawValue, systemImage: mode.iconName)
@@ -173,6 +196,7 @@ public struct MainWindowView: View {
                 }
             }
         }
+        .tint(VeloraTheme.accentViolet)
         .onAppear {
             viewModel.loadCachedSnapshotIfAvailable()
         }
@@ -180,7 +204,7 @@ public struct MainWindowView: View {
             WindowAccessor { window in
                 window.titlebarAppearsTransparent = true
                 window.isOpaque = false
-                window.backgroundColor = NSColor(red: 22/255.0, green: 25/255.0, blue: 46/255.0, alpha: 1.0)
+                window.backgroundColor = NSColor(red: 32/255.0, green: 32/255.0, blue: 49/255.0, alpha: 1.0)
                 window.toolbar?.showsBaselineSeparator = false
                 window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
             }
