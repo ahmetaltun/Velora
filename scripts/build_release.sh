@@ -5,39 +5,67 @@ set -euo pipefail
 # Velora Release Build & Packaging Script
 # -----------------------------------------------------------------------------
 # Usage:
-#   ./scripts/build_release.sh [version] [--dmg]
-# Example:
+#   ./scripts/build_release.sh [version] [--dmg] [--sign <identity>]
+# Examples:
+#   ./scripts/build_release.sh 0.1.0
 #   ./scripts/build_release.sh 0.1.0 --dmg
+#   ./scripts/build_release.sh 0.1.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
 # -----------------------------------------------------------------------------
 
-RAW_VERSION="${1:-0.1.0}"
-# Strip leading 'v' if provided as a git tag (e.g., v0.1.0 -> 0.1.0)
-VERSION="${RAW_VERSION#v}"
+RAW_VERSION="0.1.0"
 GENERATE_DMG=false
+SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
 
-for arg in "$@"; do
-    if [ "$arg" == "--dmg" ]; then
-        GENERATE_DMG=true
-    fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dmg)
+            GENERATE_DMG=true
+            shift
+            ;;
+        --sign)
+            SIGN_IDENTITY="$2"
+            shift 2
+            ;;
+        -*)
+            echo "❌ Unknown flag: $1"
+            echo "Usage: $0 [version] [--dmg] [--sign <identity>]"
+            exit 1
+            ;;
+        *)
+            RAW_VERSION="$1"
+            shift
+            ;;
+    esac
 done
+
+# Strip leading 'v' if passed as git tag (e.g., v0.1.0 -> 0.1.0)
+VERSION="${RAW_VERSION#v}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 echo "=================================================="
-echo "  Building Velora v${VERSION} (Production Release)"
+echo "  Velora Release Build Pipeline"
+echo "  Target Version: v${VERSION}"
 echo "=================================================="
 
-# 1. Build Rust FFI in release mode (creates target/release/libvelora_ffi.a)
-echo "📦 Step 1: Compiling Rust FFI core (release)..."
+# 0. Prerequisite Verification
+command -v cargo >/dev/null 2>&1 || { echo "❌ Error: cargo is required but not installed."; exit 1; }
+command -v swift >/dev/null 2>&1 || { echo "❌ Error: swift is required but not installed."; exit 1; }
+if [ "$GENERATE_DMG" = true ]; then
+    command -v hdiutil >/dev/null 2>&1 || { echo "❌ Error: hdiutil is required for DMG creation."; exit 1; }
+fi
+
+# 1. Build Rust FFI core in release mode
+echo "📦 Step 1/6: Compiling Rust FFI core (release)..."
 cargo build --release -p velora-ffi
 
 # 2. Build Swift app in release mode (statically links libvelora_ffi.a)
-echo "🚀 Step 2: Compiling Swift frontend (release)..."
+echo "🚀 Step 2/6: Compiling Swift frontend (release)..."
 (cd swift && swift build -c release)
 
 # 3. Assemble Velora.app bundle
-echo "📁 Step 3: Assembling Velora.app..."
+echo "📁 Step 3/6: Assembling Velora.app bundle..."
 BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$BUILD_DIR/Velora.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -56,7 +84,7 @@ if [ -f "$ROOT_DIR/assets/icons/AppIcon.icns" ]; then
     cp "$ROOT_DIR/assets/icons/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
-# Write Info.plist
+# Generate production Info.plist
 cat << EOF > "$CONTENTS_DIR/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -84,10 +112,14 @@ cat << EOF > "$CONTENTS_DIR/Info.plist"
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Velora Contributors</string>
     <key>NSDesktopFolderUsageDescription</key>
     <string>Velora needs access to scan and clean project artifacts on your Desktop.</string>
     <key>NSDocumentsFolderUsageDescription</key>
@@ -101,55 +133,94 @@ EOF
 # Touch app directory to register bundle changes
 touch "$APP_DIR"
 
-# 4. Optional Code Signing (if APPLE_SIGNING_IDENTITY is set)
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-    echo "🔐 Step 4: Signing Velora.app with Hardened Runtime..."
-    codesign --deep --force --options runtime --timestamp \
-        --entitlements "$ROOT_DIR/Velora.entitlements" \
-        --sign "$APPLE_SIGNING_IDENTITY" \
-        "$APP_DIR"
-    codesign --verify --deep --strict --verbose=2 "$APP_DIR"
-    echo "✅ Velora.app signed and verified."
-fi
-
-# 5. Verify binary dependencies (ensure zero local path leakage)
-echo "🔍 Step 5: Validating Mach-O linkages..."
+# 4. Validate Mach-O linkages (ensure zero leaked local developer paths)
+echo "🔍 Step 4/6: Validating Mach-O linkages..."
 if otool -L "$MACOS_DIR/Velora" | tail -n +2 | grep -E '/Users/|/home/'; then
     echo "❌ Error: Leaked local developer paths detected in binary dependencies!"
     exit 1
 fi
 echo "✅ Binary verified: 100% self-contained and portable."
 
+# 5. Optional Code Signing
+if [ -n "$SIGN_IDENTITY" ]; then
+    echo "🔐 Step 5/6: Code-signing Velora.app with Hardened Runtime..."
+    codesign --deep --force --options runtime --timestamp \
+        --entitlements "$ROOT_DIR/Velora.entitlements" \
+        --sign "$SIGN_IDENTITY" \
+        "$APP_DIR"
+    codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+    echo "✅ Velora.app signed and verified."
+else
+    echo "ℹ️ Step 5/6: Skipping code signing (no identity provided)."
+fi
+
 # 6. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "💿 Step 6: Packaging into DMG..."
+    echo "💿 Step 6/6: Packaging into styled DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
+    BG_IMAGE="$ROOT_DIR/assets/dmg/background@2x.png"
+    if [ ! -f "$BG_IMAGE" ]; then
+        BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
+    fi
+    VOL_ICON="$ROOT_DIR/assets/icons/AppIcon.icns"
 
     rm -rf "$DMG_STAGE" "$DMG_OUTPUT"
     mkdir -p "$DMG_STAGE"
-
     cp -R "$APP_DIR" "$DMG_STAGE/"
-    ln -s /Applications "$DMG_STAGE/Applications"
 
-    hdiutil create \
-        -volname "Velora" \
-        -srcfolder "$DMG_STAGE" \
-        -ov \
-        -format UDZO \
-        "$DMG_OUTPUT"
+    if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
+        echo "🎨 Using create-dmg for styled installer presentation..."
+        CREATE_DMG_ARGS=(
+            --volname "Velora"
+            --window-pos 200 120
+            --window-size 660 420
+            --icon-size 128
+            --icon "Velora.app" 180 210
+            --hide-extension "Velora.app"
+            --app-drop-link 480 210
+            --no-internet-enable
+        )
+
+        if [ -f "$VOL_ICON" ]; then
+            CREATE_DMG_ARGS+=(--volicon "$VOL_ICON")
+        fi
+
+        CREATE_DMG_ARGS+=(--background "$BG_IMAGE")
+
+        create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_OUTPUT" "$DMG_STAGE/Velora.app" || {
+            echo "⚠️ create-dmg encountered an issue, falling back to standard hdiutil..."
+            ln -s /Applications "$DMG_STAGE/Applications"
+            hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_OUTPUT"
+        }
+    else
+        echo "ℹ️ create-dmg not found or background missing; using native hdiutil fallback..."
+        ln -s /Applications "$DMG_STAGE/Applications"
+        hdiutil create \
+            -volname "Velora" \
+            -srcfolder "$DMG_STAGE" \
+            -ov \
+            -format UDZO \
+            "$DMG_OUTPUT"
+    fi
 
     rm -rf "$DMG_STAGE"
     echo "✅ DMG generated at: $DMG_OUTPUT"
 
-    if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+    if [ -n "$SIGN_IDENTITY" ]; then
         echo "🔐 Signing DMG..."
-        codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_OUTPUT"
+        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_OUTPUT"
         codesign --verify --strict --verbose=2 "$DMG_OUTPUT"
-        echo "✅ DMG signed successfully."
+        echo "✅ DMG signed and verified."
     fi
+else
+    echo "ℹ️ Step 6/6: Skipping DMG generation (--dmg not specified)."
 fi
 
 echo "=================================================="
-echo "🎉 Build complete: $APP_DIR"
+echo "🎉 Pipeline finished successfully!"
+echo "   Artifact: $APP_DIR"
+if [ "$GENERATE_DMG" = true ]; then
+    echo "   DMG:      $DMG_OUTPUT"
+fi
 echo "=================================================="

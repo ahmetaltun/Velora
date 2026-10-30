@@ -1,0 +1,46 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-verify:
+    name: Test & Build Verification
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Workspace Compilation Check
+        run: |
+          echo "🦀 Verifying Rust workspace compiles..."
+          cargo check --workspace
+
+      - name: Run Workspace Tests
+        run: |
+          echo "🧪 Running Rust unit and integration test suites..."
+          cargo test --workspace
+
+      - name: Verify Swift Frontend Build
+        run: |
+          echo "🍎 Building Rust FFI and verifying Swift app compilation..."
+          cargo build -p velora-ffi
+          (cd swift && swift build)
