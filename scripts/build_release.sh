@@ -188,15 +188,18 @@ if [ "$GENERATE_DMG" = true ]; then
         echo "🎨 Using create-dmg for styled installer presentation..."
         # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
         sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE" >/dev/null 2>&1 || true
+        # Hide extension at filesystem metadata level
+        SetFile -a E "$DMG_STAGE/Velora.app" 2>/dev/null || true
 
         CREATE_DMG_ARGS=(
             --volname "Velora"
             --window-pos 200 120
-            --window-size 660 420
-            --icon-size 128
-            --icon "Velora.app" 180 210
+            --window-size 660 448
+            --icon-size 110
+            --text-size 13
+            --icon "Velora.app" 160 185
             --hide-extension "Velora.app"
-            --app-drop-link 480 210
+            --app-drop-link 500 185
             --no-internet-enable
         )
 
