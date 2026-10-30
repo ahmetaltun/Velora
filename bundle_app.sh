@@ -11,10 +11,18 @@ mkdir -p "$MACOS" "$RESOURCES"
 # Copy binary
 cp swift/.build/debug/Velora "$MACOS/Velora"
 
-# Copy app icon if available
+# Copy app icon and image assets if available
 if [ -f "assets/icons/AppIcon.icns" ]; then
     cp assets/icons/AppIcon.icns "$RESOURCES/AppIcon.icns"
 fi
+if [ -f "assets/icons/AppIcon.png" ]; then
+    cp assets/icons/AppIcon.png "$RESOURCES/AppIcon.png"
+fi
+for icon_asset in assets/icons/VeloraIcon-*.png; do
+    if [ -f "$icon_asset" ]; then
+        cp "$icon_asset" "$RESOURCES/"
+    fi
+done
 
 # Create Info.plist
 cat << 'EOF' > "$CONTENTS/Info.plist"

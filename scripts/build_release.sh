@@ -79,10 +79,18 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/swift/.build/release/Velora" "$MACOS_DIR/Velora"
 chmod +x "$MACOS_DIR/Velora"
 
-# Copy app icon if present
+# Copy app icon and image assets if present
 if [ -f "$ROOT_DIR/assets/icons/AppIcon.icns" ]; then
     cp "$ROOT_DIR/assets/icons/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
+if [ -f "$ROOT_DIR/assets/icons/AppIcon.png" ]; then
+    cp "$ROOT_DIR/assets/icons/AppIcon.png" "$RESOURCES_DIR/AppIcon.png"
+fi
+for icon_asset in "$ROOT_DIR"/assets/icons/VeloraIcon-*.png; do
+    if [ -f "$icon_asset" ]; then
+        cp "$icon_asset" "$RESOURCES_DIR/"
+    fi
+done
 
 # Generate production Info.plist
 cat << EOF > "$CONTENTS_DIR/Info.plist"

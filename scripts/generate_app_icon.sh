@@ -7,6 +7,10 @@ MASTER_PNG="${ASSETS_DIR}/AppIcon.png"
 ICONSET_DIR="${ASSETS_DIR}/AppIcon.iconset"
 OUTPUT_ICNS="${ASSETS_DIR}/AppIcon.icns"
 
+if [[ ! -f "${MASTER_PNG}" ]] && [[ -f "${ASSETS_DIR}/VeloraIcon-1024.png" ]]; then
+    MASTER_PNG="${ASSETS_DIR}/VeloraIcon-1024.png"
+fi
+
 if [[ ! -f "${MASTER_PNG}" ]]; then
     echo "❌ Error: Master icon '${MASTER_PNG}' not found." >&2
     exit 1

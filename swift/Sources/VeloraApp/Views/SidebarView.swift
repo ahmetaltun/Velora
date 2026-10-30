@@ -35,35 +35,27 @@ public struct SidebarView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // App Identity Header
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(
-                            LinearGradient(
-                                colors: [VeloraTheme.accentBlue, VeloraTheme.accentCyan],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 34, height: 34)
+            Button {
+                AppAssetLoader.openAboutPanel()
+            } label: {
+                HStack(spacing: 10) {
+                    VeloraLogoView(size: 34)
 
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.white)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Velora")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundColor(VeloraTheme.textPrimary)
+
+                        Text("Disk Intelligence")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                    }
+
+                    Spacer()
                 }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Velora")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-
-                    Text("Disk Intelligence")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                }
-
-                Spacer()
             }
+            .buttonStyle(.plain)
+            .help("About Velora")
             .padding(.horizontal, 14)
             .padding(.top, 14)
             .padding(.bottom, 12)

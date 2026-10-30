@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        if let icon = AppAssetLoader.appIcon {
+            NSApp.applicationIconImage = icon
+        }
         configureAndCenterWindows()
 
         // Ensure asynchronously restored or created windows are also sized and centered
@@ -67,6 +70,11 @@ struct VeloraApp: App {
         .defaultSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
         .commands {
             SidebarCommands()
+            CommandGroup(replacing: .appInfo) {
+                Button("About Velora") {
+                    AppAssetLoader.openAboutPanel()
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Rescan Folder") {
                     // Rescan trigger
