@@ -101,17 +101,28 @@ EOF
 # Touch app directory to register bundle changes
 touch "$APP_DIR"
 
-# 4. Verify binary dependencies (ensure zero local path leakage)
-echo "🔍 Step 4: Validating Mach-O linkages..."
+# 4. Optional Code Signing (if APPLE_SIGNING_IDENTITY is set)
+if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+    echo "🔐 Step 4: Signing Velora.app with Hardened Runtime..."
+    codesign --deep --force --options runtime --timestamp \
+        --entitlements "$ROOT_DIR/Velora.entitlements" \
+        --sign "$APPLE_SIGNING_IDENTITY" \
+        "$APP_DIR"
+    codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+    echo "✅ Velora.app signed and verified."
+fi
+
+# 5. Verify binary dependencies (ensure zero local path leakage)
+echo "🔍 Step 5: Validating Mach-O linkages..."
 if otool -L "$MACOS_DIR/Velora" | tail -n +2 | grep -E '/Users/|/home/'; then
     echo "❌ Error: Leaked local developer paths detected in binary dependencies!"
     exit 1
 fi
 echo "✅ Binary verified: 100% self-contained and portable."
 
-# 5. Optional DMG generation
+# 6. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "💿 Step 5: Packaging into DMG..."
+    echo "💿 Step 6: Packaging into DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
 
@@ -130,6 +141,13 @@ if [ "$GENERATE_DMG" = true ]; then
 
     rm -rf "$DMG_STAGE"
     echo "✅ DMG generated at: $DMG_OUTPUT"
+
+    if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+        echo "🔐 Signing DMG..."
+        codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_OUTPUT"
+        codesign --verify --strict --verbose=2 "$DMG_OUTPUT"
+        echo "✅ DMG signed successfully."
+    fi
 fi
 
 echo "=================================================="

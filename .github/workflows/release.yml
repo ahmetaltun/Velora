@@ -47,50 +47,101 @@ jobs:
           chmod +x scripts/build_release.sh
           ./scripts/build_release.sh "${{ steps.version.outputs.CLEAN_VERSION }}"
 
-      - name: Check for Apple Signing Secrets
+      - name: Check for Apple Signing & Notarization Secrets
         id: check-secrets
         run: |
-          if [ -n "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] && [ -n "${{ secrets.APPLE_API_KEY_BASE64 }}" ]; then
+          CERT="${{ secrets.APPLE_CERTIFICATE }}"
+          APPLE_ID="${{ secrets.APPLE_ID }}"
+          APPLE_PWD="${{ secrets.APPLE_PASSWORD }}"
+
+          if [ -n "$CERT" ]; then
             echo "SIGNING_ENABLED=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Apple signing and notarization credentials detected."
+            echo "✅ Apple certificate secret detected: Code signing enabled."
           else
             echo "SIGNING_ENABLED=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ Apple signing credentials missing. Generating unsigned artifact."
+            echo "⚠️ APPLE_CERTIFICATE missing. Code signing disabled."
+          fi
+
+          if [ -n "$CERT" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_PWD" ]; then
+            echo "NOTARIZATION_ENABLED=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Apple notarization credentials detected: Notarization enabled."
+          else
+            echo "NOTARIZATION_ENABLED=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Incomplete notarization credentials (APPLE_ID or APPLE_PASSWORD missing). Notarization disabled."
           fi
 
       - name: Install Apple Certificate into Disposable Keychain
         if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
         env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          BUILD_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
-          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
 
-          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          # Decode the certificate (strip CR/LF that might come from copy-pasting base64)
+          echo "$BUILD_CERTIFICATE" | tr -d '\r\n' | base64 --decode > "$CERT_PATH"
 
+          # Create a dedicated disposable keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+          # Import the .p12 certificate
           security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          # Allow codesign tool access without prompting for keychain UI password
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Append keychain to the user search list and set as default for this session
+          ORIGINAL_KEYCHAINS=$(security list-keychains -d user | tr -d '"' || true)
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $ORIGINAL_KEYCHAINS
+          security default-keychain -s "$KEYCHAIN_PATH"
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Code Sign Velora.app with Hardened Runtime
         if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
         env:
-          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          SIGNING_IDENTITY_INPUT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          codesign --deep --force --options runtime \
+          IDENTITY="${SIGNING_IDENTITY_INPUT:-}"
+          if [ -z "$IDENTITY" ]; then
+            echo "Auto-detecting Developer ID Application certificate from keychain..."
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -m 1 "Developer ID Application:" | sed -E 's/.*"([^"]+)".*/\1/' || true)
+          fi
+
+          if [ -z "$IDENTITY" ]; then
+            echo "Fallback to first available codesigning identity..."
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -m 1 '^[[:space:]]*[0-9]\+)' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+          fi
+
+          if [ -z "$IDENTITY" ]; then
+            echo "❌ Error: Could not find any valid code signing identity in keychain."
+            security find-identity -v "$KEYCHAIN_PATH"
+            exit 1
+          fi
+
+          echo "Using Signing Identity: $IDENTITY"
+          echo "RESOLVED_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+          # Sign all embedded frameworks / dylibs if present
+          if [ -d "build/Velora.app/Contents/Frameworks" ]; then
+            find build/Velora.app/Contents/Frameworks -type f \( -name "*.dylib" -o -name "*.framework" \) 2>/dev/null | while read -r lib; do
+              echo "Signing embedded library: $lib"
+              codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$lib"
+            done
+          fi
+
+          # Sign main app bundle with Hardened Runtime, Entitlements and Secure Timestamp
+          codesign --deep --force --options runtime --timestamp \
             --entitlements Velora.entitlements \
-            --sign "$DEVELOPER_ID" \
+            --sign "$IDENTITY" \
             --keychain "$KEYCHAIN_PATH" \
             build/Velora.app
 
-          echo "Verifying signature..."
+          echo "Verifying application bundle signature..."
           codesign --verify --deep --strict --verbose=2 build/Velora.app
 
       - name: Create DMG Image
@@ -116,27 +167,50 @@ jobs:
 
       - name: Code Sign DMG
         if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
-        env:
-          DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
         run: |
-          codesign --force --sign "$DEVELOPER_ID" --keychain "$KEYCHAIN_PATH" "$DMG_FILE"
+          echo "Signing DMG with identity: $RESOLVED_IDENTITY"
+          codesign --force --timestamp \
+            --sign "$RESOLVED_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            "$DMG_FILE"
+
+          echo "Verifying DMG signature..."
+          codesign --verify --strict --verbose=2 "$DMG_FILE"
 
       - name: Notarize DMG with Apple Notary Service
-        if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
+        if: steps.check-secrets.outputs.NOTARIZATION_ENABLED == 'true'
         env:
-          API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
-          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${KEY_ID}.p8"
-          echo "$API_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+          echo "Submitting $DMG_FILE to Apple Notary Service..."
+          SUBMISSION_LOG="$RUNNER_TEMP/notary_submit.log"
 
-          echo "Submitting DMG to Apple Notary Service..."
+          set +e
           xcrun notarytool submit "$DMG_FILE" \
-            --key "$API_KEY_PATH" \
-            --key-id "$KEY_ID" \
-            --issuer "$ISSUER_ID" \
-            --wait
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait 2>&1 | tee "$SUBMISSION_LOG"
+          NOTARY_EXIT_CODE=$?
+          set -e
+
+          SUBMISSION_ID=$(grep -E '^\s*id: ' "$SUBMISSION_LOG" | head -n 1 | awk '{print $2}')
+
+          if [ $NOTARY_EXIT_CODE -ne 0 ] || grep -q "status: Invalid" "$SUBMISSION_LOG"; then
+            echo "❌ Apple Notarization failed!"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "Fetching detailed notarization diagnostic log for ID: $SUBMISSION_ID..."
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          echo "✅ Notarization succeeded!"
 
           echo "Stapling notarization ticket to DMG..."
           xcrun stapler staple "$DMG_FILE"
@@ -160,4 +234,4 @@ jobs:
           if [ -n "${{ env.KEYCHAIN_PATH }}" ] && [ -f "${{ env.KEYCHAIN_PATH }}" ]; then
             security delete-keychain "${{ env.KEYCHAIN_PATH }}" || true
           fi
-          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP"/AuthKey_*.p8
+          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP"/notary_*.log
