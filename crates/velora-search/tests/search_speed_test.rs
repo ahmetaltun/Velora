@@ -123,8 +123,14 @@ fn test_half_million_records_search_latency() {
     );
 
     assert!(report1.total_matched > 0);
-    // Cold search should be well within interactive response budget
-    assert!(report1.duration_micros < 50_000, "Cold search latency exceeded 50ms");
+    // Cold search should be well within interactive response budget (higher tolerance for unoptimized debug builds)
+    let max_cold_micros = if cfg!(debug_assertions) { 200_000 } else { 50_000 };
+    assert!(
+        report1.duration_micros < max_cold_micros,
+        "Cold search latency exceeded {}ms (took {:.2}ms)",
+        max_cold_micros / 1000,
+        report1.duration_micros as f64 / 1000.0
+    );
 
     // 2. Incremental search: user narrows by typing "annual"
     let candidate_indices: Vec<usize> = report1.hits.iter().map(|h| h.record_index).collect();
@@ -140,6 +146,12 @@ fn test_half_million_records_search_latency() {
 
     assert!(report2.total_matched > 0);
     assert!(report2.total_matched <= report1.total_matched);
-    // Incremental narrowing should be sub-millisecond (< 1.5ms)
-    assert!(report2.duration_micros < 5_000, "Incremental narrowing latency exceeded 5ms");
+    // Incremental narrowing should be sub-millisecond (higher tolerance for unoptimized debug builds)
+    let max_narrowing_micros = if cfg!(debug_assertions) { 25_000 } else { 5_000 };
+    assert!(
+        report2.duration_micros < max_narrowing_micros,
+        "Incremental narrowing latency exceeded {}ms (took {:.2}ms)",
+        max_narrowing_micros / 1000,
+        report2.duration_micros as f64 / 1000.0
+    );
 }
