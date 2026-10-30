@@ -39,8 +39,8 @@ jobs:
           echo "🧪 Running Rust unit and integration test suites..."
           cargo test --workspace
 
-      - name: Verify Swift Frontend Build
+      - name: Verify Swift Frontend Build (Apple Silicon arm64)
         run: |
-          echo "🍎 Building Rust FFI and verifying Swift app compilation..."
+          echo "🍎 Building Rust FFI and verifying Swift app compilation (arm64)..."
           cargo build -p velora-ffi
-          (cd swift && swift build)
+          (cd swift && swift build --arch arm64)

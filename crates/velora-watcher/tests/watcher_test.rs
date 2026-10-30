@@ -32,10 +32,11 @@ fn test_live_incremental_sync() {
     assert_eq!(volume.get_file_name(last_rec), "velora_renamed_sync_test.txt");
 
     // 3. Apply Removed event
-    FsWatcher::apply_event(&mut volume, &FileSystemEvent::Removed(renamed_file));
+    FsWatcher::apply_event(&mut volume, &FileSystemEvent::Removed(renamed_file.clone()));
     assert_eq!(volume.total_files(), initial_count);
 
     let _ = fs::remove_file(&temp_file);
+    let _ = fs::remove_file(&renamed_file);
 }
 
 #[test]

@@ -42,6 +42,12 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>LSRequiresNativeExecution</key>
+    <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
@@ -51,5 +57,14 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
 EOF
 
 chmod +x "$MACOS/Velora"
+
+# Validate Apple Silicon (arm64) architecture exclusivity
+BINARY_ARCHS=$(lipo -archs "$MACOS/Velora")
+if [ "$BINARY_ARCHS" != "arm64" ]; then
+    echo "❌ Error: Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
+    exit 1
+fi
+echo "✅ Architecture verified: Apple Silicon (arm64)."
+
 touch "$APP_DIR"
 echo "✅ Velora.app created successfully!"

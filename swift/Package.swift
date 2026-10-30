@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "Velora",
     platforms: [
-        .macOS(.v15)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "Velora", targets: ["VeloraApp"])

@@ -1,3 +1,7 @@
+#if !arch(arm64)
+#error("Velora is designed exclusively for Apple Silicon (ARM64) macOS devices.")
+#endif
+
 import AppKit
 import SwiftUI
 

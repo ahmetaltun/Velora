@@ -1,3 +1,7 @@
+// Enforce Apple Silicon (ARM64) macOS target
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+compile_error!("Velora is engineered exclusively for Apple Silicon (arm64 / aarch64) macOS devices.");
+
 use parking_lot::RwLock;
 use std::path::Path;
 use std::sync::Arc;

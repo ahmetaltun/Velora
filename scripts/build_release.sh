@@ -57,15 +57,15 @@ if [ "$GENERATE_DMG" = true ]; then
 fi
 
 # 1. Build Rust FFI core in release mode
-echo "📦 Step 1/6: Compiling Rust FFI core (release)..."
+echo "📦 Step 1/7: Compiling Rust FFI core (release)..."
 cargo build --release -p velora-ffi
 
-# 2. Build Swift app in release mode (statically links libvelora_ffi.a)
-echo "🚀 Step 2/6: Compiling Swift frontend (release)..."
-(cd swift && swift build -c release)
+# 2. Build Swift app in release mode (statically links libvelora_ffi.a, strictly arm64)
+echo "🚀 Step 2/7: Compiling Swift frontend (release arm64)..."
+(cd swift && swift build -c release --arch arm64)
 
 # 3. Assemble Velora.app bundle
-echo "📁 Step 3/6: Assembling Velora.app bundle..."
+echo "📁 Step 3/7: Assembling Velora.app bundle..."
 BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$BUILD_DIR/Velora.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -112,6 +112,12 @@ cat << EOF > "$CONTENTS_DIR/Info.plist"
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>LSRequiresNativeExecution</key>
+    <true/>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key>
@@ -134,16 +140,25 @@ EOF
 touch "$APP_DIR"
 
 # 4. Validate Mach-O linkages (ensure zero leaked local developer paths)
-echo "🔍 Step 4/6: Validating Mach-O linkages..."
+echo "🔍 Step 4/7: Validating Mach-O linkages..."
 if otool -L "$MACOS_DIR/Velora" | tail -n +2 | grep -E '/Users/|/home/'; then
     echo "❌ Error: Leaked local developer paths detected in binary dependencies!"
     exit 1
 fi
 echo "✅ Binary verified: 100% self-contained and portable."
 
-# 5. Optional Code Signing
+# 5. Validate Apple Silicon (arm64) architecture exclusivity
+echo "🔍 Step 5/7: Validating Mach-O architecture (Apple Silicon arm64 only)..."
+BINARY_ARCHS=$(lipo -archs "$MACOS_DIR/Velora")
+if [ "$BINARY_ARCHS" != "arm64" ]; then
+    echo "❌ Error: Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
+    exit 1
+fi
+echo "✅ Architecture verified: 100% pure Apple Silicon (arm64)."
+
+# 6. Optional Code Signing
 if [ -n "$SIGN_IDENTITY" ]; then
-    echo "🔐 Step 5/6: Code-signing Velora.app with Hardened Runtime..."
+    echo "🔐 Step 6/7: Code-signing Velora.app with Hardened Runtime..."
     codesign --deep --force --options runtime --timestamp \
         --entitlements "$ROOT_DIR/Velora.entitlements" \
         --sign "$SIGN_IDENTITY" \
@@ -151,12 +166,12 @@ if [ -n "$SIGN_IDENTITY" ]; then
     codesign --verify --deep --strict --verbose=2 "$APP_DIR"
     echo "✅ Velora.app signed and verified."
 else
-    echo "ℹ️ Step 5/6: Skipping code signing (no identity provided)."
+    echo "ℹ️ Step 6/7: Skipping code signing (no identity provided)."
 fi
 
-# 6. Optional DMG generation
+# 7. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "💿 Step 6/6: Packaging into styled DMG..."
+    echo "💿 Step 7/7: Packaging into styled DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
     BG_IMAGE="$ROOT_DIR/assets/dmg/background@2x.png"
