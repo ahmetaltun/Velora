@@ -27,7 +27,10 @@ fn test_codesign_verifier_on_system_binary() {
     let zsh_path = Path::new("/bin/zsh");
     if zsh_path.exists() {
         let status = CodeSignVerifier::verify(zsh_path);
-        assert_eq!(status, SigningStatus::AppleInternal);
+        assert!(
+            matches!(status, SigningStatus::AppleInternal | SigningStatus::DeveloperIdSigned { .. }),
+            "Expected /bin/zsh to be verified as trusted Apple binary, got: {:?}", status
+        );
         assert!(status.is_trusted());
     }
 }

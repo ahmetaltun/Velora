@@ -1,10 +1,19 @@
 use std::path::Path;
 use velora_apps::AppManager;
-use velora_index::{FileFlags, FileRecord, VolumeIndex};
+use velora_index::{AppMetadataEntry, FileFlags, FileRecord, VolumeIndex};
 
 #[test]
 fn test_index_powered_footprint_resolution() {
     let mut volume = VolumeIndex::new("Macintosh HD", "/");
+
+    // Pre-populate volume.apps so it leverages in-memory metadata without scanning host /Applications
+    volume.apps.push(AppMetadataEntry {
+        name: "MockApp".to_string(),
+        bundle_id: "com.mock.app".to_string(),
+        version: "1.0.0".to_string(),
+        app_path: "/Applications/MockApp.app".to_string(),
+        is_system_app: false,
+    });
 
     // Add /Users/test/Library/Application Support
     let (u_off, u_len) = volume.pool.push("Users");

@@ -14,7 +14,7 @@ Velora combines a parallel multi-threaded **Rust** backend with a native **Swift
 - **In-Memory Search**: Sub-millisecond filename queries supporting glob patterns, case-insensitive substring search, and regular expressions.
 - **Live Filesystem Watcher**: Incremental real-time index synchronization powered by macOS [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events).
 - **Safe Staged Cleanup**: Visual collector tray allowing selective file queuing before committing removals directly to the macOS system Trash.
-- **Native macOS Experience**: Modern, lightweight SwiftUI desktop application designed specifically for macOS 14 (Sonoma) and later.
+- **Native macOS Experience**: Modern, lightweight SwiftUI desktop application designed specifically for macOS 15 (Sequoia) and later.
 
 ---
 
@@ -44,7 +44,7 @@ Velora/
 
 ## Prerequisites
 
-- **macOS**: macOS 14.0 (Sonoma) or newer.
+- **macOS**: macOS 15.0 (Sequoia) or newer.
 - **Rust Toolchain**: Rust 1.75+ (`rustup default stable`).
 - **Xcode / Swift**: Xcode 15+ (or Swift 5.9+ Command Line Tools).
 
