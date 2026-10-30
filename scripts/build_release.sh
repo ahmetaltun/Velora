@@ -174,9 +174,9 @@ if [ "$GENERATE_DMG" = true ]; then
     echo "💿 Step 7/7: Packaging into styled DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
-    BG_IMAGE="$ROOT_DIR/assets/dmg/background@2x.png"
+    BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
     if [ ! -f "$BG_IMAGE" ]; then
-        BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
+        BG_IMAGE="$ROOT_DIR/assets/dmg/background@2x.png"
     fi
     VOL_ICON="$ROOT_DIR/assets/icons/AppIcon.icns"
 
@@ -186,6 +186,9 @@ if [ "$GENERATE_DMG" = true ]; then
 
     if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
         echo "🎨 Using create-dmg for styled installer presentation..."
+        # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
+        sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE" >/dev/null 2>&1 || true
+
         CREATE_DMG_ARGS=(
             --volname "Velora"
             --window-pos 200 120
@@ -203,7 +206,7 @@ if [ "$GENERATE_DMG" = true ]; then
 
         CREATE_DMG_ARGS+=(--background "$BG_IMAGE")
 
-        create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_OUTPUT" "$DMG_STAGE/Velora.app" || {
+        create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_OUTPUT" "$DMG_STAGE" || {
             echo "⚠️ create-dmg encountered an issue, falling back to standard hdiutil..."
             ln -s /Applications "$DMG_STAGE/Applications"
             hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_OUTPUT"

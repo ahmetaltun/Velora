@@ -168,8 +168,8 @@ jobs:
           echo "::group::Assembling Styled DMG image"
           DMG_STAGE="build/dmg_stage"
           DMG_FILE="build/Velora-${{ steps.version.outputs.TAG }}.dmg"
-          BG_IMAGE="assets/dmg/background@2x.png"
-          [ -f "$BG_IMAGE" ] || BG_IMAGE="assets/dmg/background.png"
+          BG_IMAGE="assets/dmg/background.png"
+          [ -f "$BG_IMAGE" ] || BG_IMAGE="assets/dmg/background@2x.png"
 
           rm -rf "$DMG_STAGE" "$DMG_FILE"
           mkdir -p "$DMG_STAGE"
@@ -177,6 +177,8 @@ jobs:
 
           if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
             echo "Applying custom visual presentation via create-dmg..."
+            # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
+            sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE"
             create-dmg \
               --volname "Velora" \
               --volicon "assets/icons/AppIcon.icns" \
@@ -189,7 +191,7 @@ jobs:
               --app-drop-link 480 210 \
               --no-internet-enable \
               "$DMG_FILE" \
-              "$DMG_STAGE/Velora.app" || {
+              "$DMG_STAGE" || {
                 echo "⚠️ create-dmg encountered an issue, falling back to standard hdiutil..."
                 ln -s /Applications "$DMG_STAGE/Applications"
                 hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_FILE"
