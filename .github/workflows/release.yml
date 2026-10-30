@@ -17,11 +17,11 @@ permissions:
 jobs:
   release:
     name: Build, Sign, Notarize & Release
-    runs-on: macos-14
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Determine Version
         id: version
@@ -53,6 +53,7 @@ jobs:
           CERT="${{ secrets.APPLE_CERTIFICATE }}"
           APPLE_ID="${{ secrets.APPLE_ID }}"
           APPLE_PWD="${{ secrets.APPLE_PASSWORD }}"
+          TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
 
           if [ -n "$CERT" ]; then
             echo "SIGNING_ENABLED=true" >> "$GITHUB_OUTPUT"
@@ -62,12 +63,12 @@ jobs:
             echo "⚠️ APPLE_CERTIFICATE missing. Code signing disabled."
           fi
 
-          if [ -n "$CERT" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_PWD" ]; then
+          if [ -n "$CERT" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_PWD" ] && [ -n "$TEAM_ID" ]; then
             echo "NOTARIZATION_ENABLED=true" >> "$GITHUB_OUTPUT"
             echo "✅ Apple notarization credentials detected: Notarization enabled."
           else
             echo "NOTARIZATION_ENABLED=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ Incomplete notarization credentials (APPLE_ID or APPLE_PASSWORD missing). Notarization disabled."
+            echo "⚠️ Incomplete notarization credentials (APPLE_ID, APPLE_PASSWORD, or APPLE_TEAM_ID missing). Notarization disabled."
           fi
 
       - name: Install Apple Certificate into Disposable Keychain
@@ -76,25 +77,23 @@ jobs:
           BUILD_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
           KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
 
-          # Decode the certificate (strip CR/LF that might come from copy-pasting base64)
-          echo "$BUILD_CERTIFICATE" | tr -d '\r\n' | base64 --decode > "$CERT_PATH"
+          # Decode base64 certificate (strip whitespace/newlines)
+          echo "$BUILD_CERTIFICATE" | tr -d '\r\n ' | base64 --decode > "$CERT_PATH"
 
-          # Create a dedicated disposable keychain
+          # Create dedicated disposable keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Import the .p12 certificate
-          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-
-          # Allow codesign tool access without prompting for keychain UI password
+          # Import .p12 certificate and allow codesign tool access
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Append keychain to the user search list and set as default for this session
+          # Add keychain to user search list and set as default for this session
           ORIGINAL_KEYCHAINS=$(security list-keychains -d user | tr -d '"' || true)
           security list-keychains -d user -s "$KEYCHAIN_PATH" $ORIGINAL_KEYCHAINS
           security default-keychain -s "$KEYCHAIN_PATH"
@@ -126,7 +125,7 @@ jobs:
           echo "Using Signing Identity: $IDENTITY"
           echo "RESOLVED_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
-          # Sign all embedded frameworks / dylibs if present
+          # Sign embedded frameworks and dylibs first (inside-out signing)
           if [ -d "build/Velora.app/Contents/Frameworks" ]; then
             find build/Velora.app/Contents/Frameworks -type f \( -name "*.dylib" -o -name "*.framework" \) 2>/dev/null | while read -r lib; do
               echo "Signing embedded library: $lib"
@@ -215,11 +214,14 @@ jobs:
           echo "Stapling notarization ticket to DMG..."
           xcrun stapler staple "$DMG_FILE"
 
+          echo "Validating stapler ticket..."
+          xcrun stapler validate "$DMG_FILE"
+
           echo "Validating Gatekeeper acceptance..."
           spctl -a -t open --context context:primary-signature -v "$DMG_FILE"
 
       - name: Create GitHub Release and Upload DMG
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
           name: Velora ${{ steps.version.outputs.TAG }}
@@ -231,7 +233,8 @@ jobs:
       - name: Clean up temporary credentials
         if: always()
         run: |
-          if [ -n "${{ env.KEYCHAIN_PATH }}" ] && [ -f "${{ env.KEYCHAIN_PATH }}" ]; then
-            security delete-keychain "${{ env.KEYCHAIN_PATH }}" || true
+          if [ -n "${{ env.KEYCHAIN_PATH }}" ]; then
+            security delete-keychain "${{ env.KEYCHAIN_PATH }}" 2>/dev/null || true
+            rm -f "${{ env.KEYCHAIN_PATH }}" "${{ env.KEYCHAIN_PATH }}-db" 2>/dev/null || true
           fi
           rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP"/notary_*.log
