@@ -194,12 +194,12 @@ if [ "$GENERATE_DMG" = true ]; then
         CREATE_DMG_ARGS=(
             --volname "Velora"
             --window-pos 200 120
-            --window-size 660 448
+            --window-size 660 470
             --icon-size 110
             --text-size 13
             --icon "Velora.app" 160 185
             --hide-extension "Velora.app"
-            --app-drop-link 500 185
+            --app-drop-link 510 185
             --no-internet-enable
         )
 
