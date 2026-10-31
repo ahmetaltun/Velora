@@ -22,7 +22,7 @@ public final class VeloraUpdateManager: NSObject, ObservableObject, SPUUpdaterDe
     }
 
     public var currentVersionString: String {
-        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
         let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
         return "v\(shortVersion) (Build \(buildVersion))"
     }

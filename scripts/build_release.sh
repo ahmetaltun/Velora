@@ -7,12 +7,12 @@ set -euo pipefail
 # Usage:
 #   ./scripts/build_release.sh [version] [--dmg] [--sign <identity>]
 # Examples:
-#   ./scripts/build_release.sh 0.1.0
-#   ./scripts/build_release.sh 0.1.0 --dmg
-#   ./scripts/build_release.sh 0.1.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
+#   ./scripts/build_release.sh 0.2.0
+#   ./scripts/build_release.sh 0.2.0 --dmg
+#   ./scripts/build_release.sh 0.2.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
 # -----------------------------------------------------------------------------
 
-RAW_VERSION="0.1.0"
+RAW_VERSION="0.2.0"
 GENERATE_DMG=false
 GENERATE_ZIP=false
 SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
