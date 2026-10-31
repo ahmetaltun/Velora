@@ -1,128 +1,166 @@
 # Velora
 
-An ultra-fast, high-performance macOS disk space analyzer and storage management tool.
+An ultra-fast, high-performance macOS disk space analyzer, storage intelligence, and system hygiene suite.
 
-Velora combines a parallel multi-threaded **Rust** backend with a native **SwiftUI** frontend to deliver instant directory indexing, bottom-up storage rollup, real-time filesystem monitoring, and an interactive polar sunburst visualizer.
+Velora pairs a parallel multi-threaded Rust core engine with a native SwiftUI application layer via Mozilla UniFFI. Engineered exclusively for Apple Silicon (ARM64) Macs running macOS 15 (Sequoia) and later, Velora provides deep storage visibility, instant directory indexing, bottom-up storage rollup, real-time filesystem synchronization, developer artifact cleaning, duplicate detection, application uninstallation with residue tracking, APFS telemetry, malware and security scanning, and safe staged cleanup.
 
 ---
 
 ## Key Features
 
-- **Blazing Fast Scanning**: Multi-threaded directory crawler powered by [Rayon](https://crates.io/crates/rayon) and POSIX directory system calls.
-- **Interactive Polar Sunburst**: Multi-tier circular visualization rendered in native SwiftUI with fluid drill-down, hover inspection, and smooth animations.
-- **Zero-Allocation Rollup**: Single backward pass bottom-up directory aggregation ($O(N)$ linear complexity) for real-time recalculations.
-- **In-Memory Search**: Sub-millisecond filename queries supporting glob patterns, case-insensitive substring search, and regular expressions.
-- **Live Filesystem Watcher**: Incremental real-time index synchronization powered by macOS [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events).
-- **Safe Staged Cleanup**: Visual collector tray allowing selective file queuing before committing removals directly to the macOS system Trash.
-- **Native macOS Experience**: Modern, lightweight SwiftUI desktop application designed exclusively for Apple Silicon (ARM64) Macs running macOS 15 (Sequoia) and later.
+- **Parallel Directory Indexing**: Multi-threaded directory crawler powered by Rayon and low-level POSIX filesystem calls for maximum IOPS saturation.
+- **Zero-Allocation Storage Rollup**: Single backward-pass bottom-up tree aggregation running in linear time (O(N)) for real-time recalculations.
+- **Interactive Polar Sunburst**: Multi-tiered circular visualization rendered in native SwiftUI with fluid drill-down, breadcrumb tracking, and hover inspection.
+- **Sub-Millisecond In-Memory Search**: High-performance query engine supporting glob patterns, case-insensitive substrings, and regular expressions, with adaptive capping for up to 1,000 live results.
+- **Real-Time Filesystem Monitoring**: Incremental index synchronization powered by the macOS FSEvents subsystem, updating the in-memory tree without requiring full rescans.
+- **Application Management and Residue Tracking**: Complete inventory of installed applications with deep footprint resolution across Application Support, Caches, Preferences, and Containers, plus detection of orphaned leftovers from removed apps.
+- **Developer Storage and Artifact Hunter**: Targeted detection of build targets (`target`, `node_modules`, `.venv`, `build`), package manager caches (Cargo, npm, pip, Docker, Homebrew, CocoaPods, Go), and Xcode storage (DerivedData, Archives, iOS DeviceSupport, and Simulators).
+- **Disk Hygiene and Duplicate Detection**: Cryptographic duplicate file identification utilizing size pre-filtering and Blake3 hashing, alongside a Large and Old Files Heatmap Matrix grouping items across configurable age and size buckets.
+- **Security and Threat Inspection**: Auto-Start Extension Point (ASEP) auditor scanning LaunchAgents, LaunchDaemons, Login Items, and shell hooks, combined with cryptographic code signature verification and a quarantined isolation vault.
+- **APFS Telemetry and Snapshot Reconciliation**: Container-level and volume-level space accounting, purgeable space breakdown, and local Time Machine / APFS snapshot tracking.
+- **Safe Staged Cleanup**: Visual collector tray allowing users to inspect and verify queued deletions before moving items directly to the macOS system Trash.
+- **Sparkle 2 Auto-Updates**: Integrated update framework with Ed25519 cryptographic signature verification and automated appcast updates.
+- **Velora Bloom Design Language**: Modern macOS 15 interface featuring jewel accents, background task interaction gating, responsive split layouts, and Quick Look integration.
 
 ---
 
 ## Architecture Overview
 
-Velora is engineered as a modular Rust virtual workspace connected to a native Swift application layer via [UniFFI](https://github.com/mozilla/uniffi-rs):
+Velora is engineered as a modular Rust virtual workspace connected to a native Swift application layer via Mozilla UniFFI:
 
 ```
 Velora/
 ├── crates/
-│   ├── velora-index      # Compact in-memory volume index & Arena node storage
-│   ├── velora-scanner    # Parallel multi-threaded directory traverser
-│   ├── velora-search     # Low-latency regex and pattern search engine
-│   ├── velora-analyzer   # Bottom-up rollup and sunburst sector geometry calculation
-│   ├── velora-watcher    # macOS FSEvents live incremental change monitor
-│   ├── velora-ops        # Safe file operations & macOS Trash integration
-│   └── velora-ffi        # UniFFI bridge exposing Rust core models to Swift
+│   ├── velora-index      # In-memory volume index, compact arena node storage, bincode serialization
+│   ├── velora-scanner    # Parallel multi-threaded directory traverser with Rayon
+│   ├── velora-search     # Low-latency regex, glob, and substring query engine
+│   ├── velora-analyzer   # Zero-allocation bottom-up rollup and sunburst sector geometry
+│   ├── velora-watcher    # macOS FSEvents incremental filesystem monitor
+│   ├── velora-ops        # Safe file operations and macOS Trash integration
+│   ├── velora-apfs       # APFS container/volume telemetry and snapshot reconciliation
+│   ├── velora-dev        # Build artifact hunter, package cache scanner, Xcode storage inspector
+│   ├── velora-apps       # Application footprint resolver, bundle inspector, orphan detector
+│   ├── velora-hygiene    # Blake3 duplicate file finder, large & old files classification matrix
+│   ├── velora-security   # Threat scanner, ASEP persistence auditor, codesign verifier, quarantine vault
+│   └── velora-ffi        # UniFFI bridge exposing Rust core models and services to Swift
 ├── swift/
 │   └── Sources/
 │       ├── velora_ffiFFI # C-bridge and module map for the static/dynamic library
 │       ├── VeloraCore    # Swift bindings generated by UniFFI
-│       └── VeloraApp     # Native SwiftUI UI (Sunburst, Table, Sidebar, Tray)
-└── bundle_app.sh         # Helper script packaging Velora into a native macOS .app
+│       └── VeloraApp     # Native SwiftUI UI (Sunburst, Table, Sidebar, Collector Tray, Dashboards)
+├── scripts/
+│   ├── dev.sh            # Live-reload development watcher and app packager
+│   ├── build_release.sh  # Release build, code-signing, and DMG generation pipeline
+│   └── generate_app_icon.sh # Multi-resolution iconset and ICNS generator
+└── bundle_app.sh         # Packaging script producing Velora.app
 ```
 
 ---
 
-## Prerequisites
+## System Requirements
 
-- **macOS**: macOS 15.0 (Sequoia) or newer.
+- **Operating System**: macOS 15.0 (Sequoia) or newer.
 - **Architecture**: Apple Silicon only (M1/M2/M3/M4 or newer, ARM64). Intel (x86_64) Macs are not supported.
-- **Rust Toolchain**: Rust 1.75+ with `aarch64-apple-darwin` target (`rustup default stable && rustup target add aarch64-apple-darwin`).
-- **Xcode / Swift**: Xcode 16+ (Swift 6.0+ Command Line Tools with macOS 15 Sequoia SDK).
+- **Rust Toolchain**: Rust 1.75+ with the `aarch64-apple-darwin` target installed:
+  ```bash
+  rustup default stable
+  rustup target add aarch64-apple-darwin
+  ```
+- **Xcode / Swift**: Xcode 16.0+ with Swift 6.0+ Command Line Tools and macOS 15 SDK.
 
 ---
 
-## Development & Live Reload
+## Development Workflow
 
-For continuous development with live updates across both the Rust backend and SwiftUI frontend, run the dev watcher:
+Velora includes a dedicated development watcher script for fast incremental compilation across both Rust and Swift:
 
 ```bash
 ./scripts/dev.sh
 ```
 
-- **Selective compilation**: Automatically detects whether Rust (`crates/`), Swift (`swift/Sources/`), or assets changed to avoid redundant compilation.
-- **Auto-relaunch**: Packages `Velora.app` and relaunches the app upon successful build.
-- **Fault-tolerant**: If compilation fails while typing, the existing running app is preserved while displaying compiler errors.
+- **Selective compilation**: Automatically monitors changes across Rust crates (`crates/`), Swift sources (`swift/Sources/`), and assets to eliminate redundant builds.
+- **Auto-relaunch**: Packages `Velora.app` and relaunches the application upon successful build.
+- **Fault-tolerant**: Retains the running application instance while displaying compiler diagnostics if a build fails.
 
 ---
 
-## Quick Start & Building
+## Building from Source
 
 ### 1. Build the Rust FFI Library
 
-Compile the FFI crate from the repository root:
+Compile the FFI bridge crate for Apple Silicon:
 
 ```bash
-cargo build -p velora-ffi
+cargo build -p velora-ffi --release
 ```
-
-*(For release-optimized performance, append `--release`)*
 
 ### 2. Build the Swift Application
 
-Navigate into the `swift` directory and build via Swift Package Manager targeting Apple Silicon:
+Navigate into the `swift` directory and compile via Swift Package Manager:
 
 ```bash
 cd swift
-swift build --arch arm64
+swift build -c release --arch arm64
 cd ..
 ```
 
-### 3. Package and Run the Application
+### 3. Package and Run the Application Bundle
 
-Run the bundling script to generate `Velora.app`:
+Execute the bundling script to construct `Velora.app`:
 
 ```bash
 ./bundle_app.sh
 open Velora.app
 ```
 
+### 4. Release Distribution and DMG Creation
+
+To produce a signed and notarized disk image installer with custom background presentation:
+
+```bash
+./scripts/build_release.sh
+```
+
 ---
 
-## Running Tests
+## Running Tests and Verification
 
-Run all Rust unit and integration test suites:
-
-```bash
-cargo test
-```
-
-Run test suites for specific crates:
+Run all workspace unit, integration, and benchmark suites:
 
 ```bash
+# Run all workspace test suites
+cargo test --workspace
+
+# Run tests for specific subsystems
 cargo test -p velora-index
 cargo test -p velora-scanner
-cargo test -p velora-analyzer
 cargo test -p velora-search
+cargo test -p velora-analyzer
 cargo test -p velora-watcher
+cargo test -p velora-apfs
+cargo test -p velora-dev
+cargo test -p velora-apps
+cargo test -p velora-hygiene
+cargo test -p velora-security
 ```
+
+Format and lint verification:
+
+```bash
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+---
+
+## Project Documentation
+
+- [Contributing Guidelines](CONTRIBUTING.md): Standards for code, testing, branching, and pull requests.
+- [Privacy Policy](PRIVACY.md): Overview of local-first design, data boundaries, and zero-telemetry policy.
+- [Security Policy](SECURITY.md): Vulnerability reporting instructions, threat model, and platform mitigations.
 
 ---
 
 ## License
 
-This project is dual-licensed under either:
-
-- [MIT License](LICENSE-MIT)
-- [Apache License, Version 2.0](LICENSE-APACHE)
-
-at your option.
+This project is licensed under the [MIT License](LICENSE-MIT).

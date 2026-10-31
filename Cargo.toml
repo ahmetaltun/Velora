@@ -19,7 +19,7 @@ members = [
 version = "0.2.0"
 edition = "2021"
 authors = ["Velora Team"]
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 [profile.release]
 opt-level = 3
