@@ -86,12 +86,25 @@ struct VeloraApp: App {
                     AppAssetLoader.openAboutPanel()
                 }
             }
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesMenuItem()
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Rescan Folder") {
                     // Rescan trigger
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }
+        }
+
+        Settings {
+            VStack(alignment: .leading, spacing: 20) {
+                UpdatePreferencesCardView()
+            }
+            .padding(24)
+            .frame(width: 540)
+            .background(VeloraTheme.obsidianBase)
+            .preferredColorScheme(.dark)
         }
     }
 }

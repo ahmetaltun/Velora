@@ -21,8 +21,68 @@ public struct FileTableView: View {
     }
 
     public var body: some View {
-        ZStack {
-            Table(sortedItems, selection: $selectedItemIds, sortOrder: $sortOrder) {
+        VStack(spacing: 0) {
+            if viewModel.isSearchActive {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(VeloraTheme.accentCyan)
+
+                    Text("Search results for")
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+
+                    Text("\"\(viewModel.searchQuery)\"")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    // Special Search Queries & Filter Guide
+                    SearchSyntaxChipsView(viewModel: viewModel)
+
+                    Spacer()
+
+                    if !sortedItems.isEmpty {
+                        Text("\(sortedItems.count) match\(sortedItems.count == 1 ? "" : "es")")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(VeloraTheme.accentCyan)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(VeloraTheme.accentCyan.opacity(0.12), in: Capsule())
+
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(viewModel.currentFolderTotalSize), countStyle: .file))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                    }
+
+                    Button(action: {
+                        viewModel.clearSearch()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle")
+                            Text("Clear")
+                        }
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear search and return to previous tool (Esc)")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(VeloraTheme.obsidianElevated)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(VeloraTheme.cardBorder),
+                    alignment: .bottom
+                )
+            }
+
+            ZStack {
+                Table(sortedItems, selection: $selectedItemIds, sortOrder: $sortOrder) {
                 // MARK: Name Column
                 TableColumn("Name", value: \.name) { item in
                     HStack(spacing: 8) {
@@ -193,6 +253,7 @@ public struct FileTableView: View {
             }
         }
     }
+}
 
     // MARK: - Actions & Helpers
 

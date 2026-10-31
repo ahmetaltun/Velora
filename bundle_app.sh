@@ -5,8 +5,9 @@ APP_DIR="Velora.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
+FRAMEWORKS="$CONTENTS/Frameworks"
 
-mkdir -p "$MACOS" "$RESOURCES"
+mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
 # Copy binary (remove old inode first to avoid 'Text file busy' if running)
 rm -f "$MACOS/Velora"
@@ -17,6 +18,23 @@ elif [ -f "swift/.build/debug/Velora" ]; then
 else
     echo "❌ Error: Velora debug binary not found. Please compile with 'swift build --arch arm64' first."
     exit 1
+fi
+
+# Copy Sparkle.framework for auto-updates
+rm -rf "$FRAMEWORKS/Sparkle.framework"
+if [ -d "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" ]; then
+    cp -R "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORKS/"
+elif [ -d "swift/.build/debug/Sparkle.framework" ]; then
+    cp -R "swift/.build/debug/Sparkle.framework" "$FRAMEWORKS/"
+elif [ -d "swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
+    cp -R "swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$FRAMEWORKS/"
+else
+    echo "⚠️ Warning: Sparkle.framework not found in build directory."
+fi
+
+# Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
+if ! otool -l "$MACOS/Velora" | grep -F -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS/Velora" 2>/dev/null || true
 fi
 
 # Copy app icon and image assets if available
@@ -72,6 +90,15 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <!-- Sparkle 2 Auto-Update Configuration -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>u6Ia9qb88dLrJtaXLJ2vGVaq3PQk930yi5IxRduM/Ss=</string>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
 EOF
@@ -96,6 +123,12 @@ if [ -n "$MIN_OS" ]; then
     fi
     echo "✅ Minimum OS verified: macOS $MIN_OS (Sequoia+)."
 fi
+
+# Ad-hoc inside-out code signing for local execution
+if [ -d "$FRAMEWORKS/Sparkle.framework" ]; then
+    codesign --force --deep --sign - "$FRAMEWORKS/Sparkle.framework" 2>/dev/null || true
+fi
+codesign --force --sign - "$APP_DIR" 2>/dev/null || true
 
 touch "$APP_DIR"
 echo "✅ Velora.app created successfully!"

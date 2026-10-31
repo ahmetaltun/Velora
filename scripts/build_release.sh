@@ -14,12 +14,18 @@ set -euo pipefail
 
 RAW_VERSION="0.1.0"
 GENERATE_DMG=false
+GENERATE_ZIP=false
 SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dmg)
             GENERATE_DMG=true
+            GENERATE_ZIP=true
+            shift
+            ;;
+        --zip)
+            GENERATE_ZIP=true
             shift
             ;;
         --sign)
@@ -28,7 +34,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -*)
             echo "❌ Unknown flag: $1"
-            echo "Usage: $0 [version] [--dmg] [--sign <identity>]"
+            echo "Usage: $0 [version] [--dmg] [--zip] [--sign <identity>]"
             exit 1
             ;;
         *)
@@ -67,15 +73,16 @@ echo "🚀 Step 2/7: Compiling Swift frontend (release arm64, macOS 15+)..."
 (cd swift && swift build -c release --arch arm64)
 
 # 3. Assemble Velora.app bundle
-echo "📁 Step 3/7: Assembling Velora.app bundle..."
+echo "📁 Step 3/8: Assembling Velora.app bundle..."
 BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$BUILD_DIR/Velora.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
 # Copy binary
 if [ -f "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Velora" ]; then
@@ -87,6 +94,25 @@ else
     exit 1
 fi
 chmod +x "$MACOS_DIR/Velora"
+
+# Copy Sparkle.framework for auto-updates
+echo "📦 Embedding Sparkle.framework for auto-updates..."
+rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
+if [ -d "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Sparkle.framework" ]; then
+    cp -R "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS_DIR/"
+elif [ -d "$ROOT_DIR/swift/.build/release/Sparkle.framework" ]; then
+    cp -R "$ROOT_DIR/swift/.build/release/Sparkle.framework" "$FRAMEWORKS_DIR/"
+elif [ -d "$ROOT_DIR/swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
+    cp -R "$ROOT_DIR/swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$FRAMEWORKS_DIR/"
+else
+    echo "❌ Error: Sparkle.framework not found in build artifacts."
+    exit 1
+fi
+
+# Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
+if ! otool -l "$MACOS_DIR/Velora" | grep -F -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/Velora" 2>/dev/null || true
+fi
 
 # Copy app icon and image assets if present
 if [ -f "$ROOT_DIR/assets/icons/AppIcon.icns" ]; then
@@ -153,6 +179,15 @@ cat << EOF > "$CONTENTS_DIR/Info.plist"
     <string>Velora needs access to scan and clean project artifacts in Documents.</string>
     <key>NSDownloadsFolderUsageDescription</key>
     <string>Velora needs access to scan and clean downloaded caches.</string>
+    <!-- Sparkle 2 Auto-Update Configuration -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>u6Ia9qb88dLrJtaXLJ2vGVaq3PQk930yi5IxRduM/Ss=</string>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
 EOF
@@ -191,7 +226,21 @@ fi
 
 # 6. Optional Code Signing
 if [ -n "$SIGN_IDENTITY" ]; then
-    echo "🔐 Step 6/7: Code-signing Velora.app with Hardened Runtime..."
+    echo "🔐 Step 6/8: Code-signing Velora.app with Hardened Runtime..."
+    if [ -d "$FRAMEWORKS_DIR/Sparkle.framework" ]; then
+        echo "Signing embedded Sparkle components inside-out..."
+        find "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices" -type d -name "*.xpc" 2>/dev/null | while read -r xpc; do
+            codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$xpc"
+        done
+        if [ -f "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate" ]; then
+            codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate"
+        fi
+        if [ -d "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app" ]; then
+            codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app"
+        fi
+        codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework"
+    fi
+
     codesign --deep --force --options runtime --timestamp \
         --entitlements "$ROOT_DIR/Velora.entitlements" \
         --sign "$SIGN_IDENTITY" \
@@ -199,12 +248,23 @@ if [ -n "$SIGN_IDENTITY" ]; then
     codesign --verify --deep --strict --verbose=2 "$APP_DIR"
     echo "✅ Velora.app signed and verified."
 else
-    echo "ℹ️ Step 6/7: Skipping code signing (no identity provided)."
+    echo "ℹ️ Step 6/8: Skipping code signing (no identity provided)."
 fi
 
-# 7. Optional DMG generation
+# 7. Optional ZIP generation for Sparkle auto-updates
+if [ "$GENERATE_ZIP" = true ]; then
+    echo "📦 Step 7/8: Packaging into distribution ZIP for Sparkle..."
+    ZIP_OUTPUT="$BUILD_DIR/Velora-${VERSION}.zip"
+    rm -f "$ZIP_OUTPUT"
+    ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_OUTPUT"
+    echo "✅ ZIP generated at: $ZIP_OUTPUT"
+else
+    echo "ℹ️ Step 7/8: Skipping ZIP generation (--zip not specified)."
+fi
+
+# 8. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "💿 Step 7/7: Packaging into styled DMG..."
+    echo "💿 Step 8/8: Packaging into styled DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
     BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
@@ -268,12 +328,15 @@ if [ "$GENERATE_DMG" = true ]; then
         echo "✅ DMG signed and verified."
     fi
 else
-    echo "ℹ️ Step 6/6: Skipping DMG generation (--dmg not specified)."
+    echo "ℹ️ Step 8/8: Skipping DMG generation (--dmg not specified)."
 fi
 
 echo "=================================================="
 echo "🎉 Pipeline finished successfully!"
 echo "   Artifact: $APP_DIR"
+if [ "$GENERATE_ZIP" = true ]; then
+    echo "   ZIP:      $BUILD_DIR/Velora-${VERSION}.zip"
+fi
 if [ "$GENERATE_DMG" = true ]; then
     echo "   DMG:      $DMG_OUTPUT"
 fi

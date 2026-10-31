@@ -4,6 +4,7 @@ import VeloraCore
 public struct MainWindowView: View {
     @State public var viewModel = VeloraViewModel()
     @AppStorage("isCleanupInspectorVisible") private var showBloomInspector: Bool = false
+    @FocusState private var isSearchFocused: Bool
 
     public init() {}
 
@@ -30,7 +31,9 @@ public struct MainWindowView: View {
 
                     // Main Workspace Canvas
                     Group {
-                        if viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root" {
+                        if viewModel.isSearchActive {
+                            FileTableView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root" {
                             SmartScanDashboardView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_dev_artifacts" {
                             DevArtifactsHunterView(viewModel: viewModel)
@@ -48,7 +51,7 @@ public struct MainWindowView: View {
                             DuplicateFinderView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_security" {
                             MalwareScannerView(viewModel: viewModel)
-                        } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
+                        } else if viewModel.shouldShowScanUI {
                             SmartScanDashboardView(viewModel: viewModel)
                         } else {
                             FileTableView(viewModel: viewModel)
@@ -133,13 +136,19 @@ public struct MainWindowView: View {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(VeloraTheme.textSecondary)
+                            .foregroundColor(isSearchFocused ? VeloraTheme.accentCyan : VeloraTheme.textSecondary)
 
                         TextField("Search anything (e.g. ext:rs size:>10MB !target)...", text: $viewModel.searchQuery)
                             .textFieldStyle(.plain)
+                            .focused($isSearchFocused)
                             .foregroundColor(VeloraTheme.textPrimary)
                             .onChange(of: viewModel.searchQuery) { _, newValue in
                                 viewModel.performSearch(query: newValue, debounce: true)
+                            }
+                            .onKeyPress(.escape) {
+                                viewModel.clearSearch()
+                                isSearchFocused = false
+                                return .handled
                             }
 
                         if viewModel.isSearching {
@@ -147,13 +156,14 @@ public struct MainWindowView: View {
                                 .controlSize(.small)
                         } else if !viewModel.searchQuery.isEmpty {
                             Button(action: {
-                                viewModel.searchQuery = ""
-                                viewModel.performSearch(query: "")
+                                viewModel.clearSearch()
+                                isSearchFocused = false
                             }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(VeloraTheme.textSecondary)
                             }
                             .buttonStyle(.plain)
+                            .help("Clear search (Esc)")
                         }
                     }
                     .padding(.horizontal, 10)
@@ -162,8 +172,12 @@ public struct MainWindowView: View {
                     .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(VeloraTheme.cardBorder, lineWidth: 1)
+                            .stroke(isSearchFocused ? VeloraTheme.accentCyan.opacity(0.65) : VeloraTheme.cardBorder, lineWidth: 1)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .onTapGesture {
+                        isSearchFocused = true
+                    }
                 }
 
                 // Actions
@@ -193,5 +207,15 @@ public struct MainWindowView: View {
             }
         )
         .background(VeloraTheme.obsidianBase)
+        .background {
+            Button(action: {
+                isSearchFocused = true
+            }) {
+                EmptyView()
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        }
     }
 }

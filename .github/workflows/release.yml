@@ -142,11 +142,19 @@ jobs:
           echo "RESOLVED_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
           # Inside-out signing: sign embedded frameworks and dylibs first
-          if [ -d "build/Velora.app/Contents/Frameworks" ]; then
-            find build/Velora.app/Contents/Frameworks -type f \( -name "*.dylib" -o -name "*.framework" \) 2>/dev/null | while read -r lib; do
-              echo "Signing embedded library: $lib"
-              codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$lib"
+          if [ -d "build/Velora.app/Contents/Frameworks/Sparkle.framework" ]; then
+            echo "Signing embedded Sparkle components inside-out..."
+            find build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices -type d -name "*.xpc" 2>/dev/null | while read -r xpc; do
+              echo "Signing XPC service: $xpc"
+              codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$xpc"
             done
+            if [ -f "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" ]; then
+              codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+            fi
+            if [ -d "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" ]; then
+              codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+            fi
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework"
           fi
 
           # Sign the main application bundle with Hardened Runtime and Entitlements
@@ -277,12 +285,36 @@ jobs:
           spctl -a -t open --context context:primary-signature -v "$DMG_FILE"
           echo "::endgroup::"
 
+      - name: Generate Sparkle Distribution Zip & Appcast
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          echo "::group::Generating Sparkle Appcast & Update Zip"
+          ZIP_FILE="build/Velora-${{ steps.version.outputs.TAG }}.zip"
+          echo "Assembling distribution zip for Sparkle in-place updates..."
+          ditto -c -k --sequesterRsrc --keepParent build/Velora.app "$ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+          GENERATE_APPCAST="./swift/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+          if [ -n "$SPARKLE_KEY" ] && [ -x "$GENERATE_APPCAST" ]; then
+            echo "Running Sparkle generate_appcast with Ed25519 signing key..."
+            echo "$SPARKLE_KEY" | "$GENERATE_APPCAST" \
+              --ed-key-file - \
+              --download-url-prefix "https://github.com/ahmetaltun/Velora/releases/download/${{ steps.version.outputs.TAG }}/" \
+              build/
+            echo "✅ Sparkle appcast.xml generated."
+          else
+            echo "⚠️ SPARKLE_PRIVATE_KEY secret missing or generate_appcast not found: Skipping appcast generation."
+          fi
+          echo "::endgroup::"
+
       - name: Generate Checksums
         run: |
           echo "::group::Generating SHA-256 Checksums"
           cd build
           DMG_BASENAME=$(basename "${{ env.DMG_FILE }}")
-          shasum -a 256 "$DMG_BASENAME" > SHA256SUMS.txt
+          ZIP_BASENAME=$(basename "${{ env.ZIP_FILE }}")
+          shasum -a 256 "$DMG_BASENAME" "$ZIP_BASENAME" > SHA256SUMS.txt
           cat SHA256SUMS.txt
           echo "CHECKSUM_FILE=build/SHA256SUMS.txt" >> "$GITHUB_ENV"
           echo "::endgroup::"
@@ -294,6 +326,8 @@ jobs:
           name: Velora ${{ steps.version.outputs.TAG }}
           files: |
             ${{ env.DMG_FILE }}
+            ${{ env.ZIP_FILE }}
+            build/appcast.xml
             ${{ env.CHECKSUM_FILE }}
           draft: false
           prerelease: false

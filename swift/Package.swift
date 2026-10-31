@@ -10,6 +10,9 @@ let package = Package(
     products: [
         .executable(name: "Velora", targets: ["VeloraApp"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.4")
+    ],
     targets: [
         .target(
             name: "velora_ffiFFI",
@@ -25,7 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "VeloraApp",
-            dependencies: ["VeloraCore"],
+            dependencies: [
+                "VeloraCore",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/VeloraApp",
             swiftSettings: [
                 .swiftLanguageMode(.v5)

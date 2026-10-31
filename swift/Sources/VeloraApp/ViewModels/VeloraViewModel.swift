@@ -103,6 +103,17 @@ public final class VeloraViewModel {
         !hasBinaryIndex && !hasIndexedData
     }
 
+    /// Indicates whether a global search query is currently entered and active.
+    public var isSearchActive: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Clears the active search query and resets search results.
+    public func clearSearch() {
+        searchQuery = ""
+        performSearch(query: "")
+    }
+
     public func cancelScan() {
         cancelScanRequested = true
         isScanning = false

@@ -32,6 +32,14 @@ public struct SidebarView: View {
         viewModel.isScanning || viewModel.isLoadingSnapshot
     }
 
+    private func selectSidebarTool(_ id: String, loader: (() -> Void)? = nil) {
+        if viewModel.isSearchActive {
+            viewModel.clearSearch()
+        }
+        viewModel.activeSidebarId = id
+        loader?()
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
             // App Identity Header
@@ -67,9 +75,9 @@ public struct SidebarView: View {
                 systemImage: "gauge.with.dots.needle.bottom.50percent",
                 accentColor: VeloraTheme.accentCyan,
                 badge: nil,
-                isSelected: viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root"
+                isSelected: (viewModel.activeSidebarId == "tool_smart_scan" || viewModel.activeSidebarId == "volume_root") && !viewModel.isSearchActive
             ) {
-                viewModel.activeSidebarId = "tool_smart_scan"
+                selectSidebarTool("tool_smart_scan")
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
@@ -87,11 +95,12 @@ public struct SidebarView: View {
                         systemImage: "gearshape.2.fill",
                         accentColor: VeloraTheme.accentViolet,
                         badge: formatBadge(viewModel.devArtifactsBytes, isLoading: viewModel.isLoadingDevArtifacts),
-                        isSelected: viewModel.activeSidebarId == "tool_dev_artifacts"
+                        isSelected: viewModel.activeSidebarId == "tool_dev_artifacts" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_dev_artifacts"
-                        if viewModel.devArtifacts.isEmpty {
-                            viewModel.loadDevArtifacts()
+                        selectSidebarTool("tool_dev_artifacts") {
+                            if viewModel.devArtifacts.isEmpty {
+                                viewModel.loadDevArtifacts()
+                            }
                         }
                     }
 
@@ -100,11 +109,12 @@ public struct SidebarView: View {
                         systemImage: "trash.circle.fill",
                         accentColor: VeloraTheme.accentPink,
                         badge: formatBadge(viewModel.appLeftoversBytes, isLoading: viewModel.isLoadingOrphans),
-                        isSelected: viewModel.activeSidebarId == "tool_orphans"
+                        isSelected: viewModel.activeSidebarId == "tool_orphans" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_orphans"
-                        if viewModel.orphanedResidues.isEmpty {
-                            viewModel.loadOrphanedResidues()
+                        selectSidebarTool("tool_orphans") {
+                            if viewModel.orphanedResidues.isEmpty {
+                                viewModel.loadOrphanedResidues()
+                            }
                         }
                     }
 
@@ -113,11 +123,12 @@ public struct SidebarView: View {
                         systemImage: "hammer.circle.fill",
                         accentColor: VeloraTheme.accentEmerald,
                         badge: formatBadge(viewModel.xcodeStorageBytes, isLoading: viewModel.isLoadingXcode),
-                        isSelected: viewModel.activeSidebarId == "tool_xcode"
+                        isSelected: viewModel.activeSidebarId == "tool_xcode" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_xcode"
-                        if viewModel.xcodeSummary == nil {
-                            viewModel.loadXcodeSummary()
+                        selectSidebarTool("tool_xcode") {
+                            if viewModel.xcodeSummary == nil {
+                                viewModel.loadXcodeSummary()
+                            }
                         }
                     }
 
@@ -126,11 +137,12 @@ public struct SidebarView: View {
                         systemImage: "shippingbox.circle.fill",
                         accentColor: VeloraTheme.accentAmber,
                         badge: formatBadge(viewModel.packageCachesBytes, isLoading: viewModel.isLoadingPackageCaches),
-                        isSelected: viewModel.activeSidebarId == "tool_package_caches"
+                        isSelected: viewModel.activeSidebarId == "tool_package_caches" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_package_caches"
-                        if viewModel.packageCacheSummary == nil {
-                            viewModel.loadPackageCaches()
+                        selectSidebarTool("tool_package_caches") {
+                            if viewModel.packageCacheSummary == nil {
+                                viewModel.loadPackageCaches()
+                            }
                         }
                     }
                 }
@@ -141,11 +153,12 @@ public struct SidebarView: View {
                         systemImage: "shield.lefthalf.filled",
                         accentColor: (viewModel.securityThreatsCount ?? 0) > 0 ? VeloraTheme.accentPink : VeloraTheme.accentEmerald,
                         badge: formatThreatBadge(viewModel.securityThreatsCount, isLoading: viewModel.isLoadingSecurity),
-                        isSelected: viewModel.activeSidebarId == "tool_security"
+                        isSelected: viewModel.activeSidebarId == "tool_security" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_security"
-                        if viewModel.securitySummary == nil {
-                            viewModel.loadSecurityScan()
+                        selectSidebarTool("tool_security") {
+                            if viewModel.securitySummary == nil {
+                                viewModel.loadSecurityScan()
+                            }
                         }
                     }
                 }
@@ -156,11 +169,12 @@ public struct SidebarView: View {
                         systemImage: "app.badge.checkmark",
                         accentColor: VeloraTheme.accentBlue,
                         badge: nil,
-                        isSelected: viewModel.activeSidebarId == "tool_apps"
+                        isSelected: viewModel.activeSidebarId == "tool_apps" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_apps"
-                        if viewModel.installedApps.isEmpty {
-                            viewModel.loadInstalledApps()
+                        selectSidebarTool("tool_apps") {
+                            if viewModel.installedApps.isEmpty {
+                                viewModel.loadInstalledApps()
+                            }
                         }
                     }
 
@@ -169,11 +183,12 @@ public struct SidebarView: View {
                         systemImage: "calendar.badge.clock",
                         accentColor: VeloraTheme.accentPink,
                         badge: formatBadge(viewModel.largeOldMatrixBytes, isLoading: viewModel.isLoadingLargeOldMatrix),
-                        isSelected: viewModel.activeSidebarId == "tool_large_old_matrix"
+                        isSelected: viewModel.activeSidebarId == "tool_large_old_matrix" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_large_old_matrix"
-                        if viewModel.largeOldMatrix == nil {
-                            viewModel.loadLargeOldMatrix()
+                        selectSidebarTool("tool_large_old_matrix") {
+                            if viewModel.largeOldMatrix == nil {
+                                viewModel.loadLargeOldMatrix()
+                            }
                         }
                     }
 
@@ -182,17 +197,57 @@ public struct SidebarView: View {
                         systemImage: "doc.on.doc.fill",
                         accentColor: VeloraTheme.accentCyan,
                         badge: formatBadge(viewModel.duplicatesBytes, isLoading: viewModel.isLoadingDuplicates),
-                        isSelected: viewModel.activeSidebarId == "tool_duplicates"
+                        isSelected: viewModel.activeSidebarId == "tool_duplicates" && !viewModel.isSearchActive
                     ) {
-                        viewModel.activeSidebarId = "tool_duplicates"
-                        if viewModel.duplicateSummary == nil {
-                            viewModel.loadDuplicates()
+                        selectSidebarTool("tool_duplicates") {
+                            if viewModel.duplicateSummary == nil {
+                                viewModel.loadDuplicates()
+                            }
                         }
                     }
                 }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+
+            // Footer: Settings & Updates
+            Divider()
+                .overlay(VeloraTheme.cardBorder)
+                .padding(.horizontal, 12)
+
+            HStack {
+                Button {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Settings")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                    }
+                    .foregroundColor(VeloraTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open Settings (⌘,)")
+
+                Spacer()
+
+                Button {
+                    VeloraUpdateManager.shared.checkForUpdates()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Updates")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                    }
+                    .foregroundColor(VeloraTheme.accentViolet)
+                }
+                .buttonStyle(.plain)
+                .help("Check for Updates…")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
         .background(VeloraTheme.obsidianSidebar)
     }
