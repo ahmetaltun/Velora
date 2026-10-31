@@ -7,16 +7,16 @@ set -euo pipefail
 # Usage:
 #   ./scripts/build_release.sh [version] [--dmg] [--sign <identity>]
 # Examples:
-#   ./scripts/build_release.sh 0.2.0
-#   ./scripts/build_release.sh 0.2.0 --dmg
-#   ./scripts/build_release.sh 0.2.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
+#   ./scripts/build_release.sh 0.3.0
+#   ./scripts/build_release.sh 0.3.0 --dmg
+#   ./scripts/build_release.sh 0.3.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
 # -----------------------------------------------------------------------------
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
-RAW_VERSION="${DEFAULT_VERSION:-0.2.0}"
+RAW_VERSION="${DEFAULT_VERSION:-0.3.0}"
 GENERATE_DMG=false
 GENERATE_ZIP=false
 SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"

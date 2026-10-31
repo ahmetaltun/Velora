@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
-VERSION="${1:-${DEFAULT_VERSION:-0.2.0}}"
+VERSION="${1:-${DEFAULT_VERSION:-0.3.0}}"
 
 APP_DIR="Velora.app"
 CONTENTS="$APP_DIR/Contents"
