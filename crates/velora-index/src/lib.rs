@@ -4,11 +4,13 @@ compile_error!("Velora requires macOS 15 (Sequoia) or later on Apple Silicon (AR
 pub mod flags;
 pub mod pool;
 pub mod record;
+pub mod snapshot;
 pub mod table;
 pub mod volume;
 
 pub use flags::FileFlags;
 pub use pool::StringPool;
 pub use record::{DirId, FileId, FileRecord};
+pub use snapshot::{compute_crc32, SnapshotHeader, SNAPSHOT_MAGIC, SNAPSHOT_VERSION};
 pub use table::DirectoryTable;
 pub use volume::{AppMetadataEntry, VolumeIndex};

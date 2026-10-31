@@ -131,6 +131,7 @@ public final class VeloraViewModel {
 
     public func cancelScan() {
         cancelScanRequested = true
+        engine.cancelScan()
         isScanning = false
         scanStatusMessage = "Scan cancelled"
     }
@@ -524,6 +525,12 @@ public final class VeloraViewModel {
     public func drillDownPath(_ path: String) {
         if let child = currentSunburst?.children.first(where: { $0.path == path }) {
             drillDown(sector: child)
+        } else if let subSunburst = engine.computeSunburstForPath(path: path, maxDepth: 3, minAngleDeg: 1.5) {
+            pathStack.append(path)
+            sectorStack.append(subSunburst)
+            currentPath = path
+            currentSunburst = subSunburst
+            refreshTableItems()
         } else {
             pathStack.append(path)
             currentPath = path
@@ -535,9 +542,18 @@ public final class VeloraViewModel {
     public func drillDown(sector: SunburstSectorItem) {
         if sector.isDir && !sector.isGrouped {
             pathStack.append(sector.path)
-            sectorStack.append(sector)
             currentPath = sector.path
-            currentSunburst = sector
+
+            // If the sector was at the outer depth limit and has no precomputed children,
+            // recompute a fresh sub-tree sunburst rooted at this folder from the volume index.
+            if sector.children.isEmpty,
+               let subSunburst = engine.computeSunburstForPath(path: sector.path, maxDepth: 3, minAngleDeg: 1.5) {
+                sectorStack.append(subSunburst)
+                currentSunburst = subSunburst
+            } else {
+                sectorStack.append(sector)
+                currentSunburst = sector
+            }
             refreshTableItems()
         }
     }
@@ -549,6 +565,13 @@ public final class VeloraViewModel {
         if sectorStack.count > 1 {
             sectorStack.removeLast()
             currentSunburst = sectorStack.last
+        } else if let parentPath = pathStack.last {
+            currentSunburst = engine.computeSunburstForPath(path: parentPath, maxDepth: 3, minAngleDeg: 1.5)
+            if let root = currentSunburst {
+                sectorStack = [root]
+            } else {
+                sectorStack = []
+            }
         } else {
             currentSunburst = nil
             sectorStack = []

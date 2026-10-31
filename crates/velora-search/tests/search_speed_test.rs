@@ -170,3 +170,60 @@ fn test_half_million_records_search_latency() {
         report2.duration_micros as f64 / 1000.0
     );
 }
+
+#[test]
+fn test_path_prefix_filtering() {
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (u_off, u_len) = volume.pool.push("Users");
+    let users_dir = volume.dirs.insert(u_off, u_len, None);
+
+    let (a_off, a_len) = volume.pool.push("ahmet");
+    let ahmet_dir = volume.dirs.insert(a_off, a_len, Some(users_dir));
+
+    let (doc_off, doc_len) = volume.pool.push("Documents");
+    let docs_dir = volume.dirs.insert(doc_off, doc_len, Some(ahmet_dir));
+
+    let (dl_off, dl_len) = volume.pool.push("Downloads");
+    let dls_dir = volume.dirs.insert(dl_off, dl_len, Some(ahmet_dir));
+
+    // Add report.pdf in Documents
+    let (r1_off, r1_len) = volume.pool.push("report.pdf");
+    volume.add_file(FileRecord::new(
+        r1_off,
+        r1_len,
+        FileFlags::empty(),
+        docs_dir,
+        1000,
+        1700000000,
+    ));
+
+    // Add report.pdf in Downloads
+    let (r2_off, r2_len) = volume.pool.push("report.pdf");
+    volume.add_file(FileRecord::new(
+        r2_off,
+        r2_len,
+        FileFlags::empty(),
+        dls_dir,
+        2000,
+        1700000000,
+    ));
+
+    // 1. Without path filter: returns both
+    let q_all = SearchQuery::parse("report ext:pdf");
+    let rep_all = SearchEngine::search(&volume, &q_all, None, 10);
+    assert_eq!(rep_all.total_matched, 2);
+
+    // 2. With relative path filter: path:Documents
+    let q_docs = SearchQuery::parse("report path:Documents");
+    let rep_docs = SearchEngine::search(&volume, &q_docs, None, 10);
+    assert_eq!(rep_docs.total_matched, 1);
+    let hit_path = volume.resolve_full_path(&volume.records[rep_docs.hits[0].record_index]);
+    assert_eq!(hit_path, "/Users/ahmet/Documents/report.pdf");
+
+    // 3. With absolute case-insensitive path filter: path:/users/ahmet/downloads
+    let q_dls = SearchQuery::parse("report path:/users/ahmet/downloads");
+    let rep_dls = SearchEngine::search(&volume, &q_dls, None, 10);
+    assert_eq!(rep_dls.total_matched, 1);
+    let hit_path_dl = volume.resolve_full_path(&volume.records[rep_dls.hits[0].record_index]);
+    assert_eq!(hit_path_dl, "/Users/ahmet/Downloads/report.pdf");
+}

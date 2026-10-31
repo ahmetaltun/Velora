@@ -518,6 +518,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func activeFiles()  -> UInt64
     
+    func cancelScan() 
+    
     func clearCollector() 
     
     func collectItem(path: String, sizeBytes: UInt64, isDir: Bool) 
@@ -529,6 +531,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     func computeLargeOldMatrix()  -> LargeOldMatrixSummaryRecord
     
     func computeSunburst(maxDepth: UInt32, minAngleDeg: Float)  -> SunburstSectorItem?
+    
+    func computeSunburstForPath(path: String, maxDepth: UInt32, minAngleDeg: Float)  -> SunburstSectorItem?
     
     func findDevArtifacts(minSizeBytes: UInt64)  -> [DevArtifactRecord]
     
@@ -645,6 +649,12 @@ open func activeFiles() -> UInt64 {
 })
 }
     
+open func cancelScan() {try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_cancel_scan(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
 open func clearCollector() {try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_clear_collector(self.uniffiClonePointer(),$0
     )
@@ -684,6 +694,16 @@ open func computeLargeOldMatrix() -> LargeOldMatrixSummaryRecord {
 open func computeSunburst(maxDepth: UInt32, minAngleDeg: Float) -> SunburstSectorItem? {
     return try!  FfiConverterOptionTypeSunburstSectorItem.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_compute_sunburst(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(maxDepth),
+        FfiConverterFloat.lower(minAngleDeg),$0
+    )
+})
+}
+    
+open func computeSunburstForPath(path: String, maxDepth: UInt32, minAngleDeg: Float) -> SunburstSectorItem? {
+    return try!  FfiConverterOptionTypeSunburstSectorItem.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_compute_sunburst_for_path(self.uniffiClonePointer(),
+        FfiConverterString.lower(path),
         FfiConverterUInt32.lower(maxDepth),
         FfiConverterFloat.lower(minAngleDeg),$0
     )
@@ -3590,6 +3610,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_active_files() != 54765) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_cancel_scan() != 58278) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_clear_collector() != 39824) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3606,6 +3629,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_compute_sunburst() != 36924) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_compute_sunburst_for_path() != 59613) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_find_dev_artifacts() != 2838) {

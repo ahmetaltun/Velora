@@ -258,5 +258,10 @@ public struct MainWindowView: View {
             .opacity(0)
             .frame(width: 0, height: 0)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .veloraTriggerRescan)) { _ in
+            if !viewModel.isInteractionDisabled && !viewModel.isScanning {
+                viewModel.scanCurrentPath()
+            }
+        }
     }
 }

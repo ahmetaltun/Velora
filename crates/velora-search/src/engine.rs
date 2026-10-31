@@ -29,6 +29,12 @@ impl SearchEngine {
     ) -> SearchReport {
         let start = Instant::now();
 
+        let path_filter: Option<(bool, String)> = query.path_prefix.as_ref().map(|p| {
+            let trimmed = p.trim();
+            let is_absolute = trimmed.starts_with('/');
+            (is_absolute, trimmed.to_ascii_lowercase())
+        });
+
         let evaluate_record = |idx: usize, record: &FileRecord| -> Option<SearchHit> {
             if record.is_deleted() {
                 return None;
@@ -66,6 +72,20 @@ impl SearchEngine {
             // Negated terms
             for neg in &query.negated_terms {
                 if contains_ignore_case_ascii(file_name, neg) {
+                    return None;
+                }
+            }
+
+            // Path prefix filter (supports absolute "/Users/..." and relative "Documents" paths)
+            if let Some((is_absolute, ref prefix_lower)) = path_filter {
+                let full_path = volume.resolve_full_path(record);
+                let full_path_lower = full_path.to_ascii_lowercase();
+                let matches = if is_absolute {
+                    full_path_lower.starts_with(prefix_lower)
+                } else {
+                    full_path_lower.contains(prefix_lower)
+                };
+                if !matches {
                     return None;
                 }
             }

@@ -145,3 +145,101 @@ fn test_mark_deleted_batch() {
     assert!(!volume.records[1].is_deleted());
     assert!(volume.records[2].is_deleted());
 }
+
+#[test]
+fn test_snapshot_corrupted_payload_detection() {
+    let temp_dir = std::env::temp_dir();
+    let snapshot_file = temp_dir.join(format!("test_corrupt_{}.vcat", std::process::id()));
+
+    let mut volume = VolumeIndex::new("CorruptTest", "/");
+    let (d_off, d_len) = volume.pool.push("Data");
+    let dir = volume.dirs.insert(d_off, d_len, None);
+    let (f_off, f_len) = volume.pool.push("data.bin");
+    volume.add_file(FileRecord::new(
+        f_off,
+        f_len,
+        FileFlags::empty(),
+        dir,
+        1024,
+        1700000000,
+    ));
+
+    volume.save_snapshot(&snapshot_file).unwrap();
+
+    // Read bytes and flip one byte in the payload area (after 28-byte header)
+    let mut bytes = std::fs::read(&snapshot_file).unwrap();
+    assert!(bytes.len() > 30);
+    bytes[29] ^= 0xFF; // Corrupt payload byte
+    std::fs::write(&snapshot_file, &bytes).unwrap();
+
+    // Loading must fail with checksum mismatch
+    let load_res = VolumeIndex::load_snapshot(&snapshot_file);
+    assert!(load_res.is_err(), "Corrupted snapshot must fail to load");
+    let err = load_res.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("checksum mismatch"));
+
+    let _ = std::fs::remove_file(snapshot_file);
+}
+
+#[test]
+fn test_snapshot_invalid_magic_header_rejection() {
+    let temp_dir = std::env::temp_dir();
+    let bad_file = temp_dir.join(format!("test_bad_magic_{}.vcat", std::process::id()));
+
+    std::fs::write(&bad_file, b"NOT_A_VALID_SNAPSHOT_HEADER_DATA_123456").unwrap();
+
+    let load_res = VolumeIndex::load_snapshot(&bad_file);
+    assert!(load_res.is_err(), "Invalid magic header must be rejected");
+    let err = load_res.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("VELORASN"));
+
+    let _ = std::fs::remove_file(bad_file);
+}
+
+#[test]
+fn test_snapshot_unsupported_version_rejection() {
+    let temp_dir = std::env::temp_dir();
+    let version_file = temp_dir.join(format!("test_bad_version_{}.vcat", std::process::id()));
+
+    let mut buf = Vec::new();
+    buf.extend_from_slice(b"VELORASN"); // Valid magic
+    buf.extend_from_slice(&999u32.to_le_bytes()); // Unsupported version 999
+    buf.extend_from_slice(&0u32.to_le_bytes()); // Flags
+    buf.extend_from_slice(&0u32.to_le_bytes()); // Checksum
+    buf.extend_from_slice(&0u64.to_le_bytes()); // Payload len
+
+    std::fs::write(&version_file, &buf).unwrap();
+
+    let load_res = VolumeIndex::load_snapshot(&version_file);
+    assert!(load_res.is_err(), "Unsupported version must be rejected");
+    let err = load_res.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains("version 999"));
+
+    let _ = std::fs::remove_file(version_file);
+}
+
+#[test]
+fn test_snapshot_truncated_payload_detection() {
+    let temp_dir = std::env::temp_dir();
+    let trunc_file = temp_dir.join(format!("test_trunc_{}.vcat", std::process::id()));
+
+    let mut buf = Vec::new();
+    buf.extend_from_slice(b"VELORASN"); // Valid magic
+    buf.extend_from_slice(&1u32.to_le_bytes()); // Valid version 1
+    buf.extend_from_slice(&0u32.to_le_bytes()); // Flags
+    buf.extend_from_slice(&12345u32.to_le_bytes()); // Checksum
+    buf.extend_from_slice(&100u64.to_le_bytes()); // Claims 100 bytes of payload
+    buf.extend_from_slice(b"only_10_by"); // Only 10 bytes provided
+
+    std::fs::write(&trunc_file, &buf).unwrap();
+
+    let load_res = VolumeIndex::load_snapshot(&trunc_file);
+    assert!(load_res.is_err(), "Truncated snapshot must be rejected");
+    let err = load_res.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+
+    let _ = std::fs::remove_file(trunc_file);
+}

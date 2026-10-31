@@ -83,3 +83,58 @@ fn test_scan_directory_with_progress() {
 
     let _ = fs::remove_dir_all(&temp_root);
 }
+
+#[test]
+fn test_scan_cancellation() {
+    use std::sync::atomic::AtomicBool;
+    use velora_scanner::scan_directories_with_progress_and_cancel;
+
+    let temp_root = std::env::temp_dir().join("velora_test_scanner_cancel_fixture");
+    let _ = fs::remove_dir_all(&temp_root);
+    fs::create_dir_all(temp_root.join("sub")).unwrap();
+    fs::write(temp_root.join("sub/file.txt"), "hello").unwrap();
+
+    let mut volume = VolumeIndex::new("Test Scanner Cancel", temp_root.to_str().unwrap());
+    let cancel_token = AtomicBool::new(true); // Pre-cancelled
+
+    let res = scan_directories_with_progress_and_cancel(&[&temp_root], &mut volume, None, Some(&cancel_token));
+    assert!(res.is_err(), "Pre-cancelled scan must abort");
+    let err = res.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::Interrupted);
+
+    let _ = fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn test_parallel_scan_multi_branch() {
+    let temp_root = std::env::temp_dir().join("velora_test_scanner_parallel_fixture");
+    let _ = fs::remove_dir_all(&temp_root);
+
+    // Create 4 distinct branches to trigger Rayon parallel work distribution
+    for i in 1..=4 {
+        let branch = temp_root.join(format!("branch_{}", i));
+        let nested = branch.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(branch.join("file_a.txt"), "content a").unwrap();
+        fs::write(nested.join("file_b.txt"), "content b").unwrap();
+    }
+    // Also root file
+    fs::write(temp_root.join("root.txt"), "root").unwrap();
+
+    let mut volume = VolumeIndex::new("Test Parallel", temp_root.to_str().unwrap());
+    let res = scan_directory(&temp_root, &mut volume);
+    assert!(res.is_ok());
+
+    // 4 branch dirs + 4 nested dirs = 8 dirs
+    // 4 file_a + 4 file_b + 1 root.txt = 9 files
+    // Total records = 17
+    assert_eq!(volume.total_files(), 17);
+
+    // Verify paths across all branches resolve correctly
+    for record in &volume.records {
+        let full = volume.resolve_full_path(record);
+        assert!(full.starts_with(temp_root.to_str().unwrap()));
+    }
+
+    let _ = fs::remove_dir_all(&temp_root);
+}

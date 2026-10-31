@@ -1,7 +1,9 @@
 use crate::pool::StringPool;
 use crate::record::{DirId, FileId, FileRecord};
+use crate::snapshot::{compute_crc32, SnapshotHeader, SNAPSHOT_MAGIC, SNAPSHOT_VERSION};
 use crate::table::DirectoryTable;
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,20 +157,161 @@ impl VolumeIndex {
         path
     }
 
-    /// Saves binary compressed snapshot of the entire volume index to disk.
+    /// Saves binary compressed snapshot of the entire volume index to disk atomically.
+    ///
+    /// Guardrails:
+    /// 1. Writes to a unique hidden temporary file in the same parent directory to avoid race conditions and EXDEV.
+    /// 2. Prepends a 28-byte magic container header (`VELORASN`), schema version, and payload CRC-32 checksum.
+    /// 3. Flushes and syncs data to disk before performing an atomic `rename` swap.
+    /// 4. Cleans up temporary file on serialization or I/O failure.
     pub fn save_snapshot(&self, dest: &Path) -> std::io::Result<()> {
-        let bytes = bincode::serialize(self)
+        let parent = dest.parent().unwrap_or_else(|| Path::new("."));
+        let file_name = dest
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("catalog");
+
+        std::fs::create_dir_all(parent)?;
+
+        // Unique temporary filename to prevent collisions during concurrent scans
+        let unique_suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let temp_path = parent.join(format!(
+            ".{}.{}_{}.tmp",
+            file_name,
+            std::process::id(),
+            unique_suffix
+        ));
+
+        // Serialize index payload
+        let payload = bincode::serialize(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        std::fs::write(dest, bytes)
+        let checksum = compute_crc32(&payload);
+
+        let header = SnapshotHeader {
+            magic: SNAPSHOT_MAGIC,
+            version: SNAPSHOT_VERSION,
+            flags: 0,
+            checksum,
+            payload_len: payload.len() as u64,
+        };
+
+        // Write header + payload to temp file
+        let write_result = (|| -> std::io::Result<()> {
+            let mut file = std::fs::File::create(&temp_path)?;
+            header.write_to(&mut file)?;
+            file.write_all(&payload)?;
+            file.sync_data()?;
+            Ok(())
+        })();
+
+        if let Err(err) = write_result {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(err);
+        }
+
+        // Atomically replace destination snapshot
+        if let Err(err) = std::fs::rename(&temp_path, dest) {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(err);
+        }
+
+        Ok(())
     }
 
     /// Loads an offline volume catalog snapshot from disk.
+    ///
+    /// Validates the `VELORASN` magic header, schema version, and IEEE CRC-32 payload checksum
+    /// before deserializing into memory to prevent corrupt or partial loads.
     pub fn load_snapshot(src: &Path) -> std::io::Result<Self> {
-        let bytes = std::fs::read(src)?;
-        let mut index: Self = bincode::deserialize(&bytes)
+        let mut file = std::fs::File::open(src)?;
+        let header = SnapshotHeader::read_from(&mut file)?;
+
+        let mut payload = Vec::with_capacity(header.payload_len as usize);
+        file.read_to_end(&mut payload)?;
+
+        if payload.len() as u64 != header.payload_len {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "Snapshot payload truncated: expected {} bytes, read {}",
+                    header.payload_len,
+                    payload.len()
+                ),
+            ));
+        }
+
+        let actual_checksum = compute_crc32(&payload);
+        if actual_checksum != header.checksum {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Snapshot checksum mismatch: corrupted data (computed 0x{:08X}, expected 0x{:08X})",
+                    actual_checksum, header.checksum
+                ),
+            ));
+        }
+
+        let mut index: Self = bincode::deserialize(&payload)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         index.is_online = false; // Loaded from offline snapshot
         Ok(index)
+    }
+
+    /// Merges an independently scanned subtree volume index into this volume index.
+    ///
+    /// `sub`: The partial index scanned for a subdirectory branch.
+    /// `sub_root_in_self`: The `DirId` in `self` corresponding to the root directory of `sub`.
+    pub fn merge_subtree(&mut self, sub: VolumeIndex, sub_root_in_self: DirId) {
+        if sub.dirs.is_empty() {
+            return;
+        }
+
+        // Mapping from sub's DirId -> self's DirId
+        let mut dir_map: Vec<DirId> = Vec::with_capacity(sub.dirs.len());
+        // Sub's root (DirId(0)) maps to sub_root_in_self
+        dir_map.push(sub_root_in_self);
+
+        // Remap directories (from index 1 onward, skipping sub's root)
+        for i in 1..sub.dirs.len() {
+            if let Some(entry) = sub.dirs.get(DirId(i as u32)) {
+                let name = sub.pool.get(entry.name_offset, entry.name_len);
+                let (new_off, new_len) = self.pool.push(name);
+                let new_parent = entry.parent.map(|p| {
+                    let p_idx = p.0 as usize;
+                    if p_idx < dir_map.len() {
+                        dir_map[p_idx]
+                    } else {
+                        sub_root_in_self
+                    }
+                });
+                let new_id = self.dirs.insert(new_off, new_len, new_parent);
+                dir_map.push(new_id);
+            }
+        }
+
+        // Remap and append file records
+        self.records.reserve(sub.records.len());
+        for rec in &sub.records {
+            let name = sub.pool.get(rec.name_offset, rec.name_len);
+            let (new_off, new_len) = self.pool.push(name);
+            let p_idx = rec.parent_dir.0 as usize;
+            let new_parent = if p_idx < dir_map.len() {
+                dir_map[p_idx]
+            } else {
+                sub_root_in_self
+            };
+            self.records.push(FileRecord::new(
+                new_off,
+                new_len,
+                rec.flags,
+                new_parent,
+                rec.size,
+                rec.modified_secs,
+            ));
+        }
     }
 
     /// Approximate heap memory consumed in bytes.

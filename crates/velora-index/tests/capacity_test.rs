@@ -65,3 +65,38 @@ fn test_one_million_records_memory_footprint() {
     let path = volume.resolve_full_path(first_record);
     assert_eq!(path, "/Users/ahmet/Documents/financial_report_2026_q3_final_draft.pdf");
 }
+
+#[test]
+fn test_merge_subtree() {
+    let mut main_vol = VolumeIndex::new("Macintosh HD", "/");
+    let (root_off, root_len) = main_vol.pool.push("Users");
+    let root_dir = main_vol.dirs.insert(root_off, root_len, None);
+
+    let (sub_off, sub_len) = main_vol.pool.push("developer");
+    let sub_dir = main_vol.dirs.insert(sub_off, sub_len, Some(root_dir));
+
+    // Create partial subtree index
+    let mut sub_vol = VolumeIndex::new("", "");
+    let (sroot_off, sroot_len) = sub_vol.pool.push("developer");
+    let sub_root = sub_vol.dirs.insert(sroot_off, sroot_len, None);
+
+    let (nested_off, nested_len) = sub_vol.pool.push("Projects");
+    let nested_dir = sub_vol.dirs.insert(nested_off, nested_len, Some(sub_root));
+
+    let (file_off, file_len) = sub_vol.pool.push("main.rs");
+    sub_vol.add_file(FileRecord::new(
+        file_off,
+        file_len,
+        FileFlags::empty(),
+        nested_dir,
+        1024,
+        1700000000,
+    ));
+
+    main_vol.merge_subtree(sub_vol, sub_dir);
+
+    assert_eq!(main_vol.total_files(), 1);
+    let rec = &main_vol.records[0];
+    assert_eq!(main_vol.get_file_name(rec), "main.rs");
+    assert_eq!(main_vol.resolve_full_path(rec), "/Users/developer/Projects/main.rs");
+}

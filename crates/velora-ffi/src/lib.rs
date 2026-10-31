@@ -26,6 +26,7 @@ fn verify_macos_version() {
 
 use parking_lot::RwLock;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use velora_analyzer::{Analyzer, CategoryKind, SunburstSector};
 use velora_index::{DirId, VolumeIndex};
@@ -285,6 +286,7 @@ impl<'a> velora_scanner::ProgressListener for CallbackBridge<'a> {
 pub struct VeloraEngine {
     volume: RwLock<VolumeIndex>,
     collector: RwLock<CollectorTray>,
+    cancel_token: Arc<AtomicBool>,
 }
 
 #[uniffi::export]
@@ -297,6 +299,7 @@ impl VeloraEngine {
         Arc::new(Self {
             volume: RwLock::new(VolumeIndex::new("Macintosh HD", "/")),
             collector: RwLock::new(CollectorTray::new()),
+            cancel_token: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -306,16 +309,28 @@ impl VeloraEngine {
         volume_name: String,
         callback: Option<Box<dyn ScanProgressCallback>>,
     ) -> bool {
+        self.cancel_token.store(false, Ordering::SeqCst);
         let mut vol = VolumeIndex::new(volume_name, &mount_point);
         let path = Path::new(&mount_point);
         let roots: Vec<&Path> = vec![path];
 
+        let cancel = self.cancel_token.clone();
         let res = match callback.as_ref() {
             Some(cb) => {
                 let bridge = CallbackBridge { callback: cb.as_ref() };
-                velora_scanner::scan_directories_with_progress(&roots, &mut vol, Some(&bridge))
+                velora_scanner::scan_directories_with_progress_and_cancel(
+                    &roots,
+                    &mut vol,
+                    Some(&bridge),
+                    Some(&cancel),
+                )
             }
-            None => velora_scanner::scan_directories_with_progress(&roots, &mut vol, None),
+            None => velora_scanner::scan_directories_with_progress_and_cancel(
+                &roots,
+                &mut vol,
+                None,
+                Some(&cancel),
+            ),
         };
 
         if res.is_ok() {
@@ -325,6 +340,10 @@ impl VeloraEngine {
         } else {
             false
         }
+    }
+
+    pub fn cancel_scan(&self) {
+        self.cancel_token.store(true, Ordering::SeqCst);
     }
 
     pub fn total_files(&self) -> u64 {
@@ -360,6 +379,19 @@ impl VeloraEngine {
     pub fn compute_sunburst(&self, max_depth: u32, min_angle_deg: f32) -> Option<SunburstSectorItem> {
         let vol = self.volume.read();
         let sector = Analyzer::analyze(&vol, DirId(0), max_depth, min_angle_deg)?;
+        Some(sector.into())
+    }
+
+    pub fn compute_sunburst_for_path(
+        &self,
+        path: String,
+        max_depth: u32,
+        min_angle_deg: f32,
+    ) -> Option<SunburstSectorItem> {
+        let vol = self.volume.read();
+        let target = Path::new(&path);
+        let dir_id = vol.find_dir_by_path(target).unwrap_or(DirId(0));
+        let sector = Analyzer::analyze(&vol, dir_id, max_depth, min_angle_deg)?;
         Some(sector.into())
     }
 

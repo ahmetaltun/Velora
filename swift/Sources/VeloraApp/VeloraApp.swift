@@ -61,6 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+extension Notification.Name {
+    public static let veloraTriggerRescan = Notification.Name("velora_trigger_rescan")
+}
+
 @main
 struct VeloraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -91,7 +95,7 @@ struct VeloraApp: App {
             }
             CommandGroup(replacing: .newItem) {
                 Button("Rescan Folder") {
-                    // Rescan trigger
+                    NotificationCenter.default.post(name: .veloraTriggerRescan, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }

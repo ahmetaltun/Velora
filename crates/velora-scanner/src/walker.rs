@@ -1,8 +1,11 @@
+use rayon::prelude::*;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "macos")]
 use std::os::macos::fs::MetadataExt as MacMetadataExt;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Instant;
 use velora_index::{DirId, FileFlags, FileRecord, VolumeIndex};
 
@@ -17,38 +20,51 @@ pub trait ProgressListener: Send + Sync {
 
 struct ScanContext<'a> {
     listener: Option<&'a dyn ProgressListener>,
-    files_scanned: u64,
-    bytes_scanned: u64,
-    last_reported_time: Instant,
+    cancel_token: Option<&'a AtomicBool>,
+    files_scanned: AtomicU64,
+    bytes_scanned: AtomicU64,
+    last_reported_time: Mutex<Instant>,
 }
 
 impl<'a> ScanContext<'a> {
-    fn new(listener: Option<&'a dyn ProgressListener>) -> Self {
+    fn new(listener: Option<&'a dyn ProgressListener>, cancel_token: Option<&'a AtomicBool>) -> Self {
         Self {
             listener,
-            files_scanned: 0,
-            bytes_scanned: 0,
-            last_reported_time: Instant::now(),
+            cancel_token,
+            files_scanned: AtomicU64::new(0),
+            bytes_scanned: AtomicU64::new(0),
+            last_reported_time: Mutex::new(Instant::now()),
         }
     }
 
     #[inline]
-    fn record_entry(&mut self, size: u64, current_dir_path: &Path) {
-        self.files_scanned += 1;
-        self.bytes_scanned += size;
+    fn is_cancelled(&self) -> bool {
+        if let Some(token) = self.cancel_token {
+            token.load(Ordering::Relaxed)
+        } else {
+            false
+        }
+    }
+
+    #[inline]
+    fn record_entry(&self, size: u64, current_dir_path: &Path) {
+        let count = self.files_scanned.fetch_add(1, Ordering::Relaxed) + 1;
+        let bytes = self.bytes_scanned.fetch_add(size, Ordering::Relaxed) + size;
 
         // Throttle check: test every 512 files via bitmask and emit if at least 66ms (~15Hz) have elapsed
-        if (self.files_scanned & 511) == 0
-            && self.last_reported_time.elapsed().as_millis() >= 66
-        {
-            if let Some(listener) = self.listener {
-                listener.on_progress(
-                    &current_dir_path.to_string_lossy(),
-                    self.files_scanned,
-                    self.bytes_scanned,
-                );
+        if (count & 511) == 0 {
+            if let Ok(mut last) = self.last_reported_time.try_lock() {
+                if last.elapsed().as_millis() >= 66 {
+                    if let Some(listener) = self.listener {
+                        listener.on_progress(
+                            &current_dir_path.to_string_lossy(),
+                            count,
+                            bytes,
+                        );
+                    }
+                    *last = Instant::now();
+                }
             }
-            self.last_reported_time = Instant::now();
         }
     }
 
@@ -56,8 +72,8 @@ impl<'a> ScanContext<'a> {
         if let Some(listener) = self.listener {
             listener.on_progress(
                 &root_path.to_string_lossy(),
-                self.files_scanned,
-                self.bytes_scanned,
+                self.files_scanned.load(Ordering::Relaxed),
+                self.bytes_scanned.load(Ordering::Relaxed),
             );
         }
     }
@@ -74,7 +90,7 @@ pub fn scan_directory_with_progress(
     volume: &mut VolumeIndex,
     listener: Option<&dyn ProgressListener>,
 ) -> std::io::Result<()> {
-    scan_directories_with_progress(&[root_path], volume, listener)
+    scan_directories_with_progress_and_cancel(&[root_path], volume, listener, None)
 }
 
 /// Scans multiple root paths recursively into a single VolumeIndex, reporting progress through an optional ProgressListener.
@@ -83,7 +99,18 @@ pub fn scan_directories_with_progress(
     volume: &mut VolumeIndex,
     listener: Option<&dyn ProgressListener>,
 ) -> std::io::Result<()> {
-    let mut context = ScanContext::new(listener);
+    scan_directories_with_progress_and_cancel(roots, volume, listener, None)
+}
+
+/// Scans multiple root paths recursively into a single VolumeIndex using a parallel Rayon crawler,
+/// reporting progress through an optional ProgressListener and cooperatively checking an optional cancellation token.
+pub fn scan_directories_with_progress_and_cancel(
+    roots: &[&Path],
+    volume: &mut VolumeIndex,
+    listener: Option<&dyn ProgressListener>,
+    cancel_token: Option<&AtomicBool>,
+) -> std::io::Result<()> {
+    let context = ScanContext::new(listener, cancel_token);
     for &root_path in roots {
         if !root_path.exists() {
             continue;
@@ -91,7 +118,7 @@ pub fn scan_directories_with_progress(
         let root_str = root_path.to_string_lossy();
         let (offset, len) = volume.pool.push(&root_str);
         let root_dir_id = volume.dirs.insert(offset, len, None);
-        let _ = scan_dir_recursive(root_path, root_path, root_dir_id, volume, &mut context);
+        scan_single_root(root_path, root_dir_id, volume, &context)?;
     }
     if let Some(&first) = roots.first() {
         context.finish(first);
@@ -121,13 +148,157 @@ fn should_skip_directory(path: &Path, root_path: &Path) -> bool {
     false
 }
 
+fn scan_single_root(
+    root_path: &Path,
+    root_dir_id: DirId,
+    volume: &mut VolumeIndex,
+    context: &ScanContext,
+) -> std::io::Result<()> {
+    if context.is_cancelled() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Interrupted,
+            "Scan cancelled by user",
+        ));
+    }
+
+    let entries = match fs::read_dir(root_path) {
+        Ok(e) => e,
+        Err(_) => return Ok(()),
+    };
+
+    let mut direct_subdirs = Vec::new();
+
+    // 1. Process root's immediate contents
+    for entry_res in entries {
+        if context.is_cancelled() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Scan cancelled by user",
+            ));
+        }
+
+        let entry = match entry_res {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+
+        let file_name_os = entry.file_name();
+        let file_name = file_name_os.to_string_lossy();
+
+        let mut flags = FileFlags::empty();
+        if file_name.starts_with('.') {
+            flags.insert(FileFlags::IS_HIDDEN);
+        }
+
+        let is_symlink = file_type.is_symlink();
+        let meta = entry.metadata().ok();
+
+        #[cfg(target_os = "macos")]
+        if let Some(ref m) = meta {
+            if (m.st_flags() & SF_DATALESS) != 0 {
+                flags.insert(FileFlags::IS_DATALESS);
+            }
+        }
+
+        if file_type.is_dir() {
+            let entry_path = entry.path();
+            if should_skip_directory(&entry_path, root_path) {
+                continue;
+            }
+
+            flags.insert(FileFlags::IS_DIRECTORY);
+            let (name_offset, name_len) = volume.pool.push(&file_name);
+            let dir_id = volume.dirs.insert(name_offset, name_len, Some(root_dir_id));
+
+            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+
+            volume.add_file(FileRecord::new(
+                name_offset,
+                name_len,
+                flags,
+                root_dir_id,
+                0,
+                modified,
+            ));
+
+            context.record_entry(0, root_path);
+            direct_subdirs.push((entry_path, dir_id));
+        } else {
+            let size = meta.as_ref().map(|m| m.size()).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+
+            if is_symlink {
+                flags.insert(FileFlags::IS_SYMLINK);
+            }
+
+            let (name_offset, name_len) = volume.pool.push(&file_name);
+            volume.add_file(FileRecord::new(
+                name_offset,
+                name_len,
+                flags,
+                root_dir_id,
+                size,
+                modified,
+            ));
+
+            context.record_entry(size, root_path);
+        }
+    }
+
+    if direct_subdirs.is_empty() {
+        return Ok(());
+    }
+
+    // 2. Parallelize branch traversal across Rayon thread pool
+    // Each branch crawler operates independently on its own local VolumeIndex with zero locks
+    let branch_results: Result<Vec<VolumeIndex>, std::io::Error> = direct_subdirs
+        .par_iter()
+        .map(|(subdir_path, _)| {
+            if context.is_cancelled() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Scan cancelled by user",
+                ));
+            }
+
+            let mut local_vol = VolumeIndex::new("", "");
+            let (s_off, s_len) = local_vol.pool.push(&subdir_path.to_string_lossy());
+            let local_root = local_vol.dirs.insert(s_off, s_len, None);
+
+            scan_dir_recursive(subdir_path, root_path, local_root, &mut local_vol, context)?;
+            Ok(local_vol)
+        })
+        .collect();
+
+    let local_volumes = branch_results?;
+
+    // 3. Fast lock-free sequential merge of all sub-branches into main volume index
+    for ((_, subdir_id), local_vol) in direct_subdirs.into_iter().zip(local_volumes) {
+        volume.merge_subtree(local_vol, subdir_id);
+    }
+
+    Ok(())
+}
+
 fn scan_dir_recursive(
     path: &Path,
     root_path: &Path,
     current_dir: DirId,
     volume: &mut VolumeIndex,
-    context: &mut ScanContext,
+    context: &ScanContext,
 ) -> std::io::Result<()> {
+    if context.is_cancelled() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Interrupted,
+            "Scan cancelled by user",
+        ));
+    }
+
     let entries = match fs::read_dir(path) {
         Ok(e) => e,
         Err(_) => return Ok(()), // Skip unreadable/permission-denied folders safely
@@ -136,6 +307,13 @@ fn scan_dir_recursive(
     let mut subdirs = Vec::new();
 
     for entry_res in entries {
+        if context.is_cancelled() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Scan cancelled by user",
+            ));
+        }
+
         let entry = match entry_res {
             Ok(e) => e,
             Err(_) => continue,
@@ -211,7 +389,7 @@ fn scan_dir_recursive(
 
     // Recurse into subdirectories
     for (subdir_path, subdir_id) in subdirs {
-        let _ = scan_dir_recursive(&subdir_path, root_path, subdir_id, volume, context);
+        scan_dir_recursive(&subdir_path, root_path, subdir_id, volume, context)?;
     }
 
     Ok(())
