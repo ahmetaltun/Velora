@@ -37,7 +37,7 @@ jobs:
           fi
           echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
           echo "CLEAN_VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "🏷️ Target Release Tag: $TAG (Clean version: ${TAG#v})"
+          echo "[INFO] Target Release Tag: $TAG (Clean version: ${TAG#v})"
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -51,7 +51,7 @@ jobs:
 
       - name: Run Workspace Tests (Quality Gate, Apple Silicon arm64)
         run: |
-          echo "🧪 Running workspace test suites before building release (aarch64-apple-darwin)..."
+          echo "[INFO] Running workspace test suites before building release (aarch64-apple-darwin)..."
           cargo test --workspace --target aarch64-apple-darwin
 
       - name: Build Release App Bundle
@@ -69,18 +69,18 @@ jobs:
 
           if [ -n "$CERT" ]; then
             echo "SIGNING_ENABLED=true" >> "$GITHUB_OUTPUT"
-            echo "✅ APPLE_CERTIFICATE secret detected: Code signing enabled."
+            echo "[OK] APPLE_CERTIFICATE secret detected: Code signing enabled."
           else
             echo "SIGNING_ENABLED=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ APPLE_CERTIFICATE missing: Unsigned build mode."
+            echo "[WARN] APPLE_CERTIFICATE missing: Unsigned build mode."
           fi
 
           if [ -n "$CERT" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_PWD" ] && [ -n "$TEAM_ID" ]; then
             echo "NOTARIZATION_ENABLED=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Notarization credentials detected (Apple ID + Team ID): Notarization enabled."
+            echo "[OK] Notarization credentials detected (Apple ID + Team ID): Notarization enabled."
           else
             echo "NOTARIZATION_ENABLED=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ Incomplete notarization credentials: Skipping Apple Notary submission."
+            echo "[WARN] Incomplete notarization credentials: Skipping Apple Notary submission."
           fi
 
       - name: Install Apple Certificate into Disposable Keychain
@@ -112,7 +112,7 @@ jobs:
           security default-keychain -s "$KEYCHAIN_PATH"
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
-          echo "✅ Keychain created and certificate imported successfully."
+          echo "[OK] Keychain created and certificate imported successfully."
           echo "::endgroup::"
 
       - name: Code Sign Velora.app with Hardened Runtime
@@ -120,57 +120,157 @@ jobs:
         env:
           SIGNING_IDENTITY_INPUT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          echo "::group::Signing Velora.app"
+          echo "::group::Signing Velora.app (Inside-Out)"
           IDENTITY="${SIGNING_IDENTITY_INPUT:-}"
           if [ -z "$IDENTITY" ]; then
-            echo "Auto-detecting Developer ID Application identity from keychain..."
+            echo "[INFO] Auto-detecting Developer ID Application identity from keychain..."
             IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -m 1 "Developer ID Application:" | sed -E 's/.*"([^"]+)".*/\1/' || true)
           fi
 
           if [ -z "$IDENTITY" ]; then
-            echo "Fallback to first available codesigning identity..."
+            echo "[INFO] Fallback to first available codesigning identity..."
             IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -m 1 '^[[:space:]]*[0-9]\+)' | sed -E 's/.*"([^"]+)".*/\1/' || true)
           fi
 
           if [ -z "$IDENTITY" ]; then
-            echo "❌ Error: Could not locate a valid code signing identity in keychain."
+            echo "[ERROR] Could not locate a valid code signing identity in keychain."
             security find-identity -v "$KEYCHAIN_PATH"
             exit 1
           fi
 
-          echo "Using Signing Identity: $IDENTITY"
+          echo "[INFO] Using Signing Identity: $IDENTITY"
           echo "RESOLVED_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
-          # Inside-out signing: sign embedded frameworks and dylibs first
+          # Inside-out signing (Apple TN3127): Sign nested frameworks, XPC services, and helpers first
           if [ -d "build/Velora.app/Contents/Frameworks/Sparkle.framework" ]; then
-            echo "Signing embedded Sparkle components inside-out..."
+            echo "[INFO] Signing embedded Sparkle components inside-out..."
             find build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices -type d -name "*.xpc" 2>/dev/null | while read -r xpc; do
-              echo "Signing XPC service: $xpc"
+              echo "[INFO] Signing XPC service: $xpc"
               codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$xpc"
             done
             if [ -f "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" ]; then
+              echo "[INFO] Signing Sparkle Autoupdate binary..."
               codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
             fi
             if [ -d "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" ]; then
+              echo "[INFO] Signing Sparkle Updater.app helper..."
               codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
             fi
+            echo "[INFO] Signing Sparkle.framework bundle..."
             codesign --force --timestamp --options runtime --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "build/Velora.app/Contents/Frameworks/Sparkle.framework"
           fi
 
-          # Sign the main application bundle with Hardened Runtime and Entitlements
-          codesign --deep --force --options runtime --timestamp \
+          # Sign the main application Mach-O executable with Hardened Runtime and Entitlements
+          echo "[INFO] Signing main executable Mach-O binary..."
+          codesign --force --options runtime --timestamp \
+            --entitlements Velora.entitlements \
+            --sign "$IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            build/Velora.app/Contents/MacOS/Velora
+
+          # Sign the top-level application bundle WITHOUT --deep to preserve nested code signatures
+          echo "[INFO] Signing outer Velora.app bundle..."
+          codesign --force --options runtime --timestamp \
             --entitlements Velora.entitlements \
             --sign "$IDENTITY" \
             --keychain "$KEYCHAIN_PATH" \
             build/Velora.app
 
-          echo "Verifying application bundle signature..."
+          echo "[INFO] Verifying application bundle signature strictly..."
           codesign --verify --deep --strict --verbose=2 build/Velora.app
+          echo "[OK] Velora.app signed and verified successfully."
+          echo "::endgroup::"
+
+      - name: Notarize and Staple Velora.app with Apple Notary Service
+        if: steps.check-secrets.outputs.NOTARIZATION_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "::group::Apple Notary Service Submission (Velora.app)"
+          APP_NOTARIZE_ZIP="$RUNNER_TEMP/Velora-app-notarize.zip"
+          echo "[INFO] Creating temporary archive for notarytool: $APP_NOTARIZE_ZIP..."
+          ditto -c -k --keepParent build/Velora.app "$APP_NOTARIZE_ZIP"
+
+          echo "[INFO] Submitting $APP_NOTARIZE_ZIP to Apple Notary Service..."
+          SUBMISSION_LOG="$RUNNER_TEMP/notary_app_submit.log"
+
+          set +e
+          xcrun notarytool submit "$APP_NOTARIZE_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait 2>&1 | tee "$SUBMISSION_LOG"
+          NOTARY_EXIT_CODE=$?
+          set -e
+
+          SUBMISSION_ID=$(grep -E '^\s*id: ' "$SUBMISSION_LOG" | head -n 1 | awk '{print $2}')
+
+          if [ $NOTARY_EXIT_CODE -ne 0 ] || grep -q "status: Invalid" "$SUBMISSION_LOG"; then
+            echo "[ERROR] Apple Notarization for Velora.app failed!"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "[INFO] Fetching detailed notarization diagnostic log for ID: $SUBMISSION_ID..."
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          echo "[OK] Notarization for Velora.app succeeded!"
+          rm -f "$APP_NOTARIZE_ZIP"
+
+          echo "[INFO] Stapling notarization ticket directly to build/Velora.app..."
+          xcrun stapler staple build/Velora.app
+
+          echo "[INFO] Validating stapled ticket on build/Velora.app..."
+          xcrun stapler validate build/Velora.app
+
+          echo "[INFO] Validating Gatekeeper acceptance for build/Velora.app..."
+          spctl --assess --type exec -vv build/Velora.app
+          echo "[OK] Velora.app notarized and stapled."
+          echo "::endgroup::"
+
+      - name: Generate Sparkle Distribution Zip & Appcast
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          echo "::group::Generating Sparkle Appcast & Update Zip"
+          ZIP_FILE="build/Velora-${{ steps.version.outputs.TAG }}.zip"
+          echo "[INFO] Assembling notarized and stapled distribution zip for Sparkle in-place updates..."
+          ditto -c -k --sequesterRsrc --keepParent build/Velora.app "$ZIP_FILE"
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+          GENERATE_APPCAST="./swift/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+          if [ -n "$SPARKLE_KEY" ] && [ -x "$GENERATE_APPCAST" ]; then
+            echo "[INFO] Running Sparkle generate_appcast with Ed25519 signing key..."
+            SPARKLE_STAGING="build/sparkle_staging"
+            rm -rf "$SPARKLE_STAGING"
+            mkdir -p "$SPARKLE_STAGING"
+            cp "$ZIP_FILE" "$SPARKLE_STAGING/"
+
+            # Fetch existing appcast feed if available to preserve version history
+            curl -fsSL "https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml" \
+              -o "$SPARKLE_STAGING/appcast.xml" 2>/dev/null || true
+
+            echo "$SPARKLE_KEY" | "$GENERATE_APPCAST" \
+              --ed-key-file - \
+              --download-url-prefix "https://github.com/ahmetaltun/Velora/releases/download/${{ steps.version.outputs.TAG }}/" \
+              "$SPARKLE_STAGING"
+
+            mv "$SPARKLE_STAGING/appcast.xml" build/appcast.xml
+            rm -rf "$SPARKLE_STAGING"
+            echo "[OK] Sparkle appcast.xml generated."
+          else
+            echo "[WARN] SPARKLE_PRIVATE_KEY secret missing or generate_appcast not found: Skipping appcast generation."
+          fi
           echo "::endgroup::"
 
       - name: Install create-dmg
         run: |
-          echo "Installing create-dmg utility for styled DMG generation..."
+          echo "[INFO] Installing create-dmg utility for styled DMG generation..."
           brew install create-dmg
 
       - name: Create Styled DMG Image
@@ -186,7 +286,7 @@ jobs:
           cp -R build/Velora.app "$DMG_STAGE/"
 
           if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
-            echo "Applying custom visual presentation via create-dmg..."
+            echo "[INFO] Applying custom visual presentation via create-dmg..."
             # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
             sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE"
             # Hide extension at filesystem metadata level
@@ -205,12 +305,12 @@ jobs:
               --no-internet-enable \
               "$DMG_FILE" \
               "$DMG_STAGE" || {
-                echo "⚠️ create-dmg encountered an issue, falling back to standard hdiutil..."
+                echo "[WARN] create-dmg encountered an issue, falling back to standard hdiutil..."
                 ln -s /Applications "$DMG_STAGE/Applications"
                 hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_FILE"
               }
           else
-            echo "ℹ️ create-dmg not found or background missing; using native hdiutil fallback..."
+            echo "[INFO] create-dmg not found or background missing; using native hdiutil fallback..."
             ln -s /Applications "$DMG_STAGE/Applications"
             hdiutil create \
               -volname "Velora" \
@@ -222,33 +322,34 @@ jobs:
 
           rm -rf "$DMG_STAGE"
           echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
-          echo "✅ Styled DMG created at: $DMG_FILE"
+          echo "[OK] Styled DMG created at: $DMG_FILE"
           echo "::endgroup::"
 
       - name: Code Sign DMG
         if: steps.check-secrets.outputs.SIGNING_ENABLED == 'true'
         run: |
           echo "::group::Signing DMG"
-          echo "Signing DMG with identity: $RESOLVED_IDENTITY"
+          echo "[INFO] Signing DMG with identity: $RESOLVED_IDENTITY"
           codesign --force --timestamp \
             --sign "$RESOLVED_IDENTITY" \
             --keychain "$KEYCHAIN_PATH" \
             "$DMG_FILE"
 
-          echo "Verifying DMG signature..."
+          echo "[INFO] Verifying DMG signature..."
           codesign --verify --strict --verbose=2 "$DMG_FILE"
+          echo "[OK] DMG signature verified."
           echo "::endgroup::"
 
-      - name: Notarize DMG with Apple Notary Service
+      - name: Notarize and Staple DMG with Apple Notary Service
         if: steps.check-secrets.outputs.NOTARIZATION_ENABLED == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          echo "::group::Apple Notary Service Submission"
-          echo "Submitting $DMG_FILE to Apple Notary Service..."
-          SUBMISSION_LOG="$RUNNER_TEMP/notary_submit.log"
+          echo "::group::Apple Notary Service Submission (DMG)"
+          echo "[INFO] Submitting $DMG_FILE to Apple Notary Service..."
+          SUBMISSION_LOG="$RUNNER_TEMP/notary_dmg_submit.log"
 
           set +e
           xcrun notarytool submit "$DMG_FILE" \
@@ -262,9 +363,9 @@ jobs:
           SUBMISSION_ID=$(grep -E '^\s*id: ' "$SUBMISSION_LOG" | head -n 1 | awk '{print $2}')
 
           if [ $NOTARY_EXIT_CODE -ne 0 ] || grep -q "status: Invalid" "$SUBMISSION_LOG"; then
-            echo "❌ Apple Notarization failed!"
+            echo "[ERROR] Apple Notarization for DMG failed!"
             if [ -n "$SUBMISSION_ID" ]; then
-              echo "Fetching detailed notarization diagnostic log for ID: $SUBMISSION_ID..."
+              echo "[INFO] Fetching detailed notarization diagnostic log for ID: $SUBMISSION_ID..."
               xcrun notarytool log "$SUBMISSION_ID" \
                 --apple-id "$APPLE_ID" \
                 --password "$APPLE_PASSWORD" \
@@ -273,51 +374,17 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Notarization succeeded!"
+          echo "[OK] Notarization for DMG succeeded!"
 
-          echo "Stapling notarization ticket to DMG..."
+          echo "[INFO] Stapling notarization ticket to DMG..."
           xcrun stapler staple "$DMG_FILE"
 
-          echo "Validating stapler ticket..."
+          echo "[INFO] Validating stapled ticket on DMG..."
           xcrun stapler validate "$DMG_FILE"
 
-          echo "Validating Gatekeeper acceptance..."
+          echo "[INFO] Validating Gatekeeper acceptance for DMG..."
           spctl -a -t open --context context:primary-signature -v "$DMG_FILE"
-          echo "::endgroup::"
-
-      - name: Generate Sparkle Distribution Zip & Appcast
-        env:
-          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: |
-          echo "::group::Generating Sparkle Appcast & Update Zip"
-          ZIP_FILE="build/Velora-${{ steps.version.outputs.TAG }}.zip"
-          echo "Assembling distribution zip for Sparkle in-place updates..."
-          ditto -c -k --sequesterRsrc --keepParent build/Velora.app "$ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
-
-          GENERATE_APPCAST="./swift/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
-          if [ -n "$SPARKLE_KEY" ] && [ -x "$GENERATE_APPCAST" ]; then
-            echo "Running Sparkle generate_appcast with Ed25519 signing key..."
-            SPARKLE_STAGING="build/sparkle_staging"
-            rm -rf "$SPARKLE_STAGING"
-            mkdir -p "$SPARKLE_STAGING"
-            cp "$ZIP_FILE" "$SPARKLE_STAGING/"
-
-            # Fetch existing appcast feed if available to preserve version history
-            curl -fsSL "https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml" \
-              -o "$SPARKLE_STAGING/appcast.xml" 2>/dev/null || true
-
-            echo "$SPARKLE_KEY" | "$GENERATE_APPCAST" \
-              --ed-key-file - \
-              --download-url-prefix "https://github.com/ahmetaltun/Velora/releases/download/${{ steps.version.outputs.TAG }}/" \
-              "$SPARKLE_STAGING"
-
-            mv "$SPARKLE_STAGING/appcast.xml" build/appcast.xml
-            rm -rf "$SPARKLE_STAGING"
-            echo "✅ Sparkle appcast.xml generated."
-          else
-            echo "⚠️ SPARKLE_PRIVATE_KEY secret missing or generate_appcast not found: Skipping appcast generation."
-          fi
+          echo "[OK] DMG notarized and stapled."
           echo "::endgroup::"
 
       - name: Generate Checksums

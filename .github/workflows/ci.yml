@@ -33,16 +33,16 @@ jobs:
 
       - name: Workspace Compilation Check (Apple Silicon arm64)
         run: |
-          echo "🦀 Verifying Rust workspace compiles for Apple Silicon (aarch64-apple-darwin)..."
+          echo "[INFO] Verifying Rust workspace compiles for Apple Silicon (aarch64-apple-darwin)..."
           cargo check --workspace --target aarch64-apple-darwin
 
       - name: Run Workspace Tests
         run: |
-          echo "🧪 Running Rust unit and integration test suites..."
+          echo "[INFO] Running Rust unit and integration test suites..."
           cargo test --workspace --target aarch64-apple-darwin
 
       - name: Verify Swift Frontend Build (Apple Silicon arm64, macOS 15+)
         run: |
-          echo "🍎 Building Rust FFI and verifying Swift app compilation (arm64, macOS 15+)..."
+          echo "[INFO] Building Rust FFI and verifying Swift app compilation (arm64, macOS 15+)..."
           cargo build -p velora-ffi --target aarch64-apple-darwin
           (cd swift && swift build --arch arm64)

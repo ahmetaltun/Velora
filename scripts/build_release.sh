@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -*)
-            echo "❌ Unknown flag: $1"
+            echo "[ERROR] Unknown flag: $1"
             echo "Usage: $0 [version] [--dmg] [--zip] [--sign <identity>]"
             exit 1
             ;;
@@ -57,24 +57,24 @@ echo "  Target Version: v${VERSION}"
 echo "=================================================="
 
 # 0. Prerequisite Verification
-command -v cargo >/dev/null 2>&1 || { echo "❌ Error: cargo is required but not installed."; exit 1; }
-command -v swift >/dev/null 2>&1 || { echo "❌ Error: swift is required but not installed."; exit 1; }
+command -v cargo >/dev/null 2>&1 || { echo "[ERROR] cargo is required but not installed."; exit 1; }
+command -v swift >/dev/null 2>&1 || { echo "[ERROR] swift is required but not installed."; exit 1; }
 if [ "$GENERATE_DMG" = true ]; then
-    command -v hdiutil >/dev/null 2>&1 || { echo "❌ Error: hdiutil is required for DMG creation."; exit 1; }
+    command -v hdiutil >/dev/null 2>&1 || { echo "[ERROR] hdiutil is required for DMG creation."; exit 1; }
 fi
 
 # 1. Build Rust FFI core in release mode
-echo "📦 Step 1/7: Compiling Rust FFI core (release arm64, macOS 15+)..."
+echo "[STEP 1/8] Compiling Rust FFI core (release arm64, macOS 15+)..."
 cargo build --release -p velora-ffi --target aarch64-apple-darwin
 mkdir -p "$ROOT_DIR/target/release"
 cp "$ROOT_DIR/target/aarch64-apple-darwin/release/libvelora_ffi.a" "$ROOT_DIR/target/release/libvelora_ffi.a" 2>/dev/null || true
 
 # 2. Build Swift app in release mode (statically links libvelora_ffi.a, strictly arm64, macOS 15+)
-echo "🚀 Step 2/7: Compiling Swift frontend (release arm64, macOS 15+)..."
+echo "[STEP 2/8] Compiling Swift frontend (release arm64, macOS 15+)..."
 (cd swift && swift build -c release --arch arm64)
 
 # 3. Assemble Velora.app bundle
-echo "📁 Step 3/8: Assembling Velora.app bundle..."
+echo "[STEP 3/8] Assembling Velora.app bundle..."
 BUILD_DIR="$ROOT_DIR/build"
 APP_DIR="$BUILD_DIR/Velora.app"
 CONTENTS_DIR="$APP_DIR/Contents"
@@ -91,13 +91,13 @@ if [ -f "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Velora" ]; then
 elif [ -f "$ROOT_DIR/swift/.build/release/Velora" ]; then
     cp "$ROOT_DIR/swift/.build/release/Velora" "$MACOS_DIR/Velora"
 else
-    echo "❌ Error: Could not locate compiled release Velora binary."
+    echo "[ERROR] Could not locate compiled release Velora binary."
     exit 1
 fi
 chmod +x "$MACOS_DIR/Velora"
 
 # Copy Sparkle.framework for auto-updates
-echo "📦 Embedding Sparkle.framework for auto-updates..."
+echo "[INFO] Embedding Sparkle.framework for auto-updates..."
 rm -rf "$FRAMEWORKS_DIR/Sparkle.framework"
 if [ -d "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Sparkle.framework" ]; then
     cp -R "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS_DIR/"
@@ -106,8 +106,9 @@ elif [ -d "$ROOT_DIR/swift/.build/release/Sparkle.framework" ]; then
 elif [ -d "$ROOT_DIR/swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
     cp -R "$ROOT_DIR/swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$FRAMEWORKS_DIR/"
 else
-    echo "❌ Error: Sparkle.framework not found in build artifacts."
+    echo "[ERROR] Sparkle.framework not found in build artifacts."
     exit 1
+fi
 fi
 
 # Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
@@ -201,75 +202,90 @@ EOF
 touch "$APP_DIR"
 
 # 4. Validate Mach-O linkages (ensure zero leaked local developer paths)
-echo "🔍 Step 4/7: Validating Mach-O linkages..."
+echo "[STEP 4/8] Validating Mach-O linkages..."
 if otool -L "$MACOS_DIR/Velora" | tail -n +2 | grep -E '/Users/|/home/'; then
-    echo "❌ Error: Leaked local developer paths detected in binary dependencies!"
+    echo "[ERROR] Leaked local developer paths detected in binary dependencies!"
     exit 1
 fi
-echo "✅ Binary verified: 100% self-contained and portable."
+echo "[OK] Binary verified: 100% self-contained and portable."
 
 # 5. Validate Apple Silicon (arm64) architecture exclusivity
-echo "🔍 Step 5/7: Validating Mach-O architecture (Apple Silicon arm64 only)..."
+echo "[STEP 5/8] Validating Mach-O architecture (Apple Silicon arm64 only)..."
 BINARY_ARCHS=$(lipo -archs "$MACOS_DIR/Velora")
 if [ "$BINARY_ARCHS" != "arm64" ]; then
-    echo "❌ Error: Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
+    echo "[ERROR] Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
     exit 1
 fi
-echo "✅ Architecture verified: 100% pure Apple Silicon (arm64)."
+echo "[OK] Architecture verified: 100% pure Apple Silicon (arm64)."
 
 # Validate macOS 15+ minimum OS requirement in Mach-O headers
-echo "🔍 Validating Mach-O minimum macOS deployment target (macOS 15+)..."
+echo "[INFO] Validating Mach-O minimum macOS deployment target (macOS 15+)..."
 MIN_OS=$(otool -l "$MACOS_DIR/Velora" | awk '/LC_BUILD_VERSION/{getline; getline; getline; print $2}')
 if [ -n "$MIN_OS" ]; then
     MAJOR_OS=$(echo "$MIN_OS" | cut -d. -f1)
     if [ "$MAJOR_OS" -lt 15 ]; then
-        echo "❌ Error: Binary minimum OS requirement is $MIN_OS, but must be 15.0 (Sequoia) or later."
+        echo "[ERROR] Binary minimum OS requirement is $MIN_OS, but must be 15.0 (Sequoia) or later."
         exit 1
     fi
-    echo "✅ Minimum deployment target verified: macOS $MIN_OS (Sequoia+)."
+    echo "[OK] Minimum deployment target verified: macOS $MIN_OS (Sequoia+)."
 fi
 
-# 6. Optional Code Signing
+# 6. Optional Code Signing (Inside-Out per Apple TN3127)
 if [ -n "$SIGN_IDENTITY" ]; then
-    echo "🔐 Step 6/8: Code-signing Velora.app with Hardened Runtime..."
+    echo "[STEP 6/8] Code-signing Velora.app with Hardened Runtime (inside-out)..."
     if [ -d "$FRAMEWORKS_DIR/Sparkle.framework" ]; then
-        echo "Signing embedded Sparkle components inside-out..."
+        echo "[INFO] Signing embedded Sparkle components inside-out..."
         find "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices" -type d -name "*.xpc" 2>/dev/null | while read -r xpc; do
+            echo "[INFO] Signing XPC service: $xpc"
             codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$xpc"
         done
         if [ -f "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate" ]; then
+            echo "[INFO] Signing Sparkle Autoupdate binary..."
             codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate"
         fi
         if [ -d "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app" ]; then
+            echo "[INFO] Signing Sparkle Updater.app helper..."
             codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app"
         fi
+        echo "[INFO] Signing Sparkle.framework bundle..."
         codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/Sparkle.framework"
     fi
 
-    codesign --deep --force --options runtime --timestamp \
+    # Sign the main application Mach-O executable with Hardened Runtime and Entitlements
+    echo "[INFO] Signing main executable Mach-O binary..."
+    codesign --force --options runtime --timestamp \
+        --entitlements "$ROOT_DIR/Velora.entitlements" \
+        --sign "$SIGN_IDENTITY" \
+        "$MACOS_DIR/Velora"
+
+    # Sign the top-level application bundle WITHOUT --deep
+    echo "[INFO] Signing outer Velora.app bundle..."
+    codesign --force --options runtime --timestamp \
         --entitlements "$ROOT_DIR/Velora.entitlements" \
         --sign "$SIGN_IDENTITY" \
         "$APP_DIR"
+
+    echo "[INFO] Verifying application bundle signature strictly..."
     codesign --verify --deep --strict --verbose=2 "$APP_DIR"
-    echo "✅ Velora.app signed and verified."
+    echo "[OK] Velora.app signed and verified."
 else
-    echo "ℹ️ Step 6/8: Skipping code signing (no identity provided)."
+    echo "[INFO] [STEP 6/8] Skipping code signing (no identity provided)."
 fi
 
 # 7. Optional ZIP generation for Sparkle auto-updates
 if [ "$GENERATE_ZIP" = true ]; then
-    echo "📦 Step 7/8: Packaging into distribution ZIP for Sparkle..."
+    echo "[STEP 7/8] Packaging into distribution ZIP for Sparkle..."
     ZIP_OUTPUT="$BUILD_DIR/Velora-${VERSION}.zip"
     rm -f "$ZIP_OUTPUT"
     ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_OUTPUT"
-    echo "✅ ZIP generated at: $ZIP_OUTPUT"
+    echo "[OK] ZIP generated at: $ZIP_OUTPUT"
 else
-    echo "ℹ️ Step 7/8: Skipping ZIP generation (--zip not specified)."
+    echo "[INFO] [STEP 7/8] Skipping ZIP generation (--zip not specified)."
 fi
 
 # 8. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "💿 Step 8/8: Packaging into styled DMG..."
+    echo "[STEP 8/8] Packaging into styled DMG..."
     DMG_STAGE="$BUILD_DIR/dmg_stage"
     DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
     BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
@@ -283,7 +299,7 @@ if [ "$GENERATE_DMG" = true ]; then
     cp -R "$APP_DIR" "$DMG_STAGE/"
 
     if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
-        echo "🎨 Using create-dmg for styled installer presentation..."
+        echo "[INFO] Using create-dmg for styled installer presentation..."
         # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
         sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE" >/dev/null 2>&1 || true
         # Hide extension at filesystem metadata level
@@ -308,12 +324,12 @@ if [ "$GENERATE_DMG" = true ]; then
         CREATE_DMG_ARGS+=(--background "$BG_IMAGE")
 
         create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_OUTPUT" "$DMG_STAGE" || {
-            echo "⚠️ create-dmg encountered an issue, falling back to standard hdiutil..."
+            echo "[WARN] create-dmg encountered an issue, falling back to standard hdiutil..."
             ln -s /Applications "$DMG_STAGE/Applications"
             hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_OUTPUT"
         }
     else
-        echo "ℹ️ create-dmg not found or background missing; using native hdiutil fallback..."
+        echo "[INFO] create-dmg not found or background missing; using native hdiutil fallback..."
         ln -s /Applications "$DMG_STAGE/Applications"
         hdiutil create \
             -volname "Velora" \
@@ -324,20 +340,20 @@ if [ "$GENERATE_DMG" = true ]; then
     fi
 
     rm -rf "$DMG_STAGE"
-    echo "✅ DMG generated at: $DMG_OUTPUT"
+    echo "[OK] DMG generated at: $DMG_OUTPUT"
 
     if [ -n "$SIGN_IDENTITY" ]; then
-        echo "🔐 Signing DMG..."
+        echo "[INFO] Signing DMG..."
         codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_OUTPUT"
         codesign --verify --strict --verbose=2 "$DMG_OUTPUT"
-        echo "✅ DMG signed and verified."
+        echo "[OK] DMG signed and verified."
     fi
 else
-    echo "ℹ️ Step 8/8: Skipping DMG generation (--dmg not specified)."
+    echo "[INFO] [STEP 8/8] Skipping DMG generation (--dmg not specified)."
 fi
 
 echo "=================================================="
-echo "🎉 Pipeline finished successfully!"
+echo "[SUCCESS] Pipeline finished successfully!"
 echo "   Artifact: $APP_DIR"
 if [ "$GENERATE_ZIP" = true ]; then
     echo "   ZIP:      $BUILD_DIR/Velora-${VERSION}.zip"
