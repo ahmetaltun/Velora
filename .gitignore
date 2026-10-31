@@ -49,3 +49,7 @@ Velora.app/
 *.crash
 *.tmp
 /.cache/
+
+# Graphify
+graphify-out/
+
