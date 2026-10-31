@@ -45,12 +45,25 @@ public struct FileTableView: View {
                     Spacer()
 
                     if !sortedItems.isEmpty {
-                        Text("\(sortedItems.count) match\(sortedItems.count == 1 ? "" : "es")")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(VeloraTheme.accentCyan)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(VeloraTheme.accentCyan.opacity(0.12), in: Capsule())
+                        let isCapped = viewModel.isSearchCapped || sortedItems.count >= Int(VeloraViewModel.maxSearchResults)
+                        HStack(spacing: 5) {
+                            if isCapped {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(VeloraTheme.accentAmber)
+                            }
+
+                            Text(isCapped ? "Top 1,000 matches" : "\(sortedItems.count) match\(sortedItems.count == 1 ? "" : "es")")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(isCapped ? VeloraTheme.accentAmber : VeloraTheme.accentCyan)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            (isCapped ? VeloraTheme.accentAmber : VeloraTheme.accentCyan).opacity(0.12),
+                            in: Capsule()
+                        )
+                        .help(isCapped ? "Showing the top 1,000 highest-relevance results. Use filters (size:, ext:, etc.) to narrow your search." : "\(sortedItems.count) total matches found.")
 
                         Text(ByteCountFormatter.string(fromByteCount: Int64(viewModel.currentFolderTotalSize), countStyle: .file))
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))

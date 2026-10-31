@@ -6,7 +6,9 @@ import VeloraCore
 @Observable
 public final class VeloraViewModel {
     public var engine: VeloraEngine
+    public static let maxSearchResults: UInt32 = 1000
     public var searchQuery: String = ""
+    public var isSearchCapped: Bool = false
     public var searchResults: [SearchResultItem] = []
     public var displayedItems: [SearchResultItem] = []
     public var currentPath: String = ""
@@ -111,6 +113,7 @@ public final class VeloraViewModel {
     /// Clears the active search query and resets search results.
     public func clearSearch() {
         searchQuery = ""
+        isSearchCapped = false
         performSearch(query: "")
     }
 
@@ -444,6 +447,7 @@ public final class VeloraViewModel {
             self.lastExecutedQuery = ""
             self.searchResults = []
             self.isSearching = false
+            self.isSearchCapped = false
             self.refreshTableItems()
             return
         }
@@ -456,12 +460,13 @@ public final class VeloraViewModel {
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            let hits = self.engine.search(queryStr: trimmed, maxResults: 300)
+            let hits = self.engine.search(queryStr: trimmed, maxResults: VeloraViewModel.maxSearchResults)
             DispatchQueue.main.async {
                 guard self.searchQuery.trimmingCharacters(in: .whitespaces) == trimmed else { return }
                 self.lastExecutedQuery = trimmed
                 self.searchResults = hits
                 self.displayedItems = hits
+                self.isSearchCapped = hits.count >= Int(VeloraViewModel.maxSearchResults)
                 self.currentFolderTotalSize = hits.reduce(0) { $0 + $1.sizeBytes }
                 self.isSearching = false
             }
