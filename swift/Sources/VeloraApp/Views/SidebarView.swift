@@ -32,6 +32,15 @@ public struct SidebarView: View {
         viewModel.isScanning || viewModel.isLoadingSnapshot
     }
 
+    private var appVersionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        if let build, !build.isEmpty, build != version {
+            return "Version \(version) (\(build))"
+        }
+        return "Version \(version)"
+    }
+
     private func selectSidebarTool(_ id: String, loader: (() -> Void)? = nil) {
         if viewModel.isSearchActive {
             viewModel.clearSearch()
@@ -210,44 +219,25 @@ public struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
 
-            // Footer: Settings & Updates
+            // Footer: App Version
             Divider()
                 .overlay(VeloraTheme.cardBorder)
                 .padding(.horizontal, 12)
 
             HStack {
-                Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("Settings")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                    }
-                    .foregroundColor(VeloraTheme.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .help("Open Settings (⌘,)")
-
                 Spacer()
-
-                Button {
-                    VeloraUpdateManager.shared.checkForUpdates()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Updates")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                    }
-                    .foregroundColor(VeloraTheme.accentViolet)
-                }
-                .buttonStyle(.plain)
-                .help("Check for Updates…")
+                Text(appVersionString)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundColor(VeloraTheme.textMuted)
+                Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                AppAssetLoader.openAboutPanel()
+            }
+            .help("About Velora")
         }
         .background(VeloraTheme.obsidianSidebar)
     }
