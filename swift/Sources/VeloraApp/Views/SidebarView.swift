@@ -54,7 +54,7 @@ public struct SidebarView: View {
         VStack(spacing: 0) {
             // App Identity Header
             Button {
-                AppAssetLoader.openAboutPanel()
+                selectSidebarTool("tool_smart_scan")
             } label: {
                 HStack(spacing: 11) {
                     VeloraLogoView(size: 38)
@@ -72,9 +72,11 @@ public struct SidebarView: View {
 
                     Spacer()
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("About Velora")
+            .disabled(viewModel.isInteractionDisabled)
+            .help("Overview")
             .padding(.horizontal, 14)
             .padding(.top, 14)
             .padding(.bottom, 12)
