@@ -65,7 +65,7 @@ public struct ScanHeroWelcomeView: View {
                         .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 18, x: 0, y: 0)
 
                     // Core pulsing orb
-                    PulsingOrbView(isScanning: true, size: 28)
+                    PulsingOrbView(isScanning: viewModel.isScanning, size: 28)
                 }
                 .padding(.top, 12)
 
@@ -163,11 +163,25 @@ public struct ScanHeroWelcomeView: View {
             .shadow(color: Color.black.opacity(0.2), radius: 30, x: 0, y: 15)
         }
         .onAppear {
+            updateAnimations()
+        }
+        .onChange(of: viewModel.isScanning) { _, _ in
+            updateAnimations()
+        }
+    }
+
+    private func updateAnimations() {
+        if viewModel.isScanning {
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
                 pulsePhase = 1.0
             }
             withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
                 radarRotation = 360
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.4)) {
+                pulsePhase = 0.0
+                radarRotation = 0.0
             }
         }
     }

@@ -8,10 +8,19 @@ public struct WindowAccessor: NSViewRepresentable {
         self.configure = configure
     }
 
+    public final class Coordinator {
+        var hasConfigured = false
+    }
+
+    public func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     public func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            if let window = view.window {
+            if let window = view.window, !context.coordinator.hasConfigured {
+                context.coordinator.hasConfigured = true
                 self.configure(window)
             }
         }
@@ -19,8 +28,9 @@ public struct WindowAccessor: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            if let window = nsView.window {
+        if !context.coordinator.hasConfigured, let window = nsView.window {
+            context.coordinator.hasConfigured = true
+            DispatchQueue.main.async {
                 self.configure(window)
             }
         }

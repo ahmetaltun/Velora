@@ -8,6 +8,7 @@ public struct AmbientFluidMeshView: View {
     public var isLoading: Bool
     public var size: CGFloat
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var meshRotation: Double = 0.0
     @State private var radarRotation: Double = 0.0
     @State private var pulseScale: CGFloat = 1.0
@@ -193,44 +194,61 @@ public struct AmbientFluidMeshView: View {
         }
         .frame(width: size, height: size)
         .onAppear {
-            restartAnimations()
+            updateAnimationState()
         }
         .onChange(of: isScanning) { _, _ in
-            restartAnimations()
+            updateAnimationState()
         }
         .onChange(of: isLoading) { _, _ in
-            restartAnimations()
+            updateAnimationState()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                updateAnimationState()
+            } else {
+                stopAnimations()
+            }
         }
     }
 
-    private func restartAnimations() {
-        // Reset and trigger continuous smooth rotation
+    private func updateAnimationState() {
+        if isBusy {
+            startBusyAnimations()
+        } else {
+            stopAnimations()
+        }
+    }
+
+    private func startBusyAnimations() {
+        // High-velocity cyber-mint scanning state
         meshRotation = 0.0
-        let rotDuration = isBusy ? 2.8 : 12.0
-        withAnimation(.linear(duration: rotDuration).repeatForever(autoreverses: false)) {
+        withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) {
             meshRotation = 360.0
         }
 
-        // Radar rotation for scanning mode
         radarRotation = 0.0
-        if isBusy {
-            withAnimation(.linear(duration: 3.5).repeatForever(autoreverses: false)) {
-                radarRotation = 360.0
-            }
+        withAnimation(.linear(duration: 3.5).repeatForever(autoreverses: false)) {
+            radarRotation = 360.0
         }
 
-        // Rhythmic breathing scale
         pulseScale = 1.0
-        let pulseDuration = isBusy ? 0.9 : 2.5
-        let targetScale: CGFloat = isBusy ? 1.08 : 1.04
-        withAnimation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true)) {
-            pulseScale = targetScale
+        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+            pulseScale = 1.08
         }
 
-        // Sparkle float & scale harmonic
         sparklePhase = 0.0
-        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
             sparklePhase = 1.0
+        }
+    }
+
+    private func stopAnimations() {
+        // Smoothly settle into the calm, static jewel state (zero CPU ticks at rest)
+        withAnimation(.easeOut(duration: 0.4)) {
+            meshRotation = 0.0
+            radarRotation = 0.0
+            pulseScale = 1.0
+            sparklePhase = 0.0
         }
     }
 }

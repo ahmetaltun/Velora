@@ -36,6 +36,10 @@ public struct LaserTrackView: View {
         .onChange(of: isScanning) { _, newValue in
             if newValue {
                 startLaser()
+            } else {
+                withAnimation(.linear(duration: 0.1)) {
+                    phase = -0.2
+                }
             }
         }
     }
