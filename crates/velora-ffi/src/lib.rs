@@ -1,6 +1,28 @@
-// Enforce Apple Silicon (ARM64) macOS target
+// Enforce Apple Silicon (ARM64) macOS target and macOS 15+ (Sequoia) minimum requirement
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-compile_error!("Velora is engineered exclusively for Apple Silicon (arm64 / aarch64) macOS devices.");
+compile_error!("Velora requires macOS 15 (Sequoia) or later on Apple Silicon (ARM64). Architecture x86_64 / Intel is not supported.");
+
+#[cfg(target_os = "macos")]
+fn verify_macos_version() {
+    let mut size: libc::size_t = 0;
+    let name = std::ffi::CString::new("kern.osproductversion").unwrap();
+    unsafe {
+        if libc::sysctlbyname(name.as_ptr(), std::ptr::null_mut(), &mut size, std::ptr::null_mut(), 0) == 0 && size > 0 {
+            let mut buf = vec![0u8; size];
+            if libc::sysctlbyname(name.as_ptr(), buf.as_mut_ptr() as *mut libc::c_void, &mut size, std::ptr::null_mut(), 0) == 0 {
+                let ver = std::ffi::CStr::from_ptr(buf.as_ptr() as *const libc::c_char).to_string_lossy();
+                if let Some(major) = ver.split('.').next().and_then(|s| s.parse::<u32>().ok()) {
+                    if major < 15 {
+                        panic!(
+                            "Unsupported macOS version: {}. Velora requires macOS 15 (Sequoia) or later on Apple Silicon (ARM64).",
+                            ver
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
 
 use parking_lot::RwLock;
 use std::path::Path;
@@ -269,6 +291,9 @@ pub struct VeloraEngine {
 impl VeloraEngine {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
+        #[cfg(target_os = "macos")]
+        verify_macos_version();
+
         Arc::new(Self {
             volume: RwLock::new(VolumeIndex::new("Macintosh HD", "/")),
             collector: RwLock::new(CollectorTray::new()),

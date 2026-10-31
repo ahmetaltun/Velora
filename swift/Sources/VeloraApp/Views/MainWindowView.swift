@@ -3,7 +3,7 @@ import VeloraCore
 
 public struct MainWindowView: View {
     @State public var viewModel = VeloraViewModel()
-    @State private var showBloomInspector: Bool = true
+    @AppStorage("isCleanupInspectorVisible") private var showBloomInspector: Bool = false
 
     public init() {}
 
@@ -63,7 +63,10 @@ public struct MainWindowView: View {
                     .background(VeloraTheme.obsidianBase)
 
                     // Bottom DaisyDisk-style Collector Drawer
-                    CollectorTrayView(viewModel: viewModel)
+                    if !showBloomInspector {
+                        CollectorTrayView(viewModel: viewModel)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -76,6 +79,7 @@ public struct MainWindowView: View {
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showBloomInspector)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.collectorItems.isEmpty)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.isScanning)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.shouldShowScanUI)
             .toolbar {
@@ -205,7 +209,6 @@ public struct MainWindowView: View {
                 window.titlebarAppearsTransparent = true
                 window.isOpaque = false
                 window.backgroundColor = NSColor(red: 32/255.0, green: 32/255.0, blue: 49/255.0, alpha: 1.0)
-                window.toolbar?.showsBaselineSeparator = false
                 window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
             }
         )

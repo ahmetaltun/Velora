@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   test-and-verify:
-    name: Test & Build Verification
-    runs-on: macos-latest
+    name: Test & Build Verification (macOS 15 Sequoia, Apple Silicon arm64)
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
@@ -23,24 +23,26 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
 
-      - name: Workspace Compilation Check
+      - name: Workspace Compilation Check (Apple Silicon arm64)
         run: |
-          echo "🦀 Verifying Rust workspace compiles..."
-          cargo check --workspace
+          echo "🦀 Verifying Rust workspace compiles for Apple Silicon (aarch64-apple-darwin)..."
+          cargo check --workspace --target aarch64-apple-darwin
 
       - name: Run Workspace Tests
         run: |
           echo "🧪 Running Rust unit and integration test suites..."
-          cargo test --workspace
+          cargo test --workspace --target aarch64-apple-darwin
 
-      - name: Verify Swift Frontend Build (Apple Silicon arm64)
+      - name: Verify Swift Frontend Build (Apple Silicon arm64, macOS 15+)
         run: |
-          echo "🍎 Building Rust FFI and verifying Swift app compilation (arm64)..."
-          cargo build -p velora-ffi
+          echo "🍎 Building Rust FFI and verifying Swift app compilation (arm64, macOS 15+)..."
+          cargo build -p velora-ffi --target aarch64-apple-darwin
           (cd swift && swift build --arch arm64)

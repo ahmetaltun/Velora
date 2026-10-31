@@ -1173,6 +1173,7 @@ dependencies = [
 name = "velora-ffi"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "parking_lot",
  "uniffi",
  "velora-analyzer",

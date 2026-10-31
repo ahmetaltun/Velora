@@ -20,8 +20,8 @@ permissions:
 
 jobs:
   release:
-    name: Build, Sign, Notarize & Release
-    runs-on: macos-latest
+    name: Build, Sign, Notarize & Release (macOS 15 Sequoia, Apple Silicon arm64)
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
@@ -41,16 +41,18 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
 
-      - name: Run Workspace Tests (Quality Gate)
+      - name: Run Workspace Tests (Quality Gate, Apple Silicon arm64)
         run: |
-          echo "🧪 Running workspace test suites before building release..."
-          cargo test --workspace
+          echo "🧪 Running workspace test suites before building release (aarch64-apple-darwin)..."
+          cargo test --workspace --target aarch64-apple-darwin
 
       - name: Build Release App Bundle
         run: |

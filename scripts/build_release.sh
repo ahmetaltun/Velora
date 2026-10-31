@@ -57,11 +57,13 @@ if [ "$GENERATE_DMG" = true ]; then
 fi
 
 # 1. Build Rust FFI core in release mode
-echo "📦 Step 1/7: Compiling Rust FFI core (release)..."
-cargo build --release -p velora-ffi
+echo "📦 Step 1/7: Compiling Rust FFI core (release arm64, macOS 15+)..."
+cargo build --release -p velora-ffi --target aarch64-apple-darwin
+mkdir -p "$ROOT_DIR/target/release"
+cp "$ROOT_DIR/target/aarch64-apple-darwin/release/libvelora_ffi.a" "$ROOT_DIR/target/release/libvelora_ffi.a" 2>/dev/null || true
 
-# 2. Build Swift app in release mode (statically links libvelora_ffi.a, strictly arm64)
-echo "🚀 Step 2/7: Compiling Swift frontend (release arm64)..."
+# 2. Build Swift app in release mode (statically links libvelora_ffi.a, strictly arm64, macOS 15+)
+echo "🚀 Step 2/7: Compiling Swift frontend (release arm64, macOS 15+)..."
 (cd swift && swift build -c release --arch arm64)
 
 # 3. Assemble Velora.app bundle
@@ -76,7 +78,14 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 # Copy binary
-cp "$ROOT_DIR/swift/.build/release/Velora" "$MACOS_DIR/Velora"
+if [ -f "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Velora" ]; then
+    cp "$ROOT_DIR/swift/.build/arm64-apple-macosx/release/Velora" "$MACOS_DIR/Velora"
+elif [ -f "$ROOT_DIR/swift/.build/release/Velora" ]; then
+    cp "$ROOT_DIR/swift/.build/release/Velora" "$MACOS_DIR/Velora"
+else
+    echo "❌ Error: Could not locate compiled release Velora binary."
+    exit 1
+fi
 chmod +x "$MACOS_DIR/Velora"
 
 # Copy app icon and image assets if present
@@ -114,6 +123,10 @@ cat << EOF > "$CONTENTS_DIR/Info.plist"
     <string>Velora</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>CFBundleVersion</key>
@@ -163,6 +176,18 @@ if [ "$BINARY_ARCHS" != "arm64" ]; then
     exit 1
 fi
 echo "✅ Architecture verified: 100% pure Apple Silicon (arm64)."
+
+# Validate macOS 15+ minimum OS requirement in Mach-O headers
+echo "🔍 Validating Mach-O minimum macOS deployment target (macOS 15+)..."
+MIN_OS=$(otool -l "$MACOS_DIR/Velora" | awk '/LC_BUILD_VERSION/{getline; getline; getline; print $2}')
+if [ -n "$MIN_OS" ]; then
+    MAJOR_OS=$(echo "$MIN_OS" | cut -d. -f1)
+    if [ "$MAJOR_OS" -lt 15 ]; then
+        echo "❌ Error: Binary minimum OS requirement is $MIN_OS, but must be 15.0 (Sequoia) or later."
+        exit 1
+    fi
+    echo "✅ Minimum deployment target verified: macOS $MIN_OS (Sequoia+)."
+fi
 
 # 6. Optional Code Signing
 if [ -n "$SIGN_IDENTITY" ]; then

@@ -1,10 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
+import Foundation
 
 let package = Package(
     name: "Velora",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "Velora", targets: ["VeloraApp"])
@@ -17,18 +18,25 @@ let package = Package(
         .target(
             name: "VeloraCore",
             dependencies: ["velora_ffiFFI"],
-            path: "Sources/VeloraCore"
+            path: "Sources/VeloraCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
         ),
         .executableTarget(
             name: "VeloraApp",
             dependencies: ["VeloraCore"],
             path: "Sources/VeloraApp",
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ],
             linkerSettings: [
                 .unsafeFlags([
                     "../target/release/libvelora_ffi.a"
                 ], .when(configuration: .release)),
                 .unsafeFlags([
                     "-L../target/debug",
+                    "-L../target/aarch64-apple-darwin/debug",
                     "-lvelora_ffi"
                 ], .when(configuration: .debug))
             ]

@@ -1,5 +1,5 @@
 #if !arch(arm64)
-#error("Velora is designed exclusively for Apple Silicon (ARM64) macOS devices.")
+#error("Velora is designed exclusively for Apple Silicon (ARM64) macOS devices running macOS 15 (Sequoia) or later.")
 #endif
 
 import AppKit
@@ -7,6 +7,17 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard #available(macOS 15.0, *) else {
+            let alert = NSAlert()
+            alert.messageText = "Unsupported macOS Version"
+            alert.informativeText = "Velora requires macOS 15 (Sequoia) or later on Apple Silicon (ARM64). The application will now terminate."
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApp.terminate(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         if let icon = AppAssetLoader.appIcon {
@@ -28,7 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for window in NSApp.windows {
             window.titlebarAppearsTransparent = true
             window.backgroundColor = NSColor(red: 32/255.0, green: 32/255.0, blue: 49/255.0, alpha: 1.0)
-            window.toolbar?.showsBaselineSeparator = false
 
             // Set minimum window bounds
             window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)

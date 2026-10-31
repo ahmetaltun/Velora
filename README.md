@@ -45,9 +45,9 @@ Velora/
 ## Prerequisites
 
 - **macOS**: macOS 15.0 (Sequoia) or newer.
-- **Architecture**: Apple Silicon only (M1/M2/M3/M4 or newer, ARM64). Intel Macs are not supported.
-- **Rust Toolchain**: Rust 1.75+ (`rustup default stable`).
-- **Xcode / Swift**: Xcode 15+ (or Swift 5.9+ Command Line Tools).
+- **Architecture**: Apple Silicon only (M1/M2/M3/M4 or newer, ARM64). Intel (x86_64) Macs are not supported.
+- **Rust Toolchain**: Rust 1.75+ with `aarch64-apple-darwin` target (`rustup default stable && rustup target add aarch64-apple-darwin`).
+- **Xcode / Swift**: Xcode 16+ (Swift 6.0+ Command Line Tools with macOS 15 Sequoia SDK).
 
 ---
 
@@ -65,11 +65,11 @@ cargo build -p velora-ffi
 
 ### 2. Build the Swift Application
 
-Navigate into the `swift` directory and build via Swift Package Manager:
+Navigate into the `swift` directory and build via Swift Package Manager targeting Apple Silicon:
 
 ```bash
 cd swift
-swift build
+swift build --arch arm64
 cd ..
 ```
 
