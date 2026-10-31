@@ -1,8 +1,7 @@
 import SwiftUI
 import VeloraCore
 
-/// Optional inspector: keeps the existing collector's five-second trash countdown
-/// intact and surfaces staged files without duplicating destructive actions.
+/// Optional inspector: surfaces staged files and provides direct cleanup confirmation.
 public struct BloomInspectorView: View {
     @Bindable public var viewModel: VeloraViewModel
 
@@ -128,25 +127,39 @@ public struct BloomInspectorView: View {
                         }
                     }
                 }
-                Text("Use the collector bar below the workspace to review and move staged items to Trash. Its safety countdown is unchanged.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(VeloraTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
+            }
+
+            if let errorMsg = viewModel.cleaningErrorMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(VeloraTheme.accentAmber)
+                    Text(errorMsg)
+                        .font(.system(size: 11))
+                        .foregroundStyle(VeloraTheme.textPrimary)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button(action: { viewModel.cleaningErrorMessage = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(VeloraTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(VeloraTheme.accentAmber.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.top, 10)
             }
 
             Spacer(minLength: 12)
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(viewModel.isScanning ? VeloraTheme.accentAmber : VeloraTheme.accentEmerald)
-                    .frame(width: 7, height: 7)
-                Text(viewModel.isScanning ? "Scanning your Mac" : "Storage catalog ready")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(VeloraTheme.textSecondary)
-                Spacer()
+
+            FreeSpaceButton(
+                itemCount: viewModel.collectorItems.count,
+                totalBytes: viewModel.collectorTotalSize,
+                isFullWidth: true,
+                isDisabled: viewModel.isInteractionDisabled || viewModel.isCleaning || viewModel.collectorItems.isEmpty,
+                isCleaning: viewModel.isCleaning
+            ) {
+                viewModel.cleanStagedItems()
             }
-            .padding(12)
-            .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 11))
         }
         .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

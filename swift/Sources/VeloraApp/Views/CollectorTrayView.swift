@@ -3,9 +3,6 @@ import VeloraCore
 
 public struct CollectorTrayView: View {
     @Bindable public var viewModel: VeloraViewModel
-    @State private var isCountdownActive: Bool = false
-    @State private var countdownRemaining: Int = 5
-    @State private var timer: Timer?
 
     public init(viewModel: VeloraViewModel) {
         self.viewModel = viewModel
@@ -159,7 +156,6 @@ public struct CollectorTrayView: View {
                         // Actions
                         HStack(spacing: 10) {
                             Button("Clear") {
-                                cancelCountdown()
                                 viewModel.clearCollector()
                             }
                             .buttonStyle(.plain)
@@ -172,45 +168,14 @@ public struct CollectorTrayView: View {
                             .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
                             .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
 
-                            if isCountdownActive {
-                                Button(action: cancelCountdown) {
-                                    HStack(spacing: 6) {
-                                        Text("Cancel (\(countdownRemaining)s)")
-                                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                                        ProgressView()
-                                            .controlSize(.mini)
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 6)
-                                    .background(VeloraTheme.obsidianSurface, in: Capsule())
-                                    .overlay(Capsule().stroke(VeloraTheme.accentPink, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                Button(action: startCountdown) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "trash.fill")
-                                            .font(.system(size: 11, weight: .bold))
-                                        Text("Free Space")
-                                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        in: Capsule()
-                                    )
-                                    .shadow(color: VeloraTheme.accentViolet.opacity(viewModel.isInteractionDisabled ? 0.0 : 0.35), radius: 6, x: 0, y: 2)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
-                                .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
+                            FreeSpaceButton(
+                                itemCount: viewModel.collectorItems.count,
+                                totalBytes: viewModel.collectorTotalSize,
+                                isFullWidth: false,
+                                isDisabled: viewModel.isInteractionDisabled || viewModel.isCleaning,
+                                isCleaning: viewModel.isCleaning
+                            ) {
+                                viewModel.cleanStagedItems()
                             }
                         }
                     }
@@ -237,28 +202,5 @@ public struct CollectorTrayView: View {
             let secs = rounded % 60
             return "~\(mins)m \(secs)s remaining"
         }
-    }
-
-    private func startCountdown() {
-        isCountdownActive = true
-        countdownRemaining = 5
-
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { t in
-            if countdownRemaining > 1 {
-                countdownRemaining -= 1
-            } else {
-                t.invalidate()
-                isCountdownActive = false
-                viewModel.cleanStagedItems()
-            }
-        }
-    }
-
-    private func cancelCountdown() {
-        timer?.invalidate()
-        timer = nil
-        isCountdownActive = false
-        countdownRemaining = 5
     }
 }
