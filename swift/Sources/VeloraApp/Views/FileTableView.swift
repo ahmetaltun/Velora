@@ -260,6 +260,7 @@ public struct FileTableView: View {
                             viewModel.scanCurrentPath()
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(viewModel.isInteractionDisabled)
                         .padding(.top, 6)
                     }
                 }
@@ -271,6 +272,7 @@ public struct FileTableView: View {
     // MARK: - Actions & Helpers
 
     private func handleItemDoubleClick(_ item: SearchResultItem) {
+        guard !viewModel.isInteractionDisabled else { return }
         if item.isDir {
             viewModel.drillDownPath(item.path)
         } else {

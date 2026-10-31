@@ -6,6 +6,16 @@ public struct MainWindowView: View {
     @AppStorage("isCleanupInspectorVisible") private var showBloomInspector: Bool = false
     @FocusState private var isSearchFocused: Bool
 
+    private var searchPlaceholderText: String {
+        if viewModel.isLoadingSnapshot {
+            return "Loading catalog.bin into RAM..."
+        } else if viewModel.isScanning {
+            return "Search paused while scanning..."
+        } else {
+            return "Search anything (e.g. ext:rs size:>10MB !target)..."
+        }
+    }
+
     public init() {}
 
     public var body: some View {
@@ -88,6 +98,8 @@ public struct MainWindowView: View {
                     }) {
                         Image(systemName: "internaldrive")
                     }
+                    .disabled(viewModel.isInteractionDisabled)
+                    .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
                     .help("Return to main volume view")
 
                     Button(action: {
@@ -95,7 +107,8 @@ public struct MainWindowView: View {
                     }) {
                         Image(systemName: "chevron.left")
                     }
-                    .disabled(viewModel.pathStack.count <= 1)
+                    .disabled(viewModel.pathStack.count <= 1 || viewModel.isInteractionDisabled)
+                    .opacity((viewModel.pathStack.count <= 1 || viewModel.isInteractionDisabled) ? 0.45 : 1.0)
                     .help("Navigate up one folder level")
 
                     // Current Path Pill
@@ -136,12 +149,13 @@ public struct MainWindowView: View {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(isSearchFocused ? VeloraTheme.accentCyan : VeloraTheme.textSecondary)
+                            .foregroundColor(viewModel.isInteractionDisabled ? VeloraTheme.textMuted : (isSearchFocused ? VeloraTheme.accentCyan : VeloraTheme.textSecondary))
 
-                        TextField("Search anything (e.g. ext:rs size:>10MB !target)...", text: $viewModel.searchQuery)
+                        TextField(searchPlaceholderText, text: $viewModel.searchQuery)
                             .textFieldStyle(.plain)
                             .focused($isSearchFocused)
-                            .foregroundColor(VeloraTheme.textPrimary)
+                            .disabled(viewModel.isInteractionDisabled)
+                            .foregroundColor(viewModel.isInteractionDisabled ? VeloraTheme.textMuted : VeloraTheme.textPrimary)
                             .onChange(of: viewModel.searchQuery) { _, newValue in
                                 viewModel.performSearch(query: newValue, debounce: true)
                             }
@@ -154,7 +168,7 @@ public struct MainWindowView: View {
                         if viewModel.isSearching {
                             ProgressView()
                                 .controlSize(.small)
-                        } else if !viewModel.searchQuery.isEmpty {
+                        } else if !viewModel.searchQuery.isEmpty && !viewModel.isInteractionDisabled {
                             Button(action: {
                                 viewModel.clearSearch()
                                 isSearchFocused = false
@@ -172,11 +186,14 @@ public struct MainWindowView: View {
                     .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSearchFocused ? VeloraTheme.accentCyan.opacity(0.65) : VeloraTheme.cardBorder, lineWidth: 1)
+                            .stroke(isSearchFocused && !viewModel.isInteractionDisabled ? VeloraTheme.accentCyan.opacity(0.65) : VeloraTheme.cardBorder, lineWidth: 1)
                     )
+                    .opacity(viewModel.isInteractionDisabled ? 0.55 : 1.0)
                     .contentShape(RoundedRectangle(cornerRadius: 12))
                     .onTapGesture {
-                        isSearchFocused = true
+                        if !viewModel.isInteractionDisabled {
+                            isSearchFocused = true
+                        }
                     }
                 }
 
@@ -195,6 +212,11 @@ public struct MainWindowView: View {
             }
         }
         .tint(VeloraTheme.accentViolet)
+        .onChange(of: viewModel.isInteractionDisabled) { _, isDisabled in
+            if isDisabled {
+                isSearchFocused = false
+            }
+        }
         .onAppear {
             viewModel.loadCachedSnapshotIfAvailable()
         }
@@ -209,7 +231,9 @@ public struct MainWindowView: View {
         .background(VeloraTheme.obsidianBase)
         .background {
             Button(action: {
-                isSearchFocused = true
+                if !viewModel.isInteractionDisabled {
+                    isSearchFocused = true
+                }
             }) {
                 EmptyView()
             }

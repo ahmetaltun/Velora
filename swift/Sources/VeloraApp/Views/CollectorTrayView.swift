@@ -145,6 +145,7 @@ public struct CollectorTrayView: View {
                                                 .foregroundColor(VeloraTheme.textSecondary)
                                         }
                                         .buttonStyle(.plain)
+                                        .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
                                     }
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
@@ -168,6 +169,8 @@ public struct CollectorTrayView: View {
                             .padding(.vertical, 5)
                             .background(VeloraTheme.obsidianSurface, in: Capsule())
                             .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
+                            .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
+                            .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
 
                             if isCountdownActive {
                                 Button(action: cancelCountdown) {
@@ -203,9 +206,11 @@ public struct CollectorTrayView: View {
                                         ),
                                         in: Capsule()
                                     )
-                                    .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
+                                    .shadow(color: VeloraTheme.accentViolet.opacity(viewModel.isInteractionDisabled ? 0.0 : 0.35), radius: 6, x: 0, y: 2)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
+                                .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
                             }
                         }
                     }

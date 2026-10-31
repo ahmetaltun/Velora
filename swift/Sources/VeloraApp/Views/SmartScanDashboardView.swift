@@ -107,7 +107,8 @@ public struct SmartScanDashboardView: View {
                             title: "Build Junk",
                             subtitle: "Rust target, node_modules & build caches",
                             systemImage: "gearshape.2.fill",
-                            accentColor: VeloraTheme.accentViolet
+                            accentColor: VeloraTheme.accentViolet,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_dev_artifacts"
                         }
@@ -116,7 +117,8 @@ public struct SmartScanDashboardView: View {
                             title: "App Leftovers",
                             subtitle: "Orphaned ~/Library support files",
                             systemImage: "trash.circle.fill",
-                            accentColor: VeloraTheme.accentPink
+                            accentColor: VeloraTheme.accentPink,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_orphans"
                         }
@@ -125,7 +127,8 @@ public struct SmartScanDashboardView: View {
                             title: "Xcode Storage",
                             subtitle: "DerivedData, device support & simulators",
                             systemImage: "hammer.circle.fill",
-                            accentColor: VeloraTheme.accentEmerald
+                            accentColor: VeloraTheme.accentEmerald,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_xcode"
                         }
@@ -134,7 +137,8 @@ public struct SmartScanDashboardView: View {
                             title: "Package Caches",
                             subtitle: "Homebrew, Cargo, npm, pip & Docker",
                             systemImage: "shippingbox.circle.fill",
-                            accentColor: VeloraTheme.accentAmber
+                            accentColor: VeloraTheme.accentAmber,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_package_caches"
                         }
@@ -143,7 +147,8 @@ public struct SmartScanDashboardView: View {
                             title: "Duplicate Finder",
                             subtitle: "Byte-for-byte duplicate file detector",
                             systemImage: "doc.on.doc.fill",
-                            accentColor: VeloraTheme.accentCyan
+                            accentColor: VeloraTheme.accentCyan,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_duplicates"
                         }
@@ -152,7 +157,8 @@ public struct SmartScanDashboardView: View {
                             title: "Malware & Threats",
                             subtitle: "LaunchAgent audit & code signatures",
                             systemImage: "shield.lefthalf.filled",
-                            accentColor: VeloraTheme.accentBlue
+                            accentColor: VeloraTheme.accentBlue,
+                            isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_security"
                         }
@@ -172,6 +178,7 @@ private struct QuickToolLauncherTile: View {
     let subtitle: String
     let systemImage: String
     let accentColor: Color
+    var isDisabled: Bool = false
     let action: () -> Void
 
     @State private var isHovering: Bool = false
@@ -181,22 +188,22 @@ private struct QuickToolLauncherTile: View {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(accentColor.opacity(isHovering ? 0.22 : 0.12))
+                        .fill(isDisabled ? VeloraTheme.textMuted.opacity(0.1) : accentColor.opacity(isHovering ? 0.22 : 0.12))
                         .frame(width: 38, height: 38)
 
                     Image(systemName: systemImage)
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(accentColor)
+                        .foregroundColor(isDisabled ? VeloraTheme.textMuted : accentColor)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
+                        .foregroundColor(isDisabled ? VeloraTheme.textMuted : VeloraTheme.textPrimary)
 
                     Text(subtitle)
                         .font(.system(size: 11, weight: .regular, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
+                        .foregroundColor(isDisabled ? VeloraTheme.textMuted.opacity(0.7) : VeloraTheme.textSecondary)
                         .lineLimit(1)
                 }
 
@@ -204,24 +211,27 @@ private struct QuickToolLauncherTile: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(isHovering ? accentColor : VeloraTheme.textMuted.opacity(0.6))
-                    .offset(x: isHovering ? 2 : 0)
+                    .foregroundColor(isHovering && !isDisabled ? accentColor : VeloraTheme.textMuted.opacity(0.6))
+                    .offset(x: isHovering && !isDisabled ? 2 : 0)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                isHovering ? VeloraTheme.obsidianElevated.opacity(0.9) : VeloraTheme.obsidianElevated,
+                isHovering && !isDisabled ? VeloraTheme.obsidianElevated.opacity(0.9) : VeloraTheme.obsidianElevated,
                 in: RoundedRectangle(cornerRadius: 12)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isHovering ? accentColor.opacity(0.4) : VeloraTheme.cardBorder, lineWidth: 1)
+                    .stroke(isHovering && !isDisabled ? accentColor.opacity(0.4) : VeloraTheme.cardBorder, lineWidth: 1)
             )
-            .shadow(color: isHovering ? accentColor.opacity(0.12) : Color.clear, radius: 8, x: 0, y: 3)
-            .scaleEffect(isHovering ? 1.015 : 1.0)
+            .opacity(isDisabled ? 0.45 : 1.0)
+            .shadow(color: isHovering && !isDisabled ? accentColor.opacity(0.12) : Color.clear, radius: 8, x: 0, y: 3)
+            .scaleEffect(isHovering && !isDisabled ? 1.015 : 1.0)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
         .onHover { hovering in
+            guard !isDisabled else { return }
             withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
                 isHovering = hovering
             }

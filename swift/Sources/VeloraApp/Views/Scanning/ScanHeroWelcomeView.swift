@@ -138,15 +138,15 @@ public struct ScanHeroWelcomeView: View {
                         in: RoundedRectangle(cornerRadius: 12)
                     )
                     .shadow(
-                        color: VeloraTheme.accentViolet.opacity(isHoveringButton && !viewModel.isScanning ? 0.65 : 0.35),
-                        radius: isHoveringButton && !viewModel.isScanning ? 16 : 8,
+                        color: VeloraTheme.accentViolet.opacity(isHoveringButton && !viewModel.isInteractionDisabled ? 0.65 : 0.35),
+                        radius: isHoveringButton && !viewModel.isInteractionDisabled ? 16 : 8,
                         x: 0,
                         y: 0
                     )
-                    .scaleEffect(isHoveringButton && !viewModel.isScanning ? 1.03 : 1.0)
+                    .scaleEffect(isHoveringButton && !viewModel.isInteractionDisabled ? 1.03 : 1.0)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isScanning)
+                .disabled(viewModel.isInteractionDisabled)
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                         isHoveringButton = hovering

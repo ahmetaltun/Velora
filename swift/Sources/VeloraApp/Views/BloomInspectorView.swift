@@ -67,6 +67,8 @@ public struct BloomInspectorView: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(VeloraTheme.accentViolet)
+                        .disabled(viewModel.isInteractionDisabled)
+                        .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
                 }
             }
             .padding(.top, 23)
@@ -118,6 +120,7 @@ public struct BloomInspectorView: View {
                                         .foregroundStyle(VeloraTheme.textMuted)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(viewModel.isInteractionDisabled)
                                 .help("Remove from basket without deleting the file")
                             }
                             .padding(11)

@@ -76,13 +76,25 @@ public final class VeloraViewModel {
     }
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
+    private var isSnapshotLoadingInProgress: Bool = false
+
+    /// Indicates whether global interaction (sidebar tools, search, navigation) is disabled
+    /// because catalog.bin is loading into memory or a volume scan is active.
+    public var isInteractionDisabled: Bool {
+        isScanning || isLoadingSnapshot
+    }
 
     public init() {
         self.engine = VeloraEngine()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.currentPath = home
         self.pathStack = [home]
+        let hasIndex = SnapshotManager.shared.hasAnyBinaryIndexFile
+        self.isLoadingSnapshot = hasIndex
         self.refreshStorageReconciliation()
+        if hasIndex {
+            self.loadCachedSnapshotIfAvailable()
+        }
     }
 
     /// Indicates whether a valid binary index snapshot file exists on disk.
@@ -127,10 +139,13 @@ public final class VeloraViewModel {
     /// This prevents blocking window presentation on app launch.
     public func loadCachedSnapshotIfAvailable() {
         guard SnapshotManager.shared.hasAnyBinaryIndexFile else {
+            isLoadingSnapshot = false
             scanStatusMessage = "Ready for initial scan"
             return
         }
 
+        guard !isSnapshotLoadingInProgress else { return }
+        isSnapshotLoadingInProgress = true
         isLoadingSnapshot = true
         scanStatusMessage = "Loading indexed catalog in background..."
 
@@ -149,6 +164,7 @@ public final class VeloraViewModel {
                         self.sectorStack = [root]
                     }
                     self.isLoadingSnapshot = false
+                    self.isSnapshotLoadingInProgress = false
                     self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
@@ -156,6 +172,7 @@ public final class VeloraViewModel {
             } else {
                 DispatchQueue.main.async {
                     self.isLoadingSnapshot = false
+                    self.isSnapshotLoadingInProgress = false
                     self.scanStatusMessage = "Failed to load cached snapshot; please perform a clean scan"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
@@ -378,6 +395,9 @@ public final class VeloraViewModel {
     }
 
     public func scanCurrentPath() {
+        if isSearchActive {
+            clearSearch()
+        }
         let path = currentPath
         isScanning = true
         cancelScanRequested = false
