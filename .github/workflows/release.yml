@@ -298,10 +298,22 @@ jobs:
           GENERATE_APPCAST="./swift/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
           if [ -n "$SPARKLE_KEY" ] && [ -x "$GENERATE_APPCAST" ]; then
             echo "Running Sparkle generate_appcast with Ed25519 signing key..."
+            SPARKLE_STAGING="build/sparkle_staging"
+            rm -rf "$SPARKLE_STAGING"
+            mkdir -p "$SPARKLE_STAGING"
+            cp "$ZIP_FILE" "$SPARKLE_STAGING/"
+
+            # Fetch existing appcast feed if available to preserve version history
+            curl -fsSL "https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml" \
+              -o "$SPARKLE_STAGING/appcast.xml" 2>/dev/null || true
+
             echo "$SPARKLE_KEY" | "$GENERATE_APPCAST" \
               --ed-key-file - \
               --download-url-prefix "https://github.com/ahmetaltun/Velora/releases/download/${{ steps.version.outputs.TAG }}/" \
-              build/
+              "$SPARKLE_STAGING"
+
+            mv "$SPARKLE_STAGING/appcast.xml" build/appcast.xml
+            rm -rf "$SPARKLE_STAGING"
             echo "✅ Sparkle appcast.xml generated."
           else
             echo "⚠️ SPARKLE_PRIVATE_KEY secret missing or generate_appcast not found: Skipping appcast generation."
