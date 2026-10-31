@@ -108,6 +108,10 @@ cat << EOF > "$CONTENTS/Info.plist"
     <string>Velora needs access to scan and clean project artifacts in Documents.</string>
     <key>NSDownloadsFolderUsageDescription</key>
     <string>Velora needs access to scan and clean downloaded caches.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Velora needs access to scan and clean project artifacts on external storage drives.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Velora needs access to scan and clean project artifacts on network volumes.</string>
     <!-- Sparkle 2 Auto-Update Configuration -->
     <key>SUFeedURL</key>
     <string>https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml</string>

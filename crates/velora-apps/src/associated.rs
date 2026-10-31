@@ -104,32 +104,43 @@ impl AssociatedFileResolver {
 
         // Group Containers
         let group_containers = lib_path.join("Group Containers");
+        let scan_group_folder = |folder_name: &str, p: &Path, out: &mut Vec<AppPart>| {
+            if Self::is_known_shared_suite_root(folder_name) {
+                // Safeguard: Shared suite roots (Microsoft Office, Google, Apple, Adobe, etc.)
+                // are shared across multiple apps and must not be associated with a single app.
+                return;
+            }
+
+            let is_match = if folder_name.contains(bundle_id) {
+                true
+            } else if app_name.len() >= 3 && folder_name.to_lowercase().contains(&app_name.to_lowercase()) {
+                // Avoid matching short names (e.g. "Go", "R") against unrelated containers
+                true
+            } else {
+                false
+            };
+
+            if is_match {
+                Self::check_candidate(
+                    p,
+                    AppPartKind::GroupContainer,
+                    "Shared Group Container",
+                    resolver,
+                    out,
+                );
+            }
+        };
+
         if let Some(res) = resolver {
             for (p, folder_name, _) in res.list_subdirs(&group_containers) {
-                if folder_name.contains(bundle_id) || folder_name.contains(app_name) {
-                    Self::check_candidate(
-                        &p,
-                        AppPartKind::SandboxedContainer,
-                        "Group Container",
-                        resolver,
-                        &mut additional_parts,
-                    );
-                }
+                scan_group_folder(&folder_name, &p, &mut additional_parts);
             }
         } else if group_containers.exists() {
             if let Ok(entries) = std::fs::read_dir(&group_containers) {
                 for entry_res in entries.flatten() {
                     let p = entry_res.path();
                     let folder_name = entry_res.file_name().to_string_lossy().to_string();
-                    if folder_name.contains(bundle_id) || folder_name.contains(app_name) {
-                        Self::check_candidate(
-                            &p,
-                            AppPartKind::SandboxedContainer,
-                            "Group Container",
-                            resolver,
-                            &mut additional_parts,
-                        );
-                    }
+                    scan_group_folder(&folder_name, &p, &mut additional_parts);
                 }
             }
         }
@@ -235,6 +246,25 @@ impl AssociatedFileResolver {
             kind,
             size_bytes,
             color_hex: kind.color_hex().to_string(),
+            is_shared: kind == AppPartKind::GroupContainer,
         });
+    }
+
+    /// Determines whether a group container folder belongs to a known multi-app vendor suite
+    /// (e.g. Microsoft Office, Google, Adobe, Apple) where data is shared among several applications.
+    pub fn is_known_shared_suite_root(folder_name: &str) -> bool {
+        let lower = folder_name.to_lowercase();
+        const SHARED_PREFIXES: &[&str] = &[
+            "group.com.microsoft",
+            "ubf8t346g9.", // Microsoft 365 / Office Team ID
+            "group.com.apple",
+            "group.com.google",
+            "group.com.adobe",
+            "group.com.dropbox",
+            "group.com.docker",
+            "group.org.mozilla",
+        ];
+
+        SHARED_PREFIXES.iter().any(|prefix| lower.starts_with(prefix))
     }
 }

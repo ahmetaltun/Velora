@@ -49,3 +49,18 @@ fn test_index_powered_footprint_resolution() {
     assert_eq!(orphans[0].name, "com.previouslydeleted.app");
     assert_eq!(orphans[0].size_bytes, 15_000_000);
 }
+
+#[test]
+fn test_shared_group_container_safeguards() {
+    use velora_apps::associated::AssociatedFileResolver;
+
+    // Verify known multi-app vendor suite roots are correctly identified
+    assert!(AssociatedFileResolver::is_known_shared_suite_root("UBF8T346G9.Office"));
+    assert!(AssociatedFileResolver::is_known_shared_suite_root("group.com.microsoft"));
+    assert!(AssociatedFileResolver::is_known_shared_suite_root("group.com.apple.notes"));
+    assert!(AssociatedFileResolver::is_known_shared_suite_root("group.com.google.chrome"));
+    assert!(AssociatedFileResolver::is_known_shared_suite_root("group.com.adobe.creativecloud"));
+
+    // Verify dedicated app group container is not flagged as shared suite root
+    assert!(!AssociatedFileResolver::is_known_shared_suite_root("group.com.independent.solitaryapp"));
+}

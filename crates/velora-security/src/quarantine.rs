@@ -4,6 +4,12 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AssociatedQuarantinedPath {
+    pub original_path: String,
+    pub quarantined_path: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuarantinedItemEntry {
     pub id: String,
@@ -12,11 +18,47 @@ pub struct QuarantinedItemEntry {
     pub original_mode: u32,
     pub quarantined_at_secs: u64,
     pub associated_paths: Vec<String>,
+    #[serde(default)]
+    pub associated_entries: Vec<AssociatedQuarantinedPath>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct QuarantineManifest {
     pub items: Vec<QuarantinedItemEntry>,
+}
+
+/// Recursively copies a directory to the destination path.
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let entry_type = entry.file_type()?;
+        let target = dst.join(entry.file_name());
+        if entry_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Moves a file or directory, falling back to copy + delete on cross-device links (EXDEV).
+fn move_or_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    match fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(err) if err.raw_os_error() == Some(libc::EXDEV) || err.kind() == std::io::ErrorKind::CrossesDevices => {
+            if src.is_dir() {
+                copy_dir_recursive(src, dst)?;
+                fs::remove_dir_all(src)?;
+            } else {
+                fs::copy(src, dst)?;
+                fs::remove_file(src)?;
+            }
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
 }
 
 pub struct QuarantineVault {
@@ -90,15 +132,16 @@ impl QuarantineVault {
                 original_mode = meta.permissions().mode();
             }
 
-            // Move file into vault
-            fs::rename(target_path, &dest_path)?;
+            // Move file into vault (falling back to copy + delete on EXDEV across volumes)
+            move_or_copy(target_path, &dest_path)?;
 
-            // Strip all permissions (chmod 000) so it cannot be executed
+            // Strip execution and write permissions (chmod 000) so it cannot be executed
             let _ = fs::set_permissions(&dest_path, fs::Permissions::from_mode(0o000));
         }
 
         // 3. Move associated plists into vault
         let mut quarantined_assocs = Vec::new();
+        let mut associated_entries = Vec::new();
         for assoc in associated_paths {
             let p = Path::new(assoc);
             if p.exists() {
@@ -107,8 +150,13 @@ impl QuarantineVault {
                     .map(|f| f.to_string_lossy().to_string())
                     .unwrap_or_else(|| "assoc".to_string());
                 let dest_assoc = self.vault_dir.join(format!("{}_{}.quarantine_meta", id, a_name));
-                if fs::rename(p, &dest_assoc).is_ok() {
-                    quarantined_assocs.push(dest_assoc.to_string_lossy().to_string());
+                if move_or_copy(p, &dest_assoc).is_ok() {
+                    let dest_str = dest_assoc.to_string_lossy().to_string();
+                    quarantined_assocs.push(dest_str.clone());
+                    associated_entries.push(AssociatedQuarantinedPath {
+                        original_path: assoc.clone(),
+                        quarantined_path: dest_str,
+                    });
                 }
             }
         }
@@ -123,6 +171,7 @@ impl QuarantineVault {
                 .map(|d| d.as_secs())
                 .unwrap_or(0),
             associated_paths: quarantined_assocs,
+            associated_entries,
         };
 
         manifest.items.push(entry.clone());
@@ -131,7 +180,8 @@ impl QuarantineVault {
         Ok(entry)
     }
 
-    /// Restores a previously quarantined item to its original location and restores its permissions.
+    /// Restores a previously quarantined item to its original location and restores its permissions,
+    /// along with all associated launch agents or daemons.
     pub fn restore(&self, id: &str) -> std::io::Result<bool> {
         let mut manifest = self.load_manifest();
         let idx = manifest.items.iter().position(|i| i.id == id);
@@ -149,7 +199,19 @@ impl QuarantineVault {
                     let _ = fs::create_dir_all(parent);
                 }
 
-                fs::rename(q_path, orig_path)?;
+                move_or_copy(q_path, orig_path)?;
+            }
+
+            // Restore all associated plists and metadata files
+            for assoc in &entry.associated_entries {
+                let assoc_q = Path::new(&assoc.quarantined_path);
+                let assoc_orig = Path::new(&assoc.original_path);
+                if assoc_q.exists() {
+                    if let Some(parent) = assoc_orig.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    let _ = move_or_copy(assoc_q, assoc_orig);
+                }
             }
 
             let _ = self.save_manifest(&manifest);

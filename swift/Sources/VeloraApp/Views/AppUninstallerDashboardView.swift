@@ -382,6 +382,10 @@ private struct AppDetailView: View {
 
                     Button(action: {
                         for part in app.parts {
+                            // Safety guardrail: Exclude shared group containers from bulk "Stage App"
+                            if part.kindName.contains("Group Container") {
+                                continue
+                            }
                             viewModel.collect(path: part.path, size: part.sizeBytes, isDir: true)
                         }
                     }) {
@@ -479,6 +483,18 @@ private struct AppPartCard: View {
                     .foregroundColor(VeloraTheme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                if part.kindName.contains("Group Container") {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(VeloraTheme.accentAmber)
+                        Text("Shared container — may affect other apps from this developer")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(VeloraTheme.accentAmber)
+                    }
+                    .padding(.top, 1)
+                }
             }
 
             Spacer()

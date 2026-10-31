@@ -26,6 +26,7 @@ impl BundleScanner {
                         kind: AppPartKind::ApplicationBundle,
                         size_bytes: bundle_size,
                         color_hex: AppPartKind::ApplicationBundle.color_hex().to_string(),
+                        is_shared: false,
                     };
 
                     apps.push(InstalledApp {
@@ -141,6 +142,7 @@ impl BundleScanner {
             kind: AppPartKind::ApplicationBundle,
             size_bytes: bundle_size,
             color_hex: AppPartKind::ApplicationBundle.color_hex().to_string(),
+            is_shared: false,
         };
 
         Some(InstalledApp {

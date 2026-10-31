@@ -86,3 +86,59 @@ fn test_in_memory_triage_zero_io() {
     assert!(candidates.iter().any(|c| c.name == "com.suspicious.miner.plist" && c.kind == CandidateKind::LaunchAgentPlist));
     assert!(candidates.iter().any(|c| c.name == "Salary_Slip.pdf.app" && c.kind == CandidateKind::SuspiciousDoubleExtension));
 }
+
+#[test]
+fn test_quarantine_and_restore_cycle() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use velora_security::quarantine::QuarantineVault;
+
+    let temp_dir = std::env::temp_dir().join(format!("velora_sec_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir).unwrap();
+
+    let target_bin = temp_dir.join("evil_miner");
+    fs::write(&target_bin, b"#!/bin/sh\necho mining").unwrap();
+    fs::set_permissions(&target_bin, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let assoc_plist = temp_dir.join("evil_miner.plist");
+    fs::write(&assoc_plist, b"<plist><dict></dict></plist>").unwrap();
+
+    let vault = QuarantineVault::new(&temp_dir);
+    let entry = vault
+        .quarantine(
+            "threat_test_1",
+            &target_bin,
+            &[assoc_plist.to_string_lossy().to_string()],
+        )
+        .expect("Quarantine should succeed");
+
+    // Verify original paths are moved
+    assert!(!target_bin.exists(), "Target binary should be moved to vault");
+    assert!(!assoc_plist.exists(), "Associated plist should be moved to vault");
+
+    // Verify quarantined file has 000 permissions
+    let q_meta = fs::metadata(&entry.quarantined_path).unwrap();
+    assert_eq!(
+        q_meta.permissions().mode() & 0o777,
+        0o000,
+        "Quarantined item must have 000 permissions"
+    );
+
+    // Test restore
+    let restored = vault.restore(&entry.id).expect("Restore should succeed");
+    assert!(restored, "Expected restore to return true");
+
+    // Verify both items are restored
+    assert!(target_bin.exists(), "Target binary must be restored to original path");
+    assert!(assoc_plist.exists(), "Associated plist must be restored to original path");
+
+    let restored_meta = fs::metadata(&target_bin).unwrap();
+    assert_eq!(
+        restored_meta.permissions().mode() & 0o777,
+        0o755,
+        "Original mode 0755 must be restored"
+    );
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}

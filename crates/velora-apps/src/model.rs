@@ -6,6 +6,7 @@ pub enum AppPartKind {
     ApplicationSupport,
     CachesAndLogs,
     SandboxedContainer,
+    GroupContainer,
     PreferencesAndDaemons,
 }
 
@@ -16,6 +17,7 @@ impl AppPartKind {
             Self::ApplicationSupport => "Application Support Data",
             Self::CachesAndLogs => "Caches & WebKit Storage",
             Self::SandboxedContainer => "Sandboxed Container",
+            Self::GroupContainer => "Shared Group Container",
             Self::PreferencesAndDaemons => "Preferences & LaunchDaemons",
         }
     }
@@ -26,6 +28,7 @@ impl AppPartKind {
             Self::ApplicationSupport => "#10B981",   // Emerald
             Self::CachesAndLogs => "#F59E0B",        // Amber
             Self::SandboxedContainer => "#8B5CF6",   // Purple
+            Self::GroupContainer => "#EC4899",       // Rose / Pink
             Self::PreferencesAndDaemons => "#6B7280",// Slate
         }
     }
@@ -38,6 +41,8 @@ pub struct AppPart {
     pub kind: AppPartKind,
     pub size_bytes: u64,
     pub color_hex: String,
+    #[serde(default)]
+    pub is_shared: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

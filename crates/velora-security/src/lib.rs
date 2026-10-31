@@ -12,5 +12,7 @@ pub mod triage;
 pub use model::{
     SecurityScanSummary, SigningStatus, ThreatCategory, ThreatRecord, ThreatSeverity,
 };
-pub use quarantine::{QuarantineManifest, QuarantineVault, QuarantinedItemEntry};
+pub use quarantine::{
+    AssociatedQuarantinedPath, QuarantineManifest, QuarantineVault, QuarantinedItemEntry,
+};
 pub use scanner::SecurityScanner;

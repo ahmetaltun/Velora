@@ -3,6 +3,7 @@ import VeloraCore
 
 public struct MainWindowView: View {
     @State public var viewModel = VeloraViewModel()
+    @ObservedObject private var permissionManager = PermissionManager.shared
     @AppStorage("isCleanupInspectorVisible") private var showBloomInspector: Bool = false
     @FocusState private var isSearchFocused: Bool
 
@@ -25,6 +26,20 @@ public struct MainWindowView: View {
         } detail: {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
+                    // Full Disk Access Security Banner
+                    if !permissionManager.hasFullDiskAccess && !permissionManager.isBannerDismissed {
+                        FullDiskAccessBannerView()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+                            .padding(.bottom, 4)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .scale(scale: 0.96).combined(with: .opacity)
+                                )
+                            )
+                    }
+
                     // CleanMyMac-style Floating Scan Banner
                     if viewModel.isScanning {
                         CleanScanBannerView(viewModel: viewModel)
@@ -90,6 +105,8 @@ public struct MainWindowView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.collectorItems.isEmpty)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.isScanning)
             .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.shouldShowScanUI)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: permissionManager.hasFullDiskAccess)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: permissionManager.isBannerDismissed)
             .toolbar {
                 // Navigation controls
                 ToolbarItemGroup(placement: .navigation) {
