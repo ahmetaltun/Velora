@@ -64,9 +64,12 @@ public enum AppAssetLoader {
     public static func openAboutPanel() {
         var options: [NSApplication.AboutPanelOptionKey: Any] = [
             .applicationName: "Velora",
-            .version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
-            .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+            .applicationVersion: VeloraAppInfo.shortVersion,
         ]
+        let build = VeloraAppInfo.buildVersion
+        if !build.isEmpty && build != VeloraAppInfo.shortVersion {
+            options[.version] = build
+        }
         if let icon = appIcon {
             options[.applicationIcon] = icon
         }

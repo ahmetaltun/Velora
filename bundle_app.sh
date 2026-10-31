@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
+VERSION="${1:-${DEFAULT_VERSION:-0.2.0}}"
+
 APP_DIR="Velora.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
@@ -51,13 +57,15 @@ for icon_asset in assets/icons/VeloraIcon-*.png; do
 done
 
 # Create Info.plist
-cat << 'EOF' > "$CONTENTS/Info.plist"
+cat << EOF > "$CONTENTS/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Velora</string>
     <key>CFBundleExecutable</key>
     <string>Velora</string>
     <key>CFBundleIconFile</key>
@@ -75,9 +83,9 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
         <string>MacOSX</string>
     </array>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>LSArchitecturePriority</key>
@@ -86,10 +94,20 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
     </array>
     <key>LSRequiresNativeExecution</key>
     <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Velora Contributors</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Velora needs access to scan and clean project artifacts on your Desktop.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Velora needs access to scan and clean project artifacts in Documents.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Velora needs access to scan and clean downloaded caches.</string>
     <!-- Sparkle 2 Auto-Update Configuration -->
     <key>SUFeedURL</key>
     <string>https://github.com/ahmetaltun/Velora/releases/latest/download/appcast.xml</string>

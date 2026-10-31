@@ -33,12 +33,7 @@ public struct SidebarView: View {
     }
 
     private var appVersionString: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        if let build, !build.isEmpty, build != version {
-            return "Version \(version) (\(build))"
-        }
-        return "Version \(version)"
+        VeloraAppInfo.formattedSidebarVersion
     }
 
     private func selectSidebarTool(_ id: String, loader: (() -> Void)? = nil) {

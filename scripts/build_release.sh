@@ -12,7 +12,11 @@ set -euo pipefail
 #   ./scripts/build_release.sh 0.2.0 --dmg --sign "Developer ID Application: Company (TEAMID)"
 # -----------------------------------------------------------------------------
 
-RAW_VERSION="0.2.0"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
+RAW_VERSION="${DEFAULT_VERSION:-0.2.0}"
 GENERATE_DMG=false
 GENERATE_ZIP=false
 SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
@@ -46,9 +50,6 @@ done
 
 # Strip leading 'v' if passed as git tag (e.g., v0.1.0 -> 0.1.0)
 VERSION="${RAW_VERSION#v}"
-
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
 
 echo "=================================================="
 echo "  Velora Release Build Pipeline"
