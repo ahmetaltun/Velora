@@ -13,7 +13,6 @@ struct ScanContext<'a> {
     listener: Option<&'a dyn ProgressListener>,
     files_scanned: u64,
     bytes_scanned: u64,
-    last_reported_files: u64,
     last_reported_time: Instant,
 }
 
@@ -23,7 +22,6 @@ impl<'a> ScanContext<'a> {
             listener,
             files_scanned: 0,
             bytes_scanned: 0,
-            last_reported_files: 0,
             last_reported_time: Instant::now(),
         }
     }
@@ -33,19 +31,18 @@ impl<'a> ScanContext<'a> {
         self.files_scanned += 1;
         self.bytes_scanned += size;
 
-        // Throttle check: emit every 500 files and if at least 25ms (40Hz) have elapsed
-        if self.files_scanned - self.last_reported_files >= 500 {
-            if self.last_reported_time.elapsed().as_millis() >= 25 {
-                if let Some(listener) = self.listener {
-                    listener.on_progress(
-                        &current_dir_path.to_string_lossy(),
-                        self.files_scanned,
-                        self.bytes_scanned,
-                    );
-                }
-                self.last_reported_files = self.files_scanned;
-                self.last_reported_time = Instant::now();
+        // Throttle check: test every 512 files via bitmask and emit if at least 66ms (~15Hz) have elapsed
+        if (self.files_scanned & 511) == 0
+            && self.last_reported_time.elapsed().as_millis() >= 66
+        {
+            if let Some(listener) = self.listener {
+                listener.on_progress(
+                    &current_dir_path.to_string_lossy(),
+                    self.files_scanned,
+                    self.bytes_scanned,
+                );
             }
+            self.last_reported_time = Instant::now();
         }
     }
 
