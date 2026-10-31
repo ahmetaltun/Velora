@@ -109,7 +109,6 @@ else
     echo "[ERROR] Sparkle.framework not found in build artifacts."
     exit 1
 fi
-fi
 
 # Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
 if ! otool -l "$MACOS_DIR/Velora" | grep -F -q "@executable_path/../Frameworks"; then
