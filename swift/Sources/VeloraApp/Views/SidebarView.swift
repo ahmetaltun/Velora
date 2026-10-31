@@ -190,59 +190,6 @@ public struct SidebarView: View {
                         }
                     }
                 }
-
-                Section("Storage & Explorer") {
-                    SidebarRowItem(
-                        title: "Macintosh HD",
-                        systemImage: "internaldrive.fill",
-                        accentColor: VeloraTheme.accentBlue,
-                        badge: nil,
-                        isSelected: viewModel.activeSidebarId == "storage_volumes"
-                    ) {
-                        viewModel.activeSidebarId = "storage_volumes"
-                    }
-
-                    SidebarRowItem(
-                        title: "Home",
-                        systemImage: "house.fill",
-                        accentColor: .secondary,
-                        badge: nil,
-                        isSelected: viewModel.activeSidebarId == "fav_home"
-                    ) {
-                        viewModel.navigateToFavorite(
-                            id: "fav_home",
-                            path: FileManager.default.homeDirectoryForCurrentUser.path
-                        )
-                    }
-
-                    SidebarRowItem(
-                        title: "Developer",
-                        systemImage: "chevron.left.forwardslash.chevron.right",
-                        accentColor: .secondary,
-                        badge: nil,
-                        isSelected: viewModel.activeSidebarId == "fav_dev"
-                    ) {
-                        let devPath = (FileManager.default.homeDirectoryForCurrentUser.path as NSString).appendingPathComponent("Rust")
-                        viewModel.navigateToFavorite(
-                            id: "fav_dev",
-                            path: devPath
-                        )
-                    }
-
-                    SidebarRowItem(
-                        title: "Downloads",
-                        systemImage: "arrow.down.circle.fill",
-                        accentColor: .secondary,
-                        badge: nil,
-                        isSelected: viewModel.activeSidebarId == "fav_downloads"
-                    ) {
-                        let dlPath = (FileManager.default.homeDirectoryForCurrentUser.path as NSString).appendingPathComponent("Downloads")
-                        viewModel.navigateToFavorite(
-                            id: "fav_downloads",
-                            path: dlPath
-                        )
-                    }
-                }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
@@ -277,11 +224,12 @@ private struct SidebarRowItem: View {
                     Text(badge)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(isSelected ? VeloraTheme.accentViolet : VeloraTheme.textMuted)
+                        .layoutPriority(1)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
             .background(
                 isSelected ? VeloraTheme.accentViolet.opacity(0.14) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 10)

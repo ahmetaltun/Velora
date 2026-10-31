@@ -8,7 +8,8 @@ RESOURCES="$CONTENTS/Resources"
 
 mkdir -p "$MACOS" "$RESOURCES"
 
-# Copy binary
+# Copy binary (remove old inode first to avoid 'Text file busy' if running)
+rm -f "$MACOS/Velora"
 if [ -f "swift/.build/arm64-apple-macosx/debug/Velora" ]; then
     cp "swift/.build/arm64-apple-macosx/debug/Velora" "$MACOS/Velora"
 elif [ -f "swift/.build/debug/Velora" ]; then

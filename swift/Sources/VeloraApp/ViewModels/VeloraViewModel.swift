@@ -11,14 +11,11 @@ public final class VeloraViewModel {
     public var displayedItems: [SearchResultItem] = []
     public var currentPath: String = ""
     public var currentSunburst: SunburstSectorItem?
-    public var selectedSector: SunburstSectorItem?
-    public var hoveredSector: SunburstSectorItem?
     public var pathStack: [String] = []
     public var sectorStack: [SunburstSectorItem] = []
     public var currentFolderTotalSize: UInt64 = 0
     public var collectorItems: [CollectedFile] = []
     public var collectorTotalSize: UInt64 = 0
-    public var selectedViewMode: ViewMode = .table
     public var activeSidebarId: String = "volume_root"
     public var isScanning: Bool = false
     public var isSearching: Bool = false
@@ -482,23 +479,6 @@ public final class VeloraViewModel {
             let home = FileManager.default.homeDirectoryForCurrentUser.path
             currentPath = home
             pathStack = [home]
-            currentSunburst = nil
-            sectorStack = []
-        }
-        refreshTableItems()
-    }
-
-    public func navigateToFavorite(id: String, path: String) {
-        searchQuery = ""
-        activeSidebarId = id
-        currentPath = path
-        pathStack = [path]
-
-        if let root = sectorStack.first ?? currentSunburst,
-           let sector = findSector(byPath: path, in: root) {
-            currentSunburst = sector
-            sectorStack = [sector]
-        } else {
             currentSunburst = nil
             sectorStack = []
         }

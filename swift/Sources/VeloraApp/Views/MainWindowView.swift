@@ -10,7 +10,7 @@ public struct MainWindowView: View {
     public var body: some View {
         NavigationSplitView {
             SidebarView(viewModel: viewModel)
-                .navigationSplitViewColumnWidth(min: 205, ideal: 232, max: 268)
+                .navigationSplitViewColumnWidth(min: 245, ideal: 265, max: 310)
         } detail: {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
@@ -48,15 +48,10 @@ public struct MainWindowView: View {
                             DuplicateFinderView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_security" {
                             MalwareScannerView(viewModel: viewModel)
-                        } else if viewModel.activeSidebarId == "storage_volumes" {
-                            ApfsStorageCardView(viewModel: viewModel)
-                                .padding(24)
                         } else if viewModel.shouldShowScanUI && viewModel.searchQuery.isEmpty {
                             SmartScanDashboardView(viewModel: viewModel)
-                        } else if !viewModel.searchQuery.isEmpty || viewModel.selectedViewMode == .table {
-                            FileTableView(viewModel: viewModel)
                         } else {
-                            SunburstCanvasView(viewModel: viewModel)
+                            FileTableView(viewModel: viewModel)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,8 +166,8 @@ public struct MainWindowView: View {
                     )
                 }
 
-                // View Mode & Actions
-                ToolbarItemGroup(placement: .primaryAction) {
+                // Actions
+                ToolbarItem(placement: .primaryAction) {
                     Button(action: {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             showBloomInspector.toggle()
@@ -182,21 +177,6 @@ public struct MainWindowView: View {
                             .foregroundStyle(showBloomInspector ? VeloraTheme.accentViolet : VeloraTheme.textSecondary)
                     }
                     .help("Toggle cleanup inspector")
-
-                    Picker("View", selection: $viewModel.selectedViewMode) {
-                        ForEach(ViewMode.allCases) { mode in
-                            Label(mode.rawValue, systemImage: mode.iconName)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Button(action: {
-                        viewModel.scanCurrentPath()
-                    }) {
-                        Label("Rescan", systemImage: "arrow.clockwise")
-                    }
-                    .help("Rescan current folder")
                 }
             }
         }

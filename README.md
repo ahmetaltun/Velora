@@ -51,6 +51,20 @@ Velora/
 
 ---
 
+## Development & Live Reload
+
+For continuous development with live updates across both the Rust backend and SwiftUI frontend, run the dev watcher:
+
+```bash
+./scripts/dev.sh
+```
+
+- **Selective compilation**: Automatically detects whether Rust (`crates/`), Swift (`swift/Sources/`), or assets changed to avoid redundant compilation.
+- **Auto-relaunch**: Packages `Velora.app` and relaunches the app upon successful build.
+- **Fault-tolerant**: If compilation fails while typing, the existing running app is preserved while displaying compiler errors.
+
+---
+
 ## Quick Start & Building
 
 ### 1. Build the Rust FFI Library
