@@ -61,6 +61,16 @@ impl FileRecord {
     }
 
     #[inline(always)]
+    pub fn is_dataless(&self) -> bool {
+        self.flags.contains(FileFlags::IS_DATALESS)
+    }
+
+    #[inline(always)]
+    pub fn is_apfs_clone(&self) -> bool {
+        self.flags.contains(FileFlags::IS_APFS_CLONE)
+    }
+
+    #[inline(always)]
     pub fn mark_deleted(&mut self) {
         self.flags.insert(FileFlags::IS_DELETED);
     }

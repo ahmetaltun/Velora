@@ -71,16 +71,91 @@ impl Sha256 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FileInodeId {
+pub struct FilePhysicalIdentity {
     pub dev: u64,
     pub ino: u64,
+    pub clone_id: u64,
 }
 
-impl FileInodeId {
+impl FilePhysicalIdentity {
     #[inline]
     pub fn is_valid(&self) -> bool {
         self.ino != 0
     }
+}
+
+/// Queries the APFS clone ID via macOS getattrlist using ATTR_CMNEXT_CLONEID.
+/// If two files on the same volume share the same non-zero clone ID, they are Copy-on-Write
+/// clones sharing the exact same physical storage blocks.
+#[cfg(target_os = "macos")]
+fn get_apfs_clone_id(path: &Path) -> u64 {
+    #[repr(C)]
+    struct AttrList {
+        bitmapcount: u16,
+        reserved: u16,
+        commonattr: u32,
+        volattr: u32,
+        dirattr: u32,
+        fileattr: u32,
+        forkattr: u32,
+    }
+
+    #[repr(C, packed(4))]
+    struct CloneIdBuffer {
+        length: u32,
+        clone_id: u64,
+    }
+
+    const FSOPT_ATTR_CMN_EXTENDED: libc::c_ulong = 0x00000020;
+    const ATTR_CMNEXT_CLONEID: u32 = 0x00000100;
+    const ATTR_BIT_MAP_COUNT: u16 = 5;
+
+    let mut attr_list = AttrList {
+        bitmapcount: ATTR_BIT_MAP_COUNT,
+        reserved: 0,
+        commonattr: 0,
+        volattr: 0,
+        dirattr: 0,
+        fileattr: 0,
+        forkattr: ATTR_CMNEXT_CLONEID,
+    };
+
+    let mut buf = CloneIdBuffer {
+        length: 0,
+        clone_id: 0,
+    };
+
+    let path_str = path.to_string_lossy();
+    if let Ok(c_path) = std::ffi::CString::new(path_str.as_bytes()) {
+        extern "C" {
+            fn getattrlist(
+                path: *const libc::c_char,
+                attrList: *mut AttrList,
+                attrBuf: *mut libc::c_void,
+                attrBufSize: libc::size_t,
+                options: libc::c_ulong,
+            ) -> libc::c_int;
+        }
+
+        unsafe {
+            if getattrlist(
+                c_path.as_ptr(),
+                &mut attr_list,
+                &mut buf as *mut _ as *mut libc::c_void,
+                std::mem::size_of::<CloneIdBuffer>(),
+                FSOPT_ATTR_CMN_EXTENDED,
+            ) == 0
+            {
+                return buf.clone_id;
+            }
+        }
+    }
+    0
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_apfs_clone_id(_path: &Path) -> u64 {
+    0
 }
 
 pub struct DuplicateFinder;
@@ -91,10 +166,11 @@ impl DuplicateFinder {
     pub fn find_duplicates(volume: &VolumeIndex, min_size_bytes: u64) -> DuplicateSummary {
         // TIER 1: In-memory exact byte size grouping
         // Files with unique sizes cannot be duplicates and are discarded with 0 disk I/O.
+        // Dataless (cloud-evicted) files are excluded to prevent on-demand cloud downloads.
         let mut size_buckets: HashMap<u64, Vec<usize>> = HashMap::new();
 
         for (idx, record) in volume.records.iter().enumerate() {
-            if record.is_deleted() || record.is_dir() || record.is_symlink() || record.size < min_size_bytes {
+            if record.is_deleted() || record.is_dir() || record.is_symlink() || record.is_dataless() || record.size < min_size_bytes {
                 continue;
             }
             size_buckets.entry(record.size).or_default().push(idx);
@@ -108,12 +184,13 @@ impl DuplicateFinder {
 
         // TIER 2: Parallel multi-point sparse probe (< 12KB disk I/O)
         // Samples 4KB prefix, 4KB suffix, and 4KB midpoint to eliminate non-duplicates early.
-        // Also tracks seen inodes to deduplicate hard links sharing identical APFS physical storage.
+        // Also tracks seen inodes and APFS clone IDs to deduplicate hard links and CoW clones sharing physical storage.
         let candidate_sparse_groups: Vec<Vec<(usize, String, [u8; 32])>> = candidate_size_groups
             .into_par_iter()
             .flat_map(|(size, indices)| {
                 let mut sparse_buckets: HashMap<[u8; 32], Vec<(usize, String, [u8; 32])>> = HashMap::new();
-                let mut seen_inodes: HashSet<FileInodeId> = HashSet::new();
+                let mut seen_inodes: HashSet<(u64, u64)> = HashSet::new();
+                let mut seen_clone_ids: HashSet<(u64, u64)> = HashSet::new();
 
                 for idx in indices {
                     let record = &volume.records[idx];
@@ -124,10 +201,14 @@ impl DuplicateFinder {
                         continue;
                     }
 
-                    if let Some((inode_id, sparse_hash)) = Self::probe_sparse_fingerprint(Path::new(&path), size) {
-                        // If this inode was already seen in this size bucket, it's a hard link to the same physical file.
-                        // Hard links share physical storage blocks, so they do not waste space.
-                        if inode_id.is_valid() && !seen_inodes.insert(inode_id) {
+                    if let Some((storage_id, sparse_hash)) = Self::probe_sparse_fingerprint(Path::new(&path), size) {
+                        // Hard links share physical storage blocks, so they do not waste extra disk space.
+                        if storage_id.is_valid() && !seen_inodes.insert((storage_id.dev, storage_id.ino)) {
+                            continue;
+                        }
+
+                        // APFS CoW clones share identical physical extent blocks, so they do not waste extra disk space.
+                        if storage_id.clone_id != 0 && !seen_clone_ids.insert((storage_id.dev, storage_id.clone_id)) {
                             continue;
                         }
 
@@ -270,22 +351,32 @@ impl DuplicateFinder {
     /// Computes a multi-point sparse fingerprint (under 12KB disk I/O):
     /// - Files <= 4KB: Reads up to 4096 bytes (full content hash).
     /// - Files > 4KB: Reads 4KB prefix, 4KB suffix, and 4KB midpoint (if > 64KB).
-    /// Returns the filesystem Inode identity and sparse SHA-256 fingerprint.
-    fn probe_sparse_fingerprint(path: &Path, file_size: u64) -> Option<(FileInodeId, [u8; 32])> {
+    /// Returns the filesystem physical identity (dev, ino, clone_id) and sparse SHA-256 fingerprint.
+    fn probe_sparse_fingerprint(path: &Path, file_size: u64) -> Option<(FilePhysicalIdentity, [u8; 32])> {
+        // Fast pre-check: Never open or read cloud-evicted dataless files (iCloud Drive / OneDrive)
+        // to avoid triggering an on-demand background network download of the file.
+        let sym_meta = std::fs::symlink_metadata(path).ok()?;
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::macos::fs::MetadataExt as MacMetadataExt;
+            const SF_DATALESS: u32 = 0x40000000;
+            if (sym_meta.st_flags() & SF_DATALESS) != 0 {
+                return None;
+            }
+        }
+
         let mut file = File::open(path).ok()?;
         let meta = file.metadata().ok()?;
 
         #[cfg(unix)]
-        let inode_id = FileInodeId {
-            dev: meta.dev(),
-            ino: meta.ino(),
-        };
-
+        let dev = meta.dev();
+        #[cfg(unix)]
+        let ino = meta.ino();
         #[cfg(not(unix))]
-        let inode_id = FileInodeId {
-            dev: 0,
-            ino: 0,
-        };
+        let (dev, ino) = (0, 0);
+
+        let clone_id = get_apfs_clone_id(path);
+        let storage_id = FilePhysicalIdentity { dev, ino, clone_id };
 
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 4096];
@@ -298,7 +389,7 @@ impl DuplicateFinder {
         hasher.update(&buffer[..bytes_read]);
 
         if file_size <= 4096 {
-            return Some((inode_id, hasher.finalize()));
+            return Some((storage_id, hasher.finalize()));
         }
 
         // 2. Suffix probe (last 4KB via seek)
@@ -324,7 +415,7 @@ impl DuplicateFinder {
             }
         }
 
-        Some((inode_id, hasher.finalize()))
+        Some((storage_id, hasher.finalize()))
     }
 
     /// Streams two files in lockstep 64KB chunks:

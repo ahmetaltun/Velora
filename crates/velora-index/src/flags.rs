@@ -11,5 +11,7 @@ bitflags! {
         const IS_PACKAGE   = 1 << 4;
         const IS_READONLY  = 1 << 5;
         const IS_DELETED   = 1 << 6;
+        const IS_DATALESS  = 1 << 7;
+        const IS_APFS_CLONE = 1 << 8;
     }
 }

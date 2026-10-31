@@ -1,8 +1,14 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "macos")]
+use std::os::macos::fs::MetadataExt as MacMetadataExt;
 use std::path::Path;
 use std::time::Instant;
 use velora_index::{DirId, FileFlags, FileRecord, VolumeIndex};
+
+/// BSD SF_DATALESS flag on macOS indicating the item's contents are stored in cloud storage (e.g., iCloud Drive)
+/// and have been evicted locally. Reading or opening this file will trigger an on-demand cloud download.
+const SF_DATALESS: u32 = 0x40000000;
 
 /// Progress listener interface for receiving throttled traversal updates.
 pub trait ProgressListener: Send + Sync {
@@ -85,7 +91,7 @@ pub fn scan_directories_with_progress(
         let root_str = root_path.to_string_lossy();
         let (offset, len) = volume.pool.push(&root_str);
         let root_dir_id = volume.dirs.insert(offset, len, None);
-        let _ = scan_dir_recursive(root_path, root_dir_id, volume, &mut context);
+        let _ = scan_dir_recursive(root_path, root_path, root_dir_id, volume, &mut context);
     }
     if let Some(&first) = roots.first() {
         context.finish(first);
@@ -93,8 +99,31 @@ pub fn scan_directories_with_progress(
     Ok(())
 }
 
+#[inline]
+fn should_skip_directory(path: &Path, root_path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    // Skip /System/Volumes which contains Data (firmlink mirror of /Users, /Applications), Update, xarts, etc.
+    // Preventing recursive traversal of /System/Volumes eliminates double-counting of all user data.
+    if path_str == "/System/Volumes" || path_str.starts_with("/System/Volumes/") {
+        return true;
+    }
+    if root_path == Path::new("/") {
+        // When scanning the root filesystem, do not cross into external mount points or synthetic virtual fs
+        if path_str == "/Volumes"
+            || path_str == "/dev"
+            || path_str == "/net"
+            || path_str == "/home"
+            || path_str == "/cores"
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn scan_dir_recursive(
     path: &Path,
+    root_path: &Path,
     current_dir: DirId,
     volume: &mut VolumeIndex,
     context: &mut ScanContext,
@@ -125,13 +154,27 @@ fn scan_dir_recursive(
             flags.insert(FileFlags::IS_HIDDEN);
         }
 
+        let is_symlink = file_type.is_symlink();
+        let meta = entry.metadata().ok();
+
+        #[cfg(target_os = "macos")]
+        if let Some(ref m) = meta {
+            if (m.st_flags() & SF_DATALESS) != 0 {
+                flags.insert(FileFlags::IS_DATALESS);
+            }
+        }
+
         if file_type.is_dir() {
+            let entry_path = entry.path();
+            if should_skip_directory(&entry_path, root_path) {
+                continue;
+            }
+
             flags.insert(FileFlags::IS_DIRECTORY);
             let (name_offset, name_len) = volume.pool.push(&file_name);
             let dir_id = volume.dirs.insert(name_offset, name_len, Some(current_dir));
 
-            let meta = entry.metadata().ok();
-            let modified = meta.map(|m| m.mtime() as u64).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
 
             volume.add_file(FileRecord::new(
                 name_offset,
@@ -143,13 +186,12 @@ fn scan_dir_recursive(
             ));
 
             context.record_entry(0, path);
-            subdirs.push((entry.path(), dir_id));
+            subdirs.push((entry_path, dir_id));
         } else {
-            let meta = entry.metadata().ok();
             let size = meta.as_ref().map(|m| m.size()).unwrap_or(0);
             let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
 
-            if file_type.is_symlink() {
+            if is_symlink {
                 flags.insert(FileFlags::IS_SYMLINK);
             }
 
@@ -169,7 +211,7 @@ fn scan_dir_recursive(
 
     // Recurse into subdirectories
     for (subdir_path, subdir_id) in subdirs {
-        let _ = scan_dir_recursive(&subdir_path, subdir_id, volume, context);
+        let _ = scan_dir_recursive(&subdir_path, root_path, subdir_id, volume, context);
     }
 
     Ok(())

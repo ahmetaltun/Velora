@@ -77,6 +77,10 @@ fn test_progressive_duplicate_detection() {
     let (bf_off, bf_len) = volume.pool.push("asset.bin");
     volume.add_file(FileRecord::new(bf_off, bf_len, FileFlags::empty(), app_dir, 10_000, 8000));
 
+    // 8. File Dataless: Identical size to A and B, but marked IS_DATALESS -> eliminated by Tier 1 to prevent cloud downloads
+    let (fdl_off, fdl_len) = volume.pool.push("file_dataless.bin");
+    volume.add_file(FileRecord::new(fdl_off, fdl_len, FileFlags::IS_DATALESS, dup_dir, 10_000, 9000));
+
     let summary = DuplicateFinder::find_duplicates(&volume, 1_000);
 
     assert_eq!(summary.total_duplicate_groups, 1);

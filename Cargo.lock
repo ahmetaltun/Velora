@@ -1193,6 +1193,7 @@ dependencies = [
 name = "velora-hygiene"
 version = "0.2.0"
 dependencies = [
+ "libc",
  "rayon",
  "serde",
  "velora-analyzer",
