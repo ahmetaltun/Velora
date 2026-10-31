@@ -166,10 +166,11 @@ fn test_snapshot_corrupted_payload_detection() {
 
     volume.save_snapshot(&snapshot_file).unwrap();
 
-    // Read bytes and flip one byte in the payload area (after 28-byte header)
+    // Read bytes and flip one byte in the payload area (after 64-byte header)
     let mut bytes = std::fs::read(&snapshot_file).unwrap();
-    assert!(bytes.len() > 30);
-    bytes[29] ^= 0xFF; // Corrupt payload byte
+    assert!(bytes.len() > 66);
+    let last = bytes.len() - 1;
+    bytes[last] ^= 0xFF; // Corrupt payload byte
     std::fs::write(&snapshot_file, &bytes).unwrap();
 
     // Loading must fail with checksum mismatch
@@ -242,4 +243,100 @@ fn test_snapshot_truncated_payload_detection() {
     assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
 
     let _ = std::fs::remove_file(trunc_file);
+}
+
+#[test]
+fn test_v1_legacy_snapshot_backward_compatibility() {
+    let temp_dir = std::env::temp_dir();
+    let v1_file = temp_dir.join(format!("test_v1_compat_{}.vcat", std::process::id()));
+
+    let mut volume = VolumeIndex::new("LegacyHD", "/");
+    let (d_off, d_len) = volume.pool.push("System");
+    let sys_dir = volume.dirs.insert(d_off, d_len, None);
+
+    let (f_off, f_len) = volume.pool.push("kernel");
+    volume.add_file(FileRecord::new(
+        f_off,
+        f_len,
+        FileFlags::IS_SYSTEM,
+        sys_dir,
+        4096,
+        1700000000,
+    ));
+
+    // Manually serialize in legacy V1 Bincode format
+    let payload = bincode::serialize(&volume).unwrap();
+    let checksum = velora_index::snapshot::compute_crc32(&payload);
+
+    let header = velora_index::snapshot::SnapshotHeaderV1 {
+        magic: velora_index::snapshot::SNAPSHOT_MAGIC,
+        version: velora_index::snapshot::SNAPSHOT_VERSION_V1,
+        flags: 0,
+        checksum,
+        payload_len: payload.len() as u64,
+    };
+
+    let mut file = std::fs::File::create(&v1_file).unwrap();
+    header.write_to(&mut file).unwrap();
+    std::io::Write::write_all(&mut file, &payload).unwrap();
+    drop(file);
+
+    // Verify VolumeIndex::load_snapshot loads legacy V1 transparently
+    let loaded = VolumeIndex::load_snapshot(&v1_file).expect("Failed to load V1 snapshot");
+    assert_eq!(loaded.volume_name, "LegacyHD");
+    assert_eq!(loaded.total_files(), 1);
+    let record = &loaded.records[0];
+    assert_eq!(loaded.get_file_name(record), "kernel");
+    assert_eq!(loaded.resolve_full_path(record), "/System/kernel");
+    assert!(record.flags.contains(FileFlags::IS_SYSTEM));
+
+    let _ = std::fs::remove_file(v1_file);
+}
+
+#[test]
+fn test_large_snapshot_load_performance() {
+    let temp_dir = std::env::temp_dir();
+    let snapshot_file = temp_dir.join(format!("test_perf_{}.vcat", std::process::id()));
+
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (d_off, d_len) = volume.pool.push("Library");
+    let lib_dir = volume.dirs.insert(d_off, d_len, None);
+
+    let (sub_off, sub_len) = volume.pool.push("Frameworks");
+    let fw_dir = volume.dirs.insert(sub_off, sub_len, Some(lib_dir));
+
+    let (f_off, f_len) = volume.pool.push("Foundation.framework");
+
+    let count = if cfg!(debug_assertions) { 100_000 } else { 1_000_000 };
+    for i in 0..count {
+        volume.add_file(FileRecord::new(
+            f_off,
+            f_len,
+            FileFlags::empty(),
+            fw_dir,
+            1024 * (i as u64 % 500 + 1),
+            1730000000 + i as u64,
+        ));
+    }
+
+    let t_save = std::time::Instant::now();
+    volume.save_snapshot(&snapshot_file).expect("save failed");
+    let save_elapsed = t_save.elapsed();
+
+    let meta = std::fs::metadata(&snapshot_file).unwrap();
+    let size_mb = meta.len() as f64 / (1024.0 * 1024.0);
+
+    let t_load = std::time::Instant::now();
+    let loaded = VolumeIndex::load_snapshot(&snapshot_file).expect("load failed");
+    let load_elapsed = t_load.elapsed();
+
+    println!(
+        "\n⚡ PERFORMANCE: {} records ({:.2} MB) -> Saved in {:?}, Loaded in {:?}",
+        count, size_mb, save_elapsed, load_elapsed
+    );
+
+    assert_eq!(loaded.total_files(), count);
+    assert_eq!(loaded.records[0].size, volume.records[0].size);
+
+    let _ = std::fs::remove_file(snapshot_file);
 }

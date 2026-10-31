@@ -1,9 +1,12 @@
 use crate::pool::StringPool;
 use crate::record::{DirId, FileId, FileRecord};
-use crate::snapshot::{compute_crc32, SnapshotHeader, SNAPSHOT_MAGIC, SNAPSHOT_VERSION};
-use crate::table::DirectoryTable;
+use crate::snapshot::{
+    compute_crc32, SnapshotHeader, SnapshotHeaderV2, SNAPSHOT_FLAG_UNCOMPRESSED,
+    SNAPSHOT_MAGIC, SNAPSHOT_VERSION_V2,
+};
+use crate::table::{DirectoryTable, RawDirectoryEntry};
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,6 +16,13 @@ pub struct AppMetadataEntry {
     pub version: String,
     pub app_path: String,
     pub is_system_app: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SnapshotMetadata {
+    volume_name: String,
+    mount_point: String,
+    apps: Vec<AppMetadataEntry>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -157,11 +167,11 @@ impl VolumeIndex {
         path
     }
 
-    /// Saves binary compressed snapshot of the entire volume index to disk atomically.
+    /// Saves binary uncompressed snapshot of the entire volume index to disk atomically in V2 format.
     ///
     /// Guardrails:
     /// 1. Writes to a unique hidden temporary file in the same parent directory to avoid race conditions and EXDEV.
-    /// 2. Prepends a 28-byte magic container header (`VELORASN`), schema version, and payload CRC-32 checksum.
+    /// 2. Prepends a 64-byte aligned magic container header (`VELORASN`), schema version 2, and payload CRC-32 checksum.
     /// 3. Flushes and syncs data to disk before performing an atomic `rename` swap.
     /// 4. Cleans up temporary file on serialization or I/O failure.
     pub fn save_snapshot(&self, dest: &Path) -> std::io::Result<()> {
@@ -185,24 +195,55 @@ impl VolumeIndex {
             unique_suffix
         ));
 
-        // Serialize index payload
-        let payload = bincode::serialize(self)
+        // 1. Serialize metadata (volume name, mount point, app metadata)
+        let meta = SnapshotMetadata {
+            volume_name: self.volume_name.clone(),
+            mount_point: self.mount_point.clone(),
+            apps: self.apps.clone(),
+        };
+        let meta_bytes = bincode::serialize(&meta)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let checksum = compute_crc32(&payload);
 
-        let header = SnapshotHeader {
+        // 2. Sections
+        let pool_bytes = self.pool.buffer();
+        let raw_dirs = self.dirs.to_raw_entries();
+        let dir_bytes: &[u8] = bytemuck::cast_slice(&raw_dirs);
+        let records_bytes: &[u8] = bytemuck::cast_slice(&self.records);
+
+        let payload_len = pool_bytes.len() + dir_bytes.len() + records_bytes.len() + meta_bytes.len();
+
+        // 3. Compute IEEE CRC-32 with hardware acceleration
+        let mut hasher = crc32fast::Hasher::new();
+        hasher.update(pool_bytes);
+        hasher.update(dir_bytes);
+        hasher.update(records_bytes);
+        hasher.update(&meta_bytes);
+        let checksum = hasher.finalize();
+
+        let header = SnapshotHeaderV2 {
             magic: SNAPSHOT_MAGIC,
-            version: SNAPSHOT_VERSION,
-            flags: 0,
+            version: SNAPSHOT_VERSION_V2,
+            flags: SNAPSHOT_FLAG_UNCOMPRESSED,
             checksum,
-            payload_len: payload.len() as u64,
+            _reserved1: 0,
+            payload_len: payload_len as u64,
+            pool_len: pool_bytes.len() as u64,
+            dirs_count: raw_dirs.len() as u64,
+            records_count: self.records.len() as u64,
+            metadata_len: meta_bytes.len() as u64,
         };
 
-        // Write header + payload to temp file
+        // Write header + sections to temp file
         let write_result = (|| -> std::io::Result<()> {
-            let mut file = std::fs::File::create(&temp_path)?;
-            header.write_to(&mut file)?;
-            file.write_all(&payload)?;
+            let file = std::fs::File::create(&temp_path)?;
+            let mut writer = std::io::BufWriter::with_capacity(512 * 1024, file);
+            header.write_to(&mut writer)?;
+            writer.write_all(pool_bytes)?;
+            writer.write_all(dir_bytes)?;
+            writer.write_all(records_bytes)?;
+            writer.write_all(&meta_bytes)?;
+            writer.flush()?;
+            let file = writer.into_inner().map_err(|e| e.into_error())?;
             file.sync_data()?;
             Ok(())
         })();
@@ -223,41 +264,166 @@ impl VolumeIndex {
 
     /// Loads an offline volume catalog snapshot from disk.
     ///
-    /// Validates the `VELORASN` magic header, schema version, and IEEE CRC-32 payload checksum
-    /// before deserializing into memory to prevent corrupt or partial loads.
+    /// Memory maps the snapshot via `memmap2`, verifies IEEE CRC-32 via hardware SIMD instructions,
+    /// and performs zero-deserialization block slice loading (V2) or fallback Bincode decoding (V1).
     pub fn load_snapshot(src: &Path) -> std::io::Result<Self> {
-        let mut file = std::fs::File::open(src)?;
-        let header = SnapshotHeader::read_from(&mut file)?;
+        let file = std::fs::File::open(src)?;
+        let file_len = file.metadata()?.len();
 
-        let mut payload = Vec::with_capacity(header.payload_len as usize);
-        file.read_to_end(&mut payload)?;
-
-        if payload.len() as u64 != header.payload_len {
+        // Snapshot requires at least the 28-byte V1 header or 64-byte V2 header
+        if file_len < 28 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
-                format!(
-                    "Snapshot payload truncated: expected {} bytes, read {}",
-                    header.payload_len,
-                    payload.len()
-                ),
+                "Snapshot file too short to contain valid header",
             ));
         }
 
-        let actual_checksum = compute_crc32(&payload);
-        if actual_checksum != header.checksum {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "Snapshot checksum mismatch: corrupted data (computed 0x{:08X}, expected 0x{:08X})",
-                    actual_checksum, header.checksum
-                ),
-            ));
-        }
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+        let _ = mmap.advise(memmap2::Advice::WillNeed);
 
-        let mut index: Self = bincode::deserialize(&payload)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        index.is_online = false; // Loaded from offline snapshot
-        Ok(index)
+        let mut slice = &mmap[..];
+        let header = SnapshotHeader::read_from(&mut slice)?;
+
+        match header {
+            SnapshotHeader::V1(h) => {
+                let payload_start = 28;
+                let payload_end = payload_start + h.payload_len as usize;
+
+                if mmap.len() < payload_end {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        format!(
+                            "Snapshot payload truncated: expected {} bytes, read {}",
+                            h.payload_len,
+                            mmap.len().saturating_sub(payload_start)
+                        ),
+                    ));
+                }
+
+                let payload = &mmap[payload_start..payload_end];
+                let actual_checksum = compute_crc32(payload);
+                if actual_checksum != h.checksum {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Snapshot checksum mismatch: corrupted data (computed 0x{:08X}, expected 0x{:08X})",
+                            actual_checksum, h.checksum
+                        ),
+                    ));
+                }
+
+                let mut index: Self = bincode::deserialize(payload)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                index.is_online = false;
+                Ok(index)
+            }
+            SnapshotHeader::V2(h) => {
+                let payload_start = SnapshotHeaderV2::SIZE;
+                let payload_end = payload_start + h.payload_len as usize;
+
+                if mmap.len() < payload_end {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        format!(
+                            "Snapshot payload truncated: expected {} bytes, read {}",
+                            h.payload_len,
+                            mmap.len().saturating_sub(payload_start)
+                        ),
+                    ));
+                }
+
+                let payload = &mmap[payload_start..payload_end];
+                let actual_checksum = compute_crc32(payload);
+                if actual_checksum != h.checksum {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Snapshot checksum mismatch: corrupted data (computed 0x{:08X}, expected 0x{:08X})",
+                            actual_checksum, h.checksum
+                        ),
+                    ));
+                }
+
+                let pool_len = h.pool_len as usize;
+                let dirs_bytes_len = (h.dirs_count as usize)
+                    .checked_mul(std::mem::size_of::<RawDirectoryEntry>())
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "dirs byte length overflow"))?;
+                let records_bytes_len = (h.records_count as usize)
+                    .checked_mul(std::mem::size_of::<FileRecord>())
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "records byte length overflow"))?;
+                let metadata_len = h.metadata_len as usize;
+
+                let expected_total = pool_len
+                    .checked_add(dirs_bytes_len)
+                    .and_then(|v| v.checked_add(records_bytes_len))
+                    .and_then(|v| v.checked_add(metadata_len))
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "Snapshot section lengths overflow"))?;
+
+                if expected_total != h.payload_len as usize {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Snapshot section size mismatch: sections sum to {} but payload_len is {}",
+                            expected_total, h.payload_len
+                        ),
+                    ));
+                }
+
+                let pool_start = 0;
+                let pool_end = pool_start + pool_len;
+
+                let dirs_start = pool_end;
+                let dirs_end = dirs_start + dirs_bytes_len;
+
+                let records_start = dirs_end;
+                let records_end = records_start + records_bytes_len;
+
+                let meta_start = records_end;
+                let meta_end = meta_start + metadata_len;
+
+                // 1. String Pool: bulk copy
+                let pool = StringPool::from_buffer(payload[pool_start..pool_end].to_vec());
+
+                // 2. Directory Table: fast contiguous mapping
+                let dirs_count = h.dirs_count as usize;
+                let mut raw_dirs: Vec<RawDirectoryEntry> = Vec::with_capacity(dirs_count);
+                unsafe {
+                    raw_dirs.set_len(dirs_count);
+                    let dst = std::slice::from_raw_parts_mut(
+                        raw_dirs.as_mut_ptr() as *mut u8,
+                        dirs_count * std::mem::size_of::<RawDirectoryEntry>(),
+                    );
+                    dst.copy_from_slice(&payload[dirs_start..dirs_end]);
+                }
+                let dirs = DirectoryTable::from_raw_entries(&raw_dirs);
+
+                // 3. File Records: zero-deserialization POD bulk copy
+                let records_count = h.records_count as usize;
+                let mut records: Vec<FileRecord> = Vec::with_capacity(records_count);
+                unsafe {
+                    records.set_len(records_count);
+                    let dst = std::slice::from_raw_parts_mut(
+                        records.as_mut_ptr() as *mut u8,
+                        records_count * std::mem::size_of::<FileRecord>(),
+                    );
+                    dst.copy_from_slice(&payload[records_start..records_end]);
+                }
+
+                // 4. Metadata: small auxiliary bincode payload
+                let meta: SnapshotMetadata = bincode::deserialize(&payload[meta_start..meta_end])
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+                Ok(Self {
+                    volume_name: meta.volume_name,
+                    mount_point: meta.mount_point,
+                    is_online: false,
+                    pool,
+                    dirs,
+                    records,
+                    apps: meta.apps,
+                })
+            }
+        }
     }
 
     /// Merges an independently scanned subtree volume index into this volume index.

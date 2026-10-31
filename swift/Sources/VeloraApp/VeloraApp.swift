@@ -68,10 +68,11 @@ extension Notification.Name {
 @main
 struct VeloraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var viewModel = VeloraViewModel()
 
     var body: some Scene {
         WindowGroup("Velora") {
-            MainWindowView()
+            MainWindowView(viewModel: viewModel)
                 .frame(
                     minWidth: VeloraTheme.minWindowWidth,
                     minHeight: VeloraTheme.minWindowHeight

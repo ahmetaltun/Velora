@@ -1,11 +1,19 @@
 use crate::flags::FileFlags;
 use serde::{Deserialize, Serialize};
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct DirId(pub u32);
 
+unsafe impl bytemuck::Zeroable for DirId {}
+unsafe impl bytemuck::Pod for DirId {}
+
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct FileId(pub u32);
+
+unsafe impl bytemuck::Zeroable for FileId {}
+unsafe impl bytemuck::Pod for FileId {}
 
 /// Packed 32-byte representation of file metadata.
 /// Fits two complete records per 64-byte L1 cache line on Apple Silicon.
@@ -16,9 +24,13 @@ pub struct FileRecord {
     pub name_len: u16,
     pub flags: FileFlags,
     pub parent_dir: DirId,
+    pub _reserved: u32,
     pub size: u64,
     pub modified_secs: u64,
 }
+
+unsafe impl bytemuck::Zeroable for FileRecord {}
+unsafe impl bytemuck::Pod for FileRecord {}
 
 impl FileRecord {
     #[inline(always)]
@@ -35,6 +47,7 @@ impl FileRecord {
             name_len,
             flags,
             parent_dir,
+            _reserved: 0,
             size,
             modified_secs,
         }

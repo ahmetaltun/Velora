@@ -17,18 +17,26 @@ mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
 # Copy binary (remove old inode first to avoid 'Text file busy' if running)
 rm -f "$MACOS/Velora"
-if [ -f "swift/.build/arm64-apple-macosx/debug/Velora" ]; then
+if [ -f "swift/.build/arm64-apple-macosx/release/Velora" ]; then
+    cp "swift/.build/arm64-apple-macosx/release/Velora" "$MACOS/Velora"
+elif [ -f "swift/.build/release/Velora" ]; then
+    cp "swift/.build/release/Velora" "$MACOS/Velora"
+elif [ -f "swift/.build/arm64-apple-macosx/debug/Velora" ]; then
     cp "swift/.build/arm64-apple-macosx/debug/Velora" "$MACOS/Velora"
 elif [ -f "swift/.build/debug/Velora" ]; then
     cp "swift/.build/debug/Velora" "$MACOS/Velora"
 else
-    echo "❌ Error: Velora debug binary not found. Please compile with 'swift build --arch arm64' first."
+    echo "❌ Error: Velora binary not found. Please compile with 'swift build --arch arm64' first."
     exit 1
 fi
 
 # Copy Sparkle.framework for auto-updates
 rm -rf "$FRAMEWORKS/Sparkle.framework"
-if [ -d "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" ]; then
+if [ -d "swift/.build/arm64-apple-macosx/release/Sparkle.framework" ]; then
+    cp -R "swift/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS/"
+elif [ -d "swift/.build/release/Sparkle.framework" ]; then
+    cp -R "swift/.build/release/Sparkle.framework" "$FRAMEWORKS/"
+elif [ -d "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" ]; then
     cp -R "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORKS/"
 elif [ -d "swift/.build/debug/Sparkle.framework" ]; then
     cp -R "swift/.build/debug/Sparkle.framework" "$FRAMEWORKS/"

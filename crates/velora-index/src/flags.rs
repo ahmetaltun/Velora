@@ -15,3 +15,6 @@ bitflags! {
         const IS_APFS_CLONE = 1 << 8;
     }
 }
+
+unsafe impl bytemuck::Zeroable for FileFlags {}
+unsafe impl bytemuck::Pod for FileFlags {}

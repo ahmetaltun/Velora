@@ -34,4 +34,14 @@ impl StringPool {
     pub fn len_bytes(&self) -> usize {
         self.buffer.len()
     }
+
+    #[inline]
+    pub fn buffer(&self) -> &[u8] {
+        &self.buffer
+    }
+
+    #[inline]
+    pub fn from_buffer(buffer: Vec<u8>) -> Self {
+        Self { buffer }
+    }
 }

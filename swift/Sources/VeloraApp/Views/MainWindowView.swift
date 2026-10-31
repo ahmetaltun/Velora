@@ -2,7 +2,7 @@ import SwiftUI
 import VeloraCore
 
 public struct MainWindowView: View {
-    @State public var viewModel = VeloraViewModel()
+    @Bindable public var viewModel: VeloraViewModel
     @ObservedObject private var permissionManager = PermissionManager.shared
     @AppStorage("isCleanupInspectorVisible") private var showBloomInspector: Bool = false
     @FocusState private var isSearchFocused: Bool
@@ -17,7 +17,9 @@ public struct MainWindowView: View {
         }
     }
 
-    public init() {}
+    public init(viewModel: VeloraViewModel) {
+        self.viewModel = viewModel
+    }
 
     public var body: some View {
         NavigationSplitView {

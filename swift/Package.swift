@@ -38,7 +38,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .unsafeFlags([
-                    "../target/release/libvelora_ffi.a"
+                    "../target/aarch64-apple-darwin/release/libvelora_ffi.a"
                 ], .when(configuration: .release)),
                 .unsafeFlags([
                     "../target/aarch64-apple-darwin/debug/libvelora_ffi.a"

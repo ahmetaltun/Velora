@@ -77,6 +77,7 @@ public final class VeloraViewModel {
     private var pendingSearchWorkItem: DispatchWorkItem?
     private var lastExecutedQuery: String?
     private var isSnapshotLoadingInProgress: Bool = false
+    private var hasLoadedSnapshot: Bool = false
 
     /// Indicates whether global interaction (sidebar tools, search, navigation) is disabled
     /// because catalog.bin is loading into memory or a volume scan is active.
@@ -92,9 +93,6 @@ public final class VeloraViewModel {
         let hasIndex = SnapshotManager.shared.hasAnyBinaryIndexFile
         self.isLoadingSnapshot = hasIndex
         self.refreshStorageReconciliation()
-        if hasIndex {
-            self.loadCachedSnapshotIfAvailable()
-        }
     }
 
     /// Indicates whether a valid binary index snapshot file exists on disk.
@@ -139,13 +137,13 @@ public final class VeloraViewModel {
     /// Asynchronously deserializes and loads the offline snapshot on a background thread.
     /// This prevents blocking window presentation on app launch.
     public func loadCachedSnapshotIfAvailable() {
+        guard !hasLoadedSnapshot && !isSnapshotLoadingInProgress else { return }
         guard SnapshotManager.shared.hasAnyBinaryIndexFile else {
             isLoadingSnapshot = false
             scanStatusMessage = "Ready for initial scan"
             return
         }
 
-        guard !isSnapshotLoadingInProgress else { return }
         isSnapshotLoadingInProgress = true
         isLoadingSnapshot = true
         scanStatusMessage = "Loading indexed catalog in background..."
@@ -159,21 +157,23 @@ public final class VeloraViewModel {
                 let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
 
                 DispatchQueue.main.async {
+                    self.hasLoadedSnapshot = true
+                    self.isSnapshotLoadingInProgress = false
                     self.scannedCount = total
                     self.currentSunburst = sunburst
                     if let root = sunburst {
                         self.sectorStack = [root]
                     }
                     self.isLoadingSnapshot = false
-                    self.isSnapshotLoadingInProgress = false
                     self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
                 }
             } else {
                 DispatchQueue.main.async {
-                    self.isLoadingSnapshot = false
+                    self.hasLoadedSnapshot = false
                     self.isSnapshotLoadingInProgress = false
+                    self.isLoadingSnapshot = false
                     self.scanStatusMessage = "Failed to load cached snapshot; please perform a clean scan"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
@@ -441,6 +441,7 @@ public final class VeloraViewModel {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     self.isScanning = false
                     if success {
+                        self.hasLoadedSnapshot = true
                         self.currentSunburst = sunburst
                         if let root = sunburst {
                             self.sectorStack = [root]

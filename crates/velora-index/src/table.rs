@@ -2,6 +2,18 @@ use crate::pool::StringPool;
 use crate::record::DirId;
 use serde::{Deserialize, Serialize};
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RawDirectoryEntry {
+    pub name_offset: u32,
+    pub name_len: u16,
+    pub _reserved: u16,
+    pub raw_parent: u32,
+}
+
+unsafe impl bytemuck::Zeroable for RawDirectoryEntry {}
+unsafe impl bytemuck::Pod for RawDirectoryEntry {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirectoryEntry {
     pub name_offset: u32,
@@ -19,6 +31,34 @@ impl DirectoryTable {
         Self {
             entries: Vec::with_capacity(128 * 1024),
         }
+    }
+
+    pub fn to_raw_entries(&self) -> Vec<RawDirectoryEntry> {
+        self.entries
+            .iter()
+            .map(|e| RawDirectoryEntry {
+                name_offset: e.name_offset,
+                name_len: e.name_len,
+                _reserved: 0,
+                raw_parent: e.parent.map(|p| p.0).unwrap_or(u32::MAX),
+            })
+            .collect()
+    }
+
+    pub fn from_raw_entries(raw: &[RawDirectoryEntry]) -> Self {
+        let entries = raw
+            .iter()
+            .map(|r| DirectoryEntry {
+                name_offset: r.name_offset,
+                name_len: r.name_len,
+                parent: if r.raw_parent == u32::MAX {
+                    None
+                } else {
+                    Some(DirId(r.raw_parent))
+                },
+            })
+            .collect();
+        Self { entries }
     }
 
     pub fn insert(&mut self, name_offset: u32, name_len: u16, parent: Option<DirId>) -> DirId {
