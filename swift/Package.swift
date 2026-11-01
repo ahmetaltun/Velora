@@ -37,6 +37,9 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/VeloraApp",
+            resources: [
+                .process("Shaders/VeloraShaders.metal")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ],

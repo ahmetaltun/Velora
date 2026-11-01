@@ -540,6 +540,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func findOrphanedResidue(homePath: String)  -> [OrphanedResidueRecord]
     
+    func getRecordsBufferDescriptor()  -> RecordsBufferDescriptor
+    
     func inspectPackageCaches(homePath: String)  -> PackageCacheSummaryRecord
     
     func inspectXcode(homePath: String)  -> XcodeSummaryRecord
@@ -563,6 +565,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     func reconcileStorage(mountPoint: String)  -> StorageReconciliationItem
     
     func removeCollected(path: String) 
+    
+    func resolveLargeOldCandidates(candidateIndices: [UInt32], maxResults: UInt32)  -> [LargeOldFileRecord]
     
     func restoreQuarantinedThreat(homePath: String, id: String)  -> Bool
     
@@ -734,6 +738,13 @@ open func findOrphanedResidue(homePath: String) -> [OrphanedResidueRecord] {
 })
 }
     
+open func getRecordsBufferDescriptor() -> RecordsBufferDescriptor {
+    return try!  FfiConverterTypeRecordsBufferDescriptor.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_get_records_buffer_descriptor(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
 open func inspectPackageCaches(homePath: String) -> PackageCacheSummaryRecord {
     return try!  FfiConverterTypePackageCacheSummaryRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_inspect_package_caches(self.uniffiClonePointer(),
@@ -827,6 +838,15 @@ open func removeCollected(path: String) {try! rustCall() {
         FfiConverterString.lower(path),$0
     )
 }
+}
+    
+open func resolveLargeOldCandidates(candidateIndices: [UInt32], maxResults: UInt32) -> [LargeOldFileRecord] {
+    return try!  FfiConverterSequenceTypeLargeOldFileRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_resolve_large_old_candidates(self.uniffiClonePointer(),
+        FfiConverterSequenceUInt32.lower(candidateIndices),
+        FfiConverterUInt32.lower(maxResults),$0
+    )
+})
 }
     
 open func restoreQuarantinedThreat(homePath: String, id: String) -> Bool {
@@ -2177,6 +2197,80 @@ public func FfiConverterTypePackageCacheSummaryRecord_lower(_ value: PackageCach
 }
 
 
+public struct RecordsBufferDescriptor {
+    public var pointer: UInt64
+    public var count: UInt64
+    public var recordSize: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pointer: UInt64, count: UInt64, recordSize: UInt32) {
+        self.pointer = pointer
+        self.count = count
+        self.recordSize = recordSize
+    }
+}
+
+
+
+extension RecordsBufferDescriptor: Equatable, Hashable {
+    public static func ==(lhs: RecordsBufferDescriptor, rhs: RecordsBufferDescriptor) -> Bool {
+        if lhs.pointer != rhs.pointer {
+            return false
+        }
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.recordSize != rhs.recordSize {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pointer)
+        hasher.combine(count)
+        hasher.combine(recordSize)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecordsBufferDescriptor: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecordsBufferDescriptor {
+        return
+            try RecordsBufferDescriptor(
+                pointer: FfiConverterUInt64.read(from: &buf), 
+                count: FfiConverterUInt64.read(from: &buf), 
+                recordSize: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecordsBufferDescriptor, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.pointer, into: &buf)
+        FfiConverterUInt64.write(value.count, into: &buf)
+        FfiConverterUInt32.write(value.recordSize, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecordsBufferDescriptor_lift(_ buf: RustBuffer) throws -> RecordsBufferDescriptor {
+    return try FfiConverterTypeRecordsBufferDescriptor.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecordsBufferDescriptor_lower(_ value: RecordsBufferDescriptor) -> RustBuffer {
+    return FfiConverterTypeRecordsBufferDescriptor.lower(value)
+}
+
+
 public struct SearchResultItem {
     public var name: String
     public var path: String
@@ -3192,6 +3286,31 @@ fileprivate struct FfiConverterOptionCallbackInterfaceScanProgressCallback: FfiC
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt32]
+
+    public static func write(_ value: [UInt32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt32.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt32] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt32]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt32.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -3643,6 +3762,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_find_orphaned_residue() != 43215) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_get_records_buffer_descriptor() != 34644) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_package_caches() != 31799) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3677,6 +3799,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_remove_collected() != 54207) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_resolve_large_old_candidates() != 5559) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_restore_quarantined_threat() != 43062) {

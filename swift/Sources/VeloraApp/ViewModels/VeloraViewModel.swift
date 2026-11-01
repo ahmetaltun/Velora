@@ -285,7 +285,18 @@ public final class VeloraViewModel {
         isLoadingLargeOldMatrix = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let summary = self.engine.computeLargeOldMatrix()
+
+            // Attempt zero-copy GPU compute acceleration via Metal
+            var summary: LargeOldMatrixSummaryRecord? = nil
+            if let gpuEngine = MetalComputeEngine.shared {
+                summary = gpuEngine.computeLargeOldMatrix(engine: self.engine)
+            }
+
+            // Fallback to CPU algorithm if GPU compute is unavailable or returns nil
+            if summary == nil {
+                summary = self.engine.computeLargeOldMatrix()
+            }
+
             DispatchQueue.main.async {
                 self.largeOldMatrix = summary
                 self.isLoadingLargeOldMatrix = false

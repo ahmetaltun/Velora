@@ -107,7 +107,7 @@ impl LargeOldFilesMatrix {
         }
     }
 
-    fn format_relative_age(age_secs: u64) -> String {
+    pub fn format_relative_age(age_secs: u64) -> String {
         const DAY: u64 = 86_400;
         const MONTH: u64 = 30 * DAY;
         const YEAR: u64 = 365 * DAY;

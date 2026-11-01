@@ -9,6 +9,7 @@ public struct AmbientFluidMeshView: View {
     public var size: CGFloat
 
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var shaderManager = VeloraShaderManager.shared
     @State private var meshRotation: Double = 0.0
     @State private var radarRotation: Double = 0.0
     @State private var pulseScale: CGFloat = 1.0
@@ -30,49 +31,71 @@ public struct AmbientFluidMeshView: View {
 
     public var body: some View {
         ZStack {
-            // LAYER 1: Ambient Fluid Blob Mesh (Living Gradient Cloud)
-            ZStack {
-                // Blob 1: Top-Left (Blue / Mint)
-                Circle()
-                    .fill(isBusy ? VeloraTheme.mint : VeloraTheme.accentBlue)
-                    .frame(width: size * 0.65, height: size * 0.65)
-                    .offset(x: -size * 0.20, y: -size * 0.20)
+            // LAYER 1: Ambient Fluid Mesh (Hardware-Accelerated Metal Shader or Fallback Blobs)
+            if let shaderLib = shaderManager.shaderLibrary {
+                TimelineView(.animation(paused: !isBusy && scenePhase != .active)) { timeline in
+                    let time = timeline.date.timeIntervalSinceReferenceDate
+                    Rectangle()
+                        .fill(.black)
+                        .frame(width: size, height: size)
+                        .colorEffect(
+                            shaderLib.ambientFluidShader(
+                                .float2(size, size),
+                                .float(time),
+                                .float(isBusy ? 2.4 : 0.75),
+                                .color(isBusy ? VeloraTheme.mint : VeloraTheme.accentBlue),
+                                .color(isBusy ? VeloraTheme.teal : VeloraTheme.accentCyan),
+                                .color(isBusy ? VeloraTheme.mintDark : VeloraTheme.accentViolet),
+                                .color(isBusy ? VeloraTheme.accentCyan : VeloraTheme.accentPink),
+                                .float(isBusy ? 1.0 : 0.0)
+                            )
+                        )
+                }
+            } else {
+                // Fallback: CoreAnimation CPU Gaussian-blurred circles
+                ZStack {
+                    // Blob 1: Top-Left (Blue / Mint)
+                    Circle()
+                        .fill(isBusy ? VeloraTheme.mint : VeloraTheme.accentBlue)
+                        .frame(width: size * 0.65, height: size * 0.65)
+                        .offset(x: -size * 0.20, y: -size * 0.20)
 
-                // Blob 2: Top-Right (Cyan / Teal)
-                Circle()
-                    .fill(isBusy ? VeloraTheme.teal : VeloraTheme.accentCyan)
-                    .frame(width: size * 0.60, height: size * 0.60)
-                    .offset(x: size * 0.22, y: -size * 0.16)
+                    // Blob 2: Top-Right (Cyan / Teal)
+                    Circle()
+                        .fill(isBusy ? VeloraTheme.teal : VeloraTheme.accentCyan)
+                        .frame(width: size * 0.60, height: size * 0.60)
+                        .offset(x: size * 0.22, y: -size * 0.16)
 
-                // Blob 3: Bottom-Right (Violet / Dark Mint)
-                Circle()
-                    .fill(isBusy ? VeloraTheme.mintDark : VeloraTheme.accentViolet)
-                    .frame(width: size * 0.68, height: size * 0.68)
-                    .offset(x: size * 0.18, y: size * 0.20)
+                    // Blob 3: Bottom-Right (Violet / Dark Mint)
+                    Circle()
+                        .fill(isBusy ? VeloraTheme.mintDark : VeloraTheme.accentViolet)
+                        .frame(width: size * 0.68, height: size * 0.68)
+                        .offset(x: size * 0.18, y: size * 0.20)
 
-                // Blob 4: Bottom-Left (Pink / Amber Accent)
-                Circle()
-                    .fill(isBusy ? VeloraTheme.accentBlue : VeloraTheme.accentPink)
-                    .frame(width: size * 0.58, height: size * 0.58)
-                    .offset(x: -size * 0.18, y: size * 0.18)
-            }
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(meshRotation))
-            .scaleEffect(pulseScale)
-            .blur(radius: size * 0.18)
-            // Crucial Anti-Clipping Mask: Guarantees zero hard rectangular box edges
-            .mask(
-                RadialGradient(
-                    stops: [
-                        .init(color: .black, location: 0.0),
-                        .init(color: .black.opacity(0.85), location: 0.40),
-                        .init(color: .clear, location: 0.82)
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: size * 0.48
+                    // Blob 4: Bottom-Left (Pink / Amber Accent)
+                    Circle()
+                        .fill(isBusy ? VeloraTheme.accentBlue : VeloraTheme.accentPink)
+                        .frame(width: size * 0.58, height: size * 0.58)
+                        .offset(x: -size * 0.18, y: size * 0.18)
+                }
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(meshRotation))
+                .scaleEffect(pulseScale)
+                .blur(radius: size * 0.18)
+                // Crucial Anti-Clipping Mask: Guarantees zero hard rectangular box edges
+                .mask(
+                    RadialGradient(
+                        stops: [
+                            .init(color: .black, location: 0.0),
+                            .init(color: .black.opacity(0.85), location: 0.40),
+                            .init(color: .clear, location: 0.82)
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.48
+                    )
                 )
-            )
+            }
 
             // LAYER 2: Scanning Telemetry Rings (Active when indexing or loading)
             if isBusy {

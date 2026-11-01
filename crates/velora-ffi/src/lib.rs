@@ -287,6 +287,13 @@ pub struct SecuritySummaryRecord {
     pub scan_duration_ms: u64,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct RecordsBufferDescriptor {
+    pub pointer: u64,
+    pub count: u64,
+    pub record_size: u32,
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -652,6 +659,64 @@ impl VeloraEngine {
                 })
                 .collect(),
         }
+    }
+
+    pub fn get_records_buffer_descriptor(&self) -> RecordsBufferDescriptor {
+        let vol = self.volume.read();
+        let pointer = vol.records.as_ptr() as u64;
+        let count = vol.records.len() as u64;
+        let record_size = std::mem::size_of::<velora_index::FileRecord>() as u32;
+        RecordsBufferDescriptor {
+            pointer,
+            count,
+            record_size,
+        }
+    }
+
+    pub fn resolve_large_old_candidates(
+        &self,
+        candidate_indices: Vec<u32>,
+        max_results: u32,
+    ) -> Vec<LargeOldFileRecord> {
+        let vol = self.volume.read();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let mut files: Vec<LargeOldFileRecord> = candidate_indices
+            .into_iter()
+            .filter_map(|idx| {
+                let r = vol.records.get(idx as usize)?;
+                if r.is_deleted() || r.is_dir() {
+                    return None;
+                }
+                let sb = velora_hygiene::SizeBucket::from_bytes(r.size)?;
+                let age_secs = now_secs.saturating_sub(r.modified_secs);
+                let ab = velora_hygiene::AgeBucket::from_age_secs(age_secs);
+                let file_name = vol.get_file_name(r);
+                let cat = velora_analyzer::CategoryKind::classify(file_name, false);
+                let full_path = vol.resolve_full_path(r);
+
+                Some(LargeOldFileRecord {
+                    path: full_path,
+                    name: file_name.to_string(),
+                    size_bytes: r.size,
+                    modified_secs: r.modified_secs,
+                    category_name: cat.display_name().to_string(),
+                    color_hex: cat.color_hex().to_string(),
+                    age_label: velora_hygiene::LargeOldFilesMatrix::format_relative_age(age_secs),
+                    age_idx: ab as u32,
+                    size_idx: sb as u32,
+                })
+            })
+            .collect();
+
+        files.sort_unstable_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        if files.len() > max_results as usize {
+            files.truncate(max_results as usize);
+        }
+        files
     }
 
     pub fn find_duplicates(&self, min_size_bytes: u64) -> DuplicateSummaryRecord {

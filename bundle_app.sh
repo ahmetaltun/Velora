@@ -131,6 +131,14 @@ for icon_asset in assets/icons/VeloraIcon-*.png; do
     fi
 done
 
+# Copy SPM resource bundles (including compiled Shaders and Assets)
+find swift/.build -name "*.bundle" -maxdepth 3 2>/dev/null | while read -r spm_bundle; do
+    if [ -d "$spm_bundle" ] && [[ "$spm_bundle" != *"Sparkle"* ]]; then
+        echo "📦 Copying resource bundle: $(basename "$spm_bundle")"
+        cp -R "$spm_bundle" "$RESOURCES/"
+    fi
+done
+
 # Create Info.plist with explicit Apple Silicon and macOS 15+ constraints
 cat << EOF > "$CONTENTS/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
