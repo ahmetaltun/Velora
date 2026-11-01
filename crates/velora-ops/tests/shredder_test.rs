@@ -79,6 +79,38 @@ fn test_single_pass_zeroing() {
 }
 
 #[test]
+fn test_empty_file_shredding() {
+    let dir = create_temp_test_dir("empty");
+    let file_path = dir.join("empty_secret.txt");
+
+    // Create 0-byte file
+    File::create(&file_path).unwrap();
+    assert!(file_path.exists());
+
+    let cancel = AtomicBool::new(false);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let listener = TestProgressListener {
+        events: events.clone(),
+    };
+
+    let stats = shred_paths(&[file_path.clone()], ShredAlgorithm::Dod522022M, &cancel, Some(&listener));
+
+    assert_eq!(stats.files_shredded, 1);
+    assert_eq!(stats.bytes_shredded, 0);
+    assert!(stats.errors.is_empty());
+    assert!(!file_path.exists(), "0-byte file must be completely unlinked");
+
+    let ev_list = events.lock().unwrap();
+    assert!(!ev_list.is_empty(), "0-byte file must still emit progress callbacks for each pass");
+    let has_pass1 = ev_list.iter().any(|e| e.contains("pass 1/3"));
+    let has_pass3 = ev_list.iter().any(|e| e.contains("pass 3/3"));
+    assert!(has_pass1);
+    assert!(has_pass3);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn test_dod_5220_22_m_3pass() {
     let dir = create_temp_test_dir("dod3");
     let file_path = dir.join("classified_dossier.dat");

@@ -97,53 +97,136 @@ impl VolumeIndex {
         0
     }
 
+    /// Collects the specified root directory and all of its recursive child directory IDs.
+    pub fn collect_descendant_dirs(
+        &self,
+        root_dir: DirId,
+        out: &mut std::collections::HashSet<DirId>,
+    ) {
+        out.insert(root_dir);
+        let mut queue = vec![root_dir];
+        let dir_count = self.dirs.len();
+
+        let mut children_map: std::collections::HashMap<DirId, Vec<DirId>> =
+            std::collections::HashMap::new();
+        for i in 0..dir_count {
+            let id = DirId(i as u32);
+            if let Some(entry) = self.dirs.get(id) {
+                if let Some(parent) = entry.parent {
+                    children_map.entry(parent).or_default().push(id);
+                }
+            }
+        }
+
+        while let Some(parent) = queue.pop() {
+            if let Some(children) = children_map.get(&parent) {
+                for &child in children {
+                    if out.insert(child) {
+                        queue.push(child);
+                    }
+                }
+            }
+        }
+    }
+
     /// Marks all records matching any of the given paths or inside any directory prefix as deleted.
-    /// Performs a single-pass index traversal matching against an in-memory hash set and prefix list.
+    /// Performs an indexed $O(1)$ directory and file match without reconstructing full paths
+    /// for millions of records, with an edge-case fallback for unresolved paths.
     /// Returns the total bytes freed by this batch tombstoning operation.
     pub fn mark_deleted_batch(&mut self, target_paths: &[String]) -> u64 {
         if target_paths.is_empty() {
             return 0;
         }
 
-        let mut exact_set = std::collections::HashSet::with_capacity(target_paths.len());
-        let mut dir_prefixes = Vec::new();
+        let mut target_dirs: std::collections::HashSet<DirId> = std::collections::HashSet::new();
+        let mut target_files: std::collections::HashMap<DirId, std::collections::HashSet<String>> =
+            std::collections::HashMap::new();
+
+        let mut unresolved_exact = std::collections::HashSet::new();
+        let mut unresolved_prefixes = Vec::new();
 
         for p in target_paths {
             let clean = p.trim_end_matches('/');
-            if !clean.is_empty() {
-                exact_set.insert(clean);
-                dir_prefixes.push(format!("{}/", clean));
+            if clean.is_empty() {
+                continue;
+            }
+
+            let path_obj = Path::new(clean);
+            if let Some(dir_id) = self.find_dir_by_path(path_obj) {
+                // Target is a directory in the index: tombstone dir and all recursive children
+                self.collect_descendant_dirs(dir_id, &mut target_dirs);
+            } else if let Some(parent) = path_obj.parent() {
+                if let Some(parent_id) = self.find_dir_by_path(parent) {
+                    if let Some(file_name) = path_obj.file_name().and_then(|f| f.to_str()) {
+                        target_files
+                            .entry(parent_id)
+                            .or_default()
+                            .insert(file_name.to_string());
+                        continue;
+                    }
+                }
+                // Could not resolve parent DirId: queue for path fallback
+                unresolved_exact.insert(clean);
+                unresolved_prefixes.push(format!("{}/", clean));
+            } else {
+                unresolved_exact.insert(clean);
+                unresolved_prefixes.push(format!("{}/", clean));
             }
         }
 
+        let has_unresolved = !unresolved_exact.is_empty() || !unresolved_prefixes.is_empty();
         let mut freed_bytes = 0u64;
-        let mut full_path = String::with_capacity(256);
+        let mut full_path = if has_unresolved {
+            String::with_capacity(256)
+        } else {
+            String::new()
+        };
 
         for record in &mut self.records {
             if record.is_deleted() {
                 continue;
             }
 
-            full_path.clear();
-            self.dirs.build_full_path(record.parent_dir, &self.pool, &mut full_path);
-            if !full_path.ends_with('/') {
-                full_path.push('/');
-            }
-            full_path.push_str(self.pool.get(record.name_offset, record.name_len));
-
-            let clean_full = full_path.trim_end_matches('/');
-
-            if exact_set.contains(clean_full) {
+            // 1. Fast indexed directory match
+            if target_dirs.contains(&record.parent_dir) {
                 record.mark_deleted();
                 freed_bytes += record.size;
                 continue;
             }
 
-            for prefix in &dir_prefixes {
-                if clean_full.starts_with(prefix) {
+            // 2. Fast indexed file match (by parent DirId and file name in pool)
+            if let Some(names) = target_files.get(&record.parent_dir) {
+                let name = self.pool.get(record.name_offset, record.name_len);
+                if names.contains(name) {
                     record.mark_deleted();
                     freed_bytes += record.size;
-                    break;
+                    continue;
+                }
+            }
+
+            // 3. Fallback for unresolved paths only
+            if has_unresolved {
+                full_path.clear();
+                self.dirs
+                    .build_full_path(record.parent_dir, &self.pool, &mut full_path);
+                if !full_path.ends_with('/') {
+                    full_path.push('/');
+                }
+                full_path.push_str(self.pool.get(record.name_offset, record.name_len));
+
+                let clean_full = full_path.trim_end_matches('/');
+                if unresolved_exact.contains(clean_full) {
+                    record.mark_deleted();
+                    freed_bytes += record.size;
+                    continue;
+                }
+
+                for prefix in &unresolved_prefixes {
+                    if clean_full.starts_with(prefix) {
+                        record.mark_deleted();
+                        freed_bytes += record.size;
+                        break;
+                    }
                 }
             }
         }
@@ -491,42 +574,39 @@ impl VolumeIndex {
     pub fn find_dir_by_path(&self, target_path: &Path) -> Option<DirId> {
         let target_str = target_path.to_string_lossy();
         let clean = target_str.trim_end_matches('/');
+        let clean_rel = clean.trim_start_matches('/');
 
         let dir_count = self.dirs.len();
 
-        // 1. Check if it matches any root directory directly or starts with that root
         for i in 0..dir_count {
             let dir_id = DirId(i as u32);
             if let Some(entry) = self.dirs.get(dir_id) {
                 if entry.parent.is_none() {
                     let root_name = self.pool.get(entry.name_offset, entry.name_len);
-                    let clean_root = root_name.trim_end_matches('/');
+                    let clean_root = root_name.trim_start_matches('/').trim_end_matches('/');
 
-                    if clean == clean_root {
+                    if clean_root.is_empty() {
+                        if clean_rel.is_empty() {
+                            return Some(dir_id);
+                        }
+                        if let Some(found) = self.find_child_by_rel_path(dir_id, clean_rel) {
+                            return Some(found);
+                        }
+                        continue;
+                    }
+
+                    if clean_rel == clean_root {
                         return Some(dir_id);
                     }
 
-                    if clean.starts_with(clean_root) {
-                        let remainder = &clean[clean_root.len()..];
+                    if clean_rel.starts_with(clean_root) {
+                        let remainder = &clean_rel[clean_root.len()..];
                         if remainder.starts_with('/') {
                             let sub_path = &remainder[1..];
                             if let Some(found) = self.find_child_by_rel_path(dir_id, sub_path) {
                                 return Some(found);
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        // 2. Also support relative path matching across roots (e.g. "Library/Developer")
-        let clean_rel = clean.trim_start_matches('/');
-        for i in 0..dir_count {
-            let dir_id = DirId(i as u32);
-            if let Some(entry) = self.dirs.get(dir_id) {
-                if entry.parent.is_none() {
-                    if let Some(found) = self.find_child_by_rel_path(dir_id, clean_rel) {
-                        return Some(found);
                     }
                 }
             }

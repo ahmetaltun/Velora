@@ -33,6 +33,9 @@ public struct SecureShredderView: View {
 
     private func formatETA(_ seconds: Double?) -> String {
         guard let seconds = seconds else { return "Calculating..." }
+        if seconds <= 0.05 {
+            return "Finishing..."
+        }
         let s = max(1, Int(ceil(seconds)))
         if s < 60 {
             return "~\(s)s remaining"
@@ -137,6 +140,28 @@ public struct SecureShredderView: View {
                     .buttonStyle(.plain)
                     .disabled(viewModel.isShredding)
                 }
+            }
+
+            // Success banner if any
+            if let successMsg = viewModel.shredSuccessMessage {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(VeloraTheme.accentEmerald)
+                    Text(successMsg)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
+                        .lineLimit(2)
+                    Spacer()
+                    Button(action: { viewModel.shredSuccessMessage = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(VeloraTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 9)
+                .background(VeloraTheme.accentEmerald.opacity(0.16))
+                Divider().overlay(VeloraTheme.cardBorder)
             }
 
             // Error banner if any
@@ -690,10 +715,17 @@ public struct SecureShredderView: View {
                 viewModel.cancelShredding()
             }) {
                 HStack(spacing: 6) {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 12))
-                    Text("Abort Shredding")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    if viewModel.cancelShredRequested {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Cancelling...")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    } else {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 12))
+                        Text("Abort Shredding")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    }
                 }
                 .foregroundColor(Color(hex: "#EF4444"))
                 .padding(.horizontal, 18)
@@ -702,6 +734,7 @@ public struct SecureShredderView: View {
                 .overlay(Capsule().stroke(Color(hex: "#EF4444").opacity(0.3), lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .disabled(viewModel.cancelShredRequested)
 
             Spacer()
         }

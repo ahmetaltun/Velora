@@ -340,3 +340,49 @@ fn test_large_snapshot_load_performance() {
 
     let _ = std::fs::remove_file(snapshot_file);
 }
+
+#[test]
+fn test_mark_deleted_batch_scale_performance() {
+    let mut volume = VolumeIndex::new("Macintosh HD", "/");
+    let (d_off, d_len) = volume.pool.push("Users");
+    let users_dir = volume.dirs.insert(d_off, d_len, None);
+
+    let (u_off, u_len) = volume.pool.push("testuser");
+    let user_dir = volume.dirs.insert(u_off, u_len, Some(users_dir));
+
+    let (p_off, p_len) = volume.pool.push("Project");
+    let proj_dir = volume.dirs.insert(p_off, p_len, Some(user_dir));
+
+    let (readme_off, readme_len) = volume.pool.push("README.md");
+    let (dummy_off, dummy_len) = volume.pool.push("dummy.txt");
+
+    let count = 100_000;
+    for i in 0..count {
+        let (f_off, f_len) = if i == 42 {
+            (readme_off, readme_len)
+        } else {
+            (dummy_off, dummy_len)
+        };
+        volume.add_file(FileRecord::new(
+            f_off,
+            f_len,
+            FileFlags::empty(),
+            proj_dir,
+            16_384,
+            1730000000 + i as u64,
+        ));
+    }
+
+    assert_eq!(volume.active_files(), count);
+
+    // Tombstone single file out of 100,000 using batch API
+    let t_start = std::time::Instant::now();
+    let freed = volume.mark_deleted_batch(&["/Users/testuser/Project/README.md".to_string()]);
+    let elapsed = t_start.elapsed();
+
+    println!("\n⚡ BATCH DELETION: 1 out of {} files tombstoned in {:?}", count, elapsed);
+    assert_eq!(freed, 16_384);
+    assert_eq!(volume.active_files(), count - 1);
+    assert!(volume.records[42].is_deleted());
+    assert!(elapsed.as_millis() < 50, "Batch tombstone should finish in <50ms for 100k items, took {:?}", elapsed);
+}

@@ -295,6 +295,23 @@ pub fn shred_file(
 
         let mut bytes_written_file: u64 = 0;
 
+        if file_size == 0 {
+            if let Some(l) = listener {
+                l.on_progress(
+                    &path_str,
+                    file_index,
+                    total_files,
+                    spec.pass_num,
+                    total_passes,
+                    spec.name,
+                    0,
+                    0,
+                    *accumulated_bytes_written,
+                    total_expected_work_bytes,
+                );
+            }
+        }
+
         match spec.pattern {
             PassPattern::Zero => {
                 while bytes_written_file < file_size {
@@ -427,6 +444,22 @@ pub fn shred_file(
             path: path.to_path_buf(),
             source: e,
         })?;
+    }
+
+    // Notify listener that physical data overwriting is 100% complete and finalization has begun
+    if let Some(l) = listener {
+        l.on_progress(
+            &path_str,
+            file_index,
+            total_files,
+            total_passes,
+            total_passes,
+            "Finalizing (flushing disk cache & unlinking)",
+            file_size,
+            file_size,
+            *accumulated_bytes_written,
+            total_expected_work_bytes,
+        );
     }
 
     // Step 2: Truncate file length to 0 and flush

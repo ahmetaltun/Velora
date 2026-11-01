@@ -80,6 +80,7 @@ public final class VeloraViewModel {
     public var shredThroughputBytesPerSec: Double = 0.0
     public var shredEstimatedSecondsRemaining: Double? = nil
     public var shredErrorMessage: String? = nil
+    public var shredSuccessMessage: String? = nil
     public var cancelShredRequested: Bool = false
     public var isShredConfirmationPresented: Bool = false
 
@@ -1213,6 +1214,7 @@ public final class VeloraViewModel {
         shredThroughputBytesPerSec = 0
         shredEstimatedSecondsRemaining = nil
         shredErrorMessage = nil
+        shredSuccessMessage = nil
 
         let startTime = Date()
         var lastUiUpdate = Date()
@@ -1232,7 +1234,7 @@ public final class VeloraViewModel {
                 let elapsed = max(0.01, now.timeIntervalSince(startTime))
                 let speed = Double(totalBytesWritten) / elapsed
                 let remainingBytes = totalBytesAllFiles > totalBytesWritten ? totalBytesAllFiles - totalBytesWritten : 0
-                let eta = speed > 1024 ? Double(remainingBytes) / speed : nil
+                let eta = (speed > 1024 && remainingBytes > 0) ? Double(remainingBytes) / speed : nil
                 let fileName = (currentPath as NSString).lastPathComponent
 
                 DispatchQueue.main.async {
@@ -1254,14 +1256,17 @@ public final class VeloraViewModel {
             guard let self = self else { return }
             let result = self.engine.shredPaths(paths: paths, algorithm: algo, callback: bridge)
 
-            // Asynchronously persist the updated index with tombstoned files to catalog.bin
-            SnapshotManager.shared.saveSnapshot(engine: self.engine)
+            // Pre-calculate active files count and sunburst on background thread (never stall Main Thread)
+            let activeCount = self.engine.activeFiles()
+            let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
 
             DispatchQueue.main.async {
                 self.isShredding = false
                 if result.success || result.filesShredded > 0 {
                     let successfulPaths = Set(paths.filter { !FileManager.default.fileExists(atPath: $0) })
                     self.shredQueue.removeAll { successfulPaths.contains($0.path) }
+                    let itemWord = result.filesShredded == 1 ? "item" : "items"
+                    self.shredSuccessMessage = "Successfully sanitized and shredded \(result.filesShredded) \(itemWord)."
                 }
 
                 if !result.errors.isEmpty {
@@ -1269,9 +1274,9 @@ public final class VeloraViewModel {
                 }
 
                 self.syncCollectorState()
-                self.scannedCount = self.engine.activeFiles()
-                self.currentSunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
-                if let root = self.currentSunburst {
+                self.scannedCount = activeCount
+                self.currentSunburst = sunburst
+                if let root = sunburst {
                     self.sectorStack = [root]
                 }
                 self.refreshTableItems()
@@ -1283,6 +1288,12 @@ public final class VeloraViewModel {
                 if !self.orphanedResidues.isEmpty {
                     self.loadOrphanedResidues()
                 }
+            }
+
+            // Persist the updated index with tombstoned files to catalog.bin asynchronously
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let self = self else { return }
+                SnapshotManager.shared.saveSnapshot(engine: self.engine)
             }
         }
     }
