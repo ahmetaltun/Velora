@@ -3,6 +3,10 @@
 
 #pragma once
 
+#if !defined(__aarch64__) && !defined(__arm64__)
+#error "Velora is designed exclusively for Apple Silicon (ARM64) macOS devices."
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -46,3 +46,10 @@ jobs:
           echo "[INFO] Building Rust FFI and verifying Swift app compilation (arm64, macOS 15+)..."
           cargo build -p velora-ffi --target aarch64-apple-darwin
           (cd swift && swift build --arch arm64)
+
+      - name: Verify Bundle Packaging & 100% ARM64 Purity
+        run: |
+          echo "[INFO] Packaging Velora.app and auditing bundle architectures..."
+          chmod +x bundle_app.sh
+          ./bundle_app.sh
+          echo "[OK] Velora.app assembled and verified as 100% Apple Silicon (arm64)."

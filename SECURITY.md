@@ -10,7 +10,8 @@ Security updates and bug fixes are applied to the active development and release
 
 | Version | Supported          | Platform Architecture             |
 | ------- | ------------------ | --------------------------------- |
-| 0.2.x   | Yes                | macOS 15.0+ / Apple Silicon arm64 |
+| 0.3.x   | Yes                | macOS 15.0+ / Apple Silicon arm64 |
+| 0.2.x   | Discontinued       | macOS 15.0+ / Apple Silicon arm64 |
 | 0.1.x   | No                 | Discontinued                      |
 | < 0.1.0 | No                 | Discontinued                      |
 

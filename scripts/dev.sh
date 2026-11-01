@@ -30,6 +30,39 @@ cd "$ROOT_DIR"
 check_prerequisites() {
     local missing=0
 
+    # Verify macOS platform
+    if [ "$(uname -s)" != "Darwin" ]; then
+        echo -e "${RED}❌ Error: Velora dev environment can only run on macOS.${NC}"
+        exit 1
+    fi
+
+    # Verify Apple Silicon (ARM64) architecture
+    local host_arch
+    host_arch=$(uname -m)
+    if [ "$host_arch" != "arm64" ]; then
+        echo -e "${RED}❌ Error: Velora strictly requires an Apple Silicon (ARM64) Mac. Detected: ${host_arch}.${NC}"
+        if [ "$host_arch" = "x86_64" ]; then
+            if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+                echo -e "${YELLOW}   Notice: Your terminal is running under Rosetta (x86_64 translation). Please run in a native arm64 terminal.${NC}"
+            fi
+        fi
+        exit 1
+    fi
+
+    if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+        echo -e "${RED}❌ Error: Velora cannot run or build under Rosetta 2 translation. Native Apple Silicon (ARM64) required.${NC}"
+        exit 1
+    fi
+
+    # Verify macOS 15+ (Sequoia) minimum requirement
+    local os_ver os_major
+    os_ver=$(sw_vers -productVersion 2>/dev/null || echo "0")
+    os_major=$(echo "$os_ver" | cut -d. -f1)
+    if [ "$os_major" -lt 15 ]; then
+        echo -e "${RED}❌ Error: Velora requires macOS 15 (Sequoia) or later. Detected: macOS ${os_ver}.${NC}"
+        exit 1
+    fi
+
     if ! command -v cargo >/dev/null 2>&1; then
         echo -e "${RED}❌ Error: 'cargo' is required but not installed or not in PATH.${NC}"
         missing=1

@@ -57,8 +57,43 @@ echo "  Target Version: v${VERSION}"
 echo "=================================================="
 
 # 0. Prerequisite Verification
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "[ERROR] Velora can only be built on macOS."
+    exit 1
+fi
+
+HOST_ARCH=$(uname -m)
+if [ "$HOST_ARCH" != "arm64" ]; then
+    echo "[ERROR] Velora release pipeline strictly requires an Apple Silicon (ARM64) Mac. Detected: $HOST_ARCH."
+    if [ "$HOST_ARCH" = "x86_64" ]; then
+        if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+            echo "        Notice: Shell is running under Rosetta (x86_64 translation). Please run in a native arm64 shell."
+        fi
+    fi
+    exit 1
+fi
+
+if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+    echo "[ERROR] Velora cannot be built under Rosetta 2 translation. Native Apple Silicon (ARM64) required."
+    exit 1
+fi
+
+OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "0")
+OS_MAJOR=$(echo "$OS_VERSION" | cut -d. -f1)
+if [ "$OS_MAJOR" -lt 15 ]; then
+    echo "[ERROR] Velora requires macOS 15 (Sequoia) or later. Detected: macOS $OS_VERSION."
+    exit 1
+fi
+
 command -v cargo >/dev/null 2>&1 || { echo "[ERROR] cargo is required but not installed."; exit 1; }
 command -v swift >/dev/null 2>&1 || { echo "[ERROR] swift is required but not installed."; exit 1; }
+if command -v rustup >/dev/null 2>&1; then
+    if ! rustup target list --installed | grep -q "aarch64-apple-darwin"; then
+        echo "[ERROR] Rust target 'aarch64-apple-darwin' is not installed."
+        echo "        Install it via: rustup target add aarch64-apple-darwin"
+        exit 1
+    fi
+fi
 if [ "$GENERATE_DMG" = true ]; then
     command -v hdiutil >/dev/null 2>&1 || { echo "[ERROR] hdiutil is required for DMG creation."; exit 1; }
 fi
@@ -110,6 +145,30 @@ else
     exit 1
 fi
 
+thin_binary_to_arm64() {
+    local target="$1"
+    if [ -f "$target" ]; then
+        if lipo -info "$target" 2>/dev/null | grep -q "^Architectures in the fat file:"; then
+            echo "[INFO] Thinning $target to arm64..."
+            local tmp="${target}.arm64"
+            lipo -thin arm64 "$target" -output "$tmp"
+            mv -f "$tmp" "$target"
+            chmod +x "$target"
+        fi
+    fi
+}
+
+# Thin embedded Sparkle framework binaries to pure arm64
+echo "[INFO] Thinning Sparkle.framework binaries to Apple Silicon (arm64 only)..."
+thin_binary_to_arm64 "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Sparkle"
+thin_binary_to_arm64 "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate"
+thin_binary_to_arm64 "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater"
+find "$FRAMEWORKS_DIR/Sparkle.framework" -type f -perm +111 2>/dev/null | while read -r bin_file; do
+    if file "$bin_file" | grep -q "Mach-O"; then
+        thin_binary_to_arm64 "$bin_file"
+    fi
+done
+
 # Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
 if ! otool -l "$MACOS_DIR/Velora" | grep -F -q "@executable_path/../Frameworks"; then
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS_DIR/Velora" 2>/dev/null || true
@@ -160,6 +219,11 @@ cat << EOF > "$CONTENTS_DIR/Info.plist"
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <key>LSMinimumSystemVersionByArchitecture</key>
+    <dict>
+        <key>arm64</key>
+        <string>15.0</string>
+    </dict>
     <key>LSArchitecturePriority</key>
     <array>
         <string>arm64</string>
@@ -208,14 +272,26 @@ if otool -L "$MACOS_DIR/Velora" | tail -n +2 | grep -E '/Users/|/home/'; then
 fi
 echo "[OK] Binary verified: 100% self-contained and portable."
 
-# 5. Validate Apple Silicon (arm64) architecture exclusivity
-echo "[STEP 5/8] Validating Mach-O architecture (Apple Silicon arm64 only)..."
+# 5. Validate Apple Silicon (arm64) architecture exclusivity across entire bundle
+echo "[STEP 5/8] Validating Mach-O architecture (Apple Silicon arm64 only across bundle)..."
 BINARY_ARCHS=$(lipo -archs "$MACOS_DIR/Velora")
 if [ "$BINARY_ARCHS" != "arm64" ]; then
     echo "[ERROR] Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
     exit 1
 fi
-echo "[OK] Architecture verified: 100% pure Apple Silicon (arm64)."
+echo "[OK] Main binary verified: 100% pure Apple Silicon (arm64)."
+
+echo "[INFO] Auditing all embedded bundle Mach-O binaries for Apple Silicon (arm64) exclusivity..."
+while IFS= read -r bin_file; do
+    if file "$bin_file" | grep -q "Mach-O"; then
+        ARCHS=$(lipo -archs "$bin_file")
+        if [ "$ARCHS" != "arm64" ]; then
+            echo "[ERROR] Non-arm64 architecture ($ARCHS) detected in: $bin_file"
+            exit 1
+        fi
+    fi
+done < <(find "$APP_DIR" -type f -perm +111)
+echo "[OK] Complete bundle verified: 100% pure Apple Silicon (arm64)."
 
 # Validate macOS 15+ minimum OS requirement in Mach-O headers
 echo "[INFO] Validating Mach-O minimum macOS deployment target (macOS 15+)..."

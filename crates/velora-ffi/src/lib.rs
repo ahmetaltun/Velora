@@ -3,7 +3,27 @@
 compile_error!("Velora requires macOS 15 (Sequoia) or later on Apple Silicon (ARM64). Architecture x86_64 / Intel is not supported.");
 
 #[cfg(target_os = "macos")]
-fn verify_macos_version() {
+fn verify_runtime_platform() {
+    // 1. Verify not running under Rosetta translation
+    let mut translated: libc::c_int = 0;
+    let mut trans_size = std::mem::size_of::<libc::c_int>() as libc::size_t;
+    let trans_name = std::ffi::CString::new("sysctl.proc_translated").unwrap();
+    unsafe {
+        if libc::sysctlbyname(
+            trans_name.as_ptr(),
+            &mut translated as *mut _ as *mut libc::c_void,
+            &mut trans_size,
+            std::ptr::null_mut(),
+            0,
+        ) == 0
+        {
+            if translated != 0 {
+                panic!("Velora requires native Apple Silicon (ARM64) execution. Rosetta 2 translation is not supported.");
+            }
+        }
+    }
+
+    // 2. Verify macOS 15+ (Sequoia) minimum requirement
     let mut size: libc::size_t = 0;
     let name = std::ffi::CString::new("kern.osproductversion").unwrap();
     unsafe {
@@ -294,7 +314,7 @@ impl VeloraEngine {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
         #[cfg(target_os = "macos")]
-        verify_macos_version();
+        verify_runtime_platform();
 
         Arc::new(Self {
             volume: RwLock::new(VolumeIndex::new("Macintosh HD", "/")),

@@ -2,6 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "❌ Error: App icon generation requires macOS (sips and iconutil)." >&2
+    exit 1
+fi
+command -v sips >/dev/null 2>&1 || { echo "❌ Error: 'sips' is required." >&2; exit 1; }
+command -v iconutil >/dev/null 2>&1 || { echo "❌ Error: 'iconutil' is required." >&2; exit 1; }
 ASSETS_DIR="${ROOT_DIR}/assets/icons"
 MASTER_PNG="${ASSETS_DIR}/AppIcon.png"
 ICONSET_DIR="${ASSETS_DIR}/AppIcon.iconset"

@@ -1,8 +1,39 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
+
+# -----------------------------------------------------------------------------
+# Host Environment Verification (Apple Silicon macOS 15+ only)
+# -----------------------------------------------------------------------------
+if [ "$(uname -s)" != "Darwin" ]; then
+    echo "❌ Error: Velora can only be bundled and run on macOS."
+    exit 1
+fi
+
+HOST_ARCH=$(uname -m)
+if [ "$HOST_ARCH" != "arm64" ]; then
+    echo "❌ Error: Velora requires Apple Silicon (ARM64). Detected host architecture: $HOST_ARCH."
+    if [ "$HOST_ARCH" = "x86_64" ]; then
+        if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+            echo "   ⚠️ Notice: Terminal is running under Rosetta (x86_64 translation). Please run in a native arm64 terminal."
+        fi
+    fi
+    exit 1
+fi
+
+if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+    echo "❌ Error: Velora cannot run or build under Rosetta 2 translation. Native Apple Silicon (ARM64) required."
+    exit 1
+fi
+
+OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "0")
+OS_MAJOR=$(echo "$OS_VERSION" | cut -d. -f1)
+if [ "$OS_MAJOR" -lt 15 ]; then
+    echo "❌ Error: Velora requires macOS 15 (Sequoia) or later. Detected: macOS $OS_VERSION."
+    exit 1
+fi
 
 DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
 VERSION="${1:-${DEFAULT_VERSION:-0.3.0}}"
@@ -19,8 +50,8 @@ mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 rm -f "$MACOS/Velora"
 CANDIDATES=(
     "swift/.build/arm64-apple-macosx/release/Velora"
-    "swift/.build/release/Velora"
     "swift/.build/arm64-apple-macosx/debug/Velora"
+    "swift/.build/release/Velora"
     "swift/.build/debug/Velora"
 )
 NEWEST_FILE=""
@@ -44,16 +75,42 @@ fi
 rm -rf "$FRAMEWORKS/Sparkle.framework"
 if [ -d "swift/.build/arm64-apple-macosx/release/Sparkle.framework" ]; then
     cp -R "swift/.build/arm64-apple-macosx/release/Sparkle.framework" "$FRAMEWORKS/"
-elif [ -d "swift/.build/release/Sparkle.framework" ]; then
-    cp -R "swift/.build/release/Sparkle.framework" "$FRAMEWORKS/"
 elif [ -d "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" ]; then
     cp -R "swift/.build/arm64-apple-macosx/debug/Sparkle.framework" "$FRAMEWORKS/"
+elif [ -d "swift/.build/release/Sparkle.framework" ]; then
+    cp -R "swift/.build/release/Sparkle.framework" "$FRAMEWORKS/"
 elif [ -d "swift/.build/debug/Sparkle.framework" ]; then
     cp -R "swift/.build/debug/Sparkle.framework" "$FRAMEWORKS/"
 elif [ -d "swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" ]; then
     cp -R "swift/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$FRAMEWORKS/"
 else
     echo "⚠️ Warning: Sparkle.framework not found in build directory."
+fi
+
+thin_binary_to_arm64() {
+    local target="$1"
+    if [ -f "$target" ]; then
+        if lipo -info "$target" 2>/dev/null | grep -q "^Architectures in the fat file:"; then
+            echo "✂️ Thinning $target to arm64..."
+            local tmp="${target}.arm64"
+            lipo -thin arm64 "$target" -output "$tmp"
+            mv -f "$tmp" "$target"
+            chmod +x "$target"
+        fi
+    fi
+}
+
+# Thin embedded Sparkle framework binaries to pure arm64
+if [ -d "$FRAMEWORKS/Sparkle.framework" ]; then
+    echo "✂️ Thinning Sparkle.framework to Apple Silicon (arm64 only)..."
+    thin_binary_to_arm64 "$FRAMEWORKS/Sparkle.framework/Versions/B/Sparkle"
+    thin_binary_to_arm64 "$FRAMEWORKS/Sparkle.framework/Versions/B/Autoupdate"
+    thin_binary_to_arm64 "$FRAMEWORKS/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater"
+    find "$FRAMEWORKS/Sparkle.framework" -type f -perm +111 2>/dev/null | while read -r bin_file; do
+        if file "$bin_file" | grep -q "Mach-O"; then
+            thin_binary_to_arm64 "$bin_file"
+        fi
+    done
 fi
 
 # Ensure executable can locate embedded frameworks via @executable_path/../Frameworks
@@ -74,7 +131,7 @@ for icon_asset in assets/icons/VeloraIcon-*.png; do
     fi
 done
 
-# Create Info.plist
+# Create Info.plist with explicit Apple Silicon and macOS 15+ constraints
 cat << EOF > "$CONTENTS/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -106,6 +163,11 @@ cat << EOF > "$CONTENTS/Info.plist"
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <key>LSMinimumSystemVersionByArchitecture</key>
+    <dict>
+        <key>arm64</key>
+        <string>15.0</string>
+    </dict>
     <key>LSArchitecturePriority</key>
     <array>
         <string>arm64</string>
@@ -145,13 +207,13 @@ EOF
 
 chmod +x "$MACOS/Velora"
 
-# Validate Apple Silicon (arm64) architecture exclusivity
+# Validate main executable Apple Silicon (arm64) architecture exclusivity
 BINARY_ARCHS=$(lipo -archs "$MACOS/Velora")
 if [ "$BINARY_ARCHS" != "arm64" ]; then
     echo "❌ Error: Binary must be strictly Apple Silicon (arm64). Found: $BINARY_ARCHS"
     exit 1
 fi
-echo "✅ Architecture verified: Apple Silicon (arm64)."
+echo "✅ Main binary architecture verified: Apple Silicon (arm64)."
 
 # Validate macOS 15+ minimum OS requirement
 MIN_OS=$(otool -l "$MACOS/Velora" | awk '/LC_BUILD_VERSION/{getline; getline; getline; print $2}')
@@ -163,6 +225,19 @@ if [ -n "$MIN_OS" ]; then
     fi
     echo "✅ Minimum OS verified: macOS $MIN_OS (Sequoia+)."
 fi
+
+# Recursive bundle audit: Verify 100% of all Mach-O binaries in Velora.app are strictly arm64
+echo "🔬 Auditing all bundle Mach-O binaries for Apple Silicon (arm64) exclusivity..."
+while IFS= read -r bin_file; do
+    if file "$bin_file" | grep -q "Mach-O"; then
+        ARCHS=$(lipo -archs "$bin_file")
+        if [ "$ARCHS" != "arm64" ]; then
+            echo "❌ Error: Found non-arm64 architecture ($ARCHS) in $bin_file"
+            exit 1
+        fi
+    fi
+done < <(find "$APP_DIR" -type f -perm +111)
+echo "✅ Complete bundle verified: 100% pure Apple Silicon (arm64)."
 
 # Ad-hoc inside-out code signing for local execution
 if [ -d "$FRAMEWORKS/Sparkle.framework" ]; then

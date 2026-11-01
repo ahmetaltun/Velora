@@ -2,6 +2,10 @@
 import PackageDescription
 import Foundation
 
+#if !arch(arm64)
+fatalError("Velora is designed exclusively for Apple Silicon (ARM64) macOS devices.")
+#endif
+
 let package = Package(
     name: "Velora",
     platforms: [

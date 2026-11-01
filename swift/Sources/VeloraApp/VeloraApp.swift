@@ -7,6 +7,20 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Runtime check: Verify native Apple Silicon (ARM64) execution without Rosetta 2 translation
+        var isTranslated: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        if sysctlbyname("sysctl.proc_translated", &isTranslated, &size, nil, 0) == 0 && isTranslated != 0 {
+            let alert = NSAlert()
+            alert.messageText = "Rosetta Translation Not Supported"
+            alert.informativeText = "Velora must run natively on Apple Silicon (ARM64). Rosetta 2 execution is not supported. The application will now terminate."
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApp.terminate(nil)
+            return
+        }
+
         guard #available(macOS 15.0, *) else {
             let alert = NSAlert()
             alert.messageText = "Unsupported macOS Version"
