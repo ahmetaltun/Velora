@@ -305,6 +305,10 @@ public struct FileTableView: View {
             Button("Collect for Cleanup") {
                 viewModel.collect(path: item.path, size: item.sizeBytes, isDir: item.isDir)
             }
+            Button("Secure Shred...") {
+                viewModel.queueForShredding(paths: [item.path])
+                viewModel.activeSidebarId = "tool_shredder"
+            }
         } else {
             Button("Collect \(selectedIds.count) Items for Cleanup") {
                 for id in selectedIds {
@@ -312,6 +316,11 @@ public struct FileTableView: View {
                         viewModel.collect(path: found.path, size: found.sizeBytes, isDir: found.isDir)
                     }
                 }
+            }
+            Button("Secure Shred \(selectedIds.count) Items...") {
+                let paths = selectedIds.compactMap { id in sortedItems.first(where: { $0.id == id })?.path }
+                viewModel.queueForShredding(paths: paths)
+                viewModel.activeSidebarId = "tool_shredder"
             }
             Divider()
             Button("Copy \(selectedIds.count) Paths") {

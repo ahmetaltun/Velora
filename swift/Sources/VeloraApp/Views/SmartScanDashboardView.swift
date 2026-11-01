@@ -144,6 +144,16 @@ public struct SmartScanDashboardView: View {
                         }
 
                         QuickToolLauncherTile(
+                            title: "AI Models",
+                            subtitle: "Ollama, Hugging Face, LM Studio & MLX",
+                            systemImage: "sparkles.rectangle.stack.fill",
+                            accentColor: VeloraTheme.accentViolet,
+                            isDisabled: viewModel.isInteractionDisabled
+                        ) {
+                            viewModel.activeSidebarId = "tool_ai_models"
+                        }
+
+                        QuickToolLauncherTile(
                             title: "Duplicate Finder",
                             subtitle: "Byte-for-byte duplicate file detector",
                             systemImage: "doc.on.doc.fill",
@@ -151,16 +161,6 @@ public struct SmartScanDashboardView: View {
                             isDisabled: viewModel.isInteractionDisabled
                         ) {
                             viewModel.activeSidebarId = "tool_duplicates"
-                        }
-
-                        QuickToolLauncherTile(
-                            title: "Malware & Threats",
-                            subtitle: "LaunchAgent audit & code signatures",
-                            systemImage: "shield.lefthalf.filled",
-                            accentColor: VeloraTheme.accentBlue,
-                            isDisabled: viewModel.isInteractionDisabled
-                        ) {
-                            viewModel.activeSidebarId = "tool_security"
                         }
                     }
                 }

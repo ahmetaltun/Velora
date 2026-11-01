@@ -15,6 +15,7 @@ Velora pairs a parallel multi-threaded Rust core engine with a native SwiftUI ap
 - **Real-Time Filesystem Monitoring**: Incremental index synchronization powered by the macOS FSEvents subsystem, updating the in-memory tree without requiring full rescans.
 - **Application Management and Residue Tracking**: Complete inventory of installed applications with deep footprint resolution across Application Support, Caches, Preferences, and Containers, plus detection of orphaned leftovers from removed apps.
 - **Developer Storage and Artifact Hunter**: Targeted detection of build targets (`target`, `node_modules`, `.venv`, `build`), package manager caches (Cargo, npm, pip, Docker, Homebrew, CocoaPods, Go), and Xcode storage (DerivedData, Archives, iOS DeviceSupport, and Simulators).
+- **Local AI & LLM Model Weight Hunter**: Deep detection and metadata extraction across Ollama (`~/.ollama/models`), Hugging Face Hub (`~/.cache/huggingface/hub`), LM Studio (`~/.cache/lm-studio/models`), Apple MLX (`~/.cache/mlx`), PyTorch (`~/.cache/torch/hub/checkpoints`), ComfyUI (`~/ComfyUI/models`), and loose weights (`.gguf`, `.safetensors`, `.bin`, `.onnx`). Features microsecond streaming GGUF/Safetensors binary header parsing (architecture, quantization, parameter count, context window), symlink/blob deduplication, inactivity tiering, and staged cleanup.
 - **Disk Hygiene and Duplicate Detection**: Cryptographic duplicate file identification utilizing size pre-filtering and Blake3 hashing, alongside a Large and Old Files Heatmap Matrix grouping items across configurable age and size buckets.
 - **Security and Threat Inspection**: Auto-Start Extension Point (ASEP) auditor scanning LaunchAgents, LaunchDaemons, Login Items, and shell hooks, combined with cryptographic code signature verification and a quarantined isolation vault.
 - **APFS Telemetry and Snapshot Reconciliation**: Container-level and volume-level space accounting, purgeable space breakdown, and local Time Machine / APFS snapshot tracking.
@@ -39,6 +40,7 @@ Velora/
 │   ├── velora-ops        # Safe file operations and macOS Trash integration
 │   ├── velora-apfs       # APFS container/volume telemetry and snapshot reconciliation
 │   ├── velora-dev        # Build artifact hunter, package cache scanner, Xcode storage inspector
+│   ├── velora-models     # Local AI & LLM weight hunter, GGUF/Safetensors binary parser, Ollama/HF resolver
 │   ├── velora-apps       # Application footprint resolver, bundle inspector, orphan detector
 │   ├── velora-hygiene    # Blake3 duplicate file finder, large & old files classification matrix
 │   ├── velora-security   # Threat scanner, ASEP persistence auditor, codesign verifier, quarantine vault

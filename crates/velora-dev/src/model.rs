@@ -178,3 +178,128 @@ pub struct PackageCacheSummary {
     pub total_bytes: u64,
     pub items: Vec<PackageCacheItem>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DockerEngineKind {
+    DockerDesktop,
+    OrbStack,
+    Colima,
+    Generic,
+}
+
+impl DockerEngineKind {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::DockerDesktop => "Docker Desktop",
+            Self::OrbStack => "OrbStack",
+            Self::Colima => "Colima",
+            Self::Generic => "Docker Engine",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DockerDaemonStatus {
+    Running,
+    Stopped,
+    SocketNotFound,
+    PermissionDenied,
+}
+
+impl DockerDaemonStatus {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Running => "Running",
+            Self::Stopped => "Stopped",
+            Self::SocketNotFound => "Socket Not Found",
+            Self::PermissionDenied => "Permission Denied",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerVmDisk {
+    pub name: String,
+    pub path: String,
+    pub engine: DockerEngineKind,
+    pub allocated_bytes: u64,
+    pub virtual_capacity_bytes: u64,
+    pub modified_secs: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerImageItem {
+    pub id: String,
+    pub repo_tags: Vec<String>,
+    pub size_bytes: u64,
+    pub shared_size_bytes: u64,
+    pub is_dangling: bool,
+    pub in_use: bool,
+    pub created_secs: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerVolumeItem {
+    pub name: String,
+    pub driver: String,
+    pub size_bytes: u64,
+    pub is_anonymous: bool,
+    pub in_use: bool,
+    pub ref_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerBuildCacheItem {
+    pub id: String,
+    pub cache_type: String,
+    pub description: String,
+    pub size_bytes: u64,
+    pub in_use: bool,
+    pub shared: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DockerContainerItem {
+    pub id: String,
+    pub names: Vec<String>,
+    pub image: String,
+    pub state: String,
+    pub size_rw_bytes: u64,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DockerStorageSummary {
+    pub daemon_status: DockerDaemonStatus,
+    pub engine_name: String,
+    pub socket_path: String,
+    pub vm_disks: Vec<DockerVmDisk>,
+    pub total_host_allocated_bytes: u64,
+    pub total_guest_active_bytes: u64,
+    pub phantom_bloat_bytes: u64,
+    pub images_total_bytes: u64,
+    pub dangling_images_bytes: u64,
+    pub unused_images_bytes: u64,
+    pub volumes_total_bytes: u64,
+    pub dangling_anonymous_volumes_bytes: u64,
+    pub dangling_named_volumes_bytes: u64,
+    pub build_cache_total_bytes: u64,
+    pub build_cache_reclaimable_bytes: u64,
+    pub stopped_containers_bytes: u64,
+    pub images: Vec<DockerImageItem>,
+    pub volumes: Vec<DockerVolumeItem>,
+    pub build_cache: Vec<DockerBuildCacheItem>,
+    pub containers: Vec<DockerContainerItem>,
+}
+
+impl Default for DockerDaemonStatus {
+    fn default() -> Self {
+        Self::Stopped
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DockerPruneResult {
+    pub success: bool,
+    pub reclaimed_bytes: u64,
+    pub message: String,
+}

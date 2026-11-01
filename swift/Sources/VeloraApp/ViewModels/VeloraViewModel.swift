@@ -37,6 +37,13 @@ public final class VeloraViewModel {
     public var packageCacheSummary: PackageCacheSummaryRecord?
     public var isLoadingPackageCaches: Bool = false
     public var dockerPruneStatus: String?
+    public var dockerSummary: DockerStorageSummaryRecord?
+    public var isLoadingDocker: Bool = false
+    public var isPruningDockerAction: Bool = false
+    public var dockerActionStatusMessage: String?
+    public var aiModelSummary: AiModelSummaryRecord?
+    public var isLoadingAiModels: Bool = false
+    public var pruneOllamaBlobsStatus: String?
     public var installedApps: [InstalledAppRecord] = []
     public var isLoadingApps: Bool = false
     public var orphanedResidues: [OrphanedResidueRecord] = []
@@ -57,6 +64,33 @@ public final class VeloraViewModel {
     public var cleaningEstimatedSecondsRemaining: Double? = nil
     public var cleaningErrorMessage: String? = nil
     public var cancelCleaningRequested: Bool = false
+
+    // Cryptographic Secure Shredder State
+    public var shredQueue: [ShredQueueItem] = []
+    public var selectedShredAlgorithm: ShredAlgorithm = .dod522022M
+    public var isShredding: Bool = false
+    public var shredCurrentIndex: Int = 0
+    public var shredTotalCount: Int = 0
+    public var shredBytesProcessed: UInt64 = 0
+    public var shredTotalBytes: UInt64 = 0
+    public var shredCurrentFileName: String = ""
+    public var shredCurrentPass: Int = 1
+    public var shredTotalPasses: Int = 3
+    public var shredPassDescription: String = ""
+    public var shredThroughputBytesPerSec: Double = 0.0
+    public var shredEstimatedSecondsRemaining: Double? = nil
+    public var shredErrorMessage: String? = nil
+    public var cancelShredRequested: Bool = false
+    public var isShredConfirmationPresented: Bool = false
+
+    public var shredProgress: Double {
+        guard shredTotalBytes > 0 else { return 0.0 }
+        return min(1.0, Double(shredBytesProcessed) / Double(shredTotalBytes))
+    }
+
+    public var shredQueueTotalSize: UInt64 {
+        shredQueue.reduce(0) { $0 + $1.sizeBytes }
+    }
 
     public var cleaningProgress: Double {
         guard cleaningTotalCount > 0 else { return 0.0 }
@@ -82,7 +116,7 @@ public final class VeloraViewModel {
     /// Indicates whether global interaction (sidebar tools, search, navigation) is disabled
     /// because catalog.bin is loading into memory or a volume scan is active.
     public var isInteractionDisabled: Bool {
-        isScanning || isLoadingSnapshot
+        isScanning || isLoadingSnapshot || isShredding
     }
 
     public init() {
@@ -255,6 +289,150 @@ public final class VeloraViewModel {
         }
     }
 
+    public func loadDockerSummary() {
+        isLoadingDocker = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.inspectDocker(homePath: home)
+            DispatchQueue.main.async {
+                self.dockerSummary = summary
+                self.isLoadingDocker = false
+            }
+        }
+    }
+
+    public func pruneDockerDanglingImages() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerDanglingImages(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerUnusedImages() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerUnusedImages(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerAnonymousVolumes() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerAnonymousVolumes(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerAllUnattachedVolumes() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerAllUnattachedVolumes(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerBuildCache() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerBuildCache(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerStoppedContainers() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerStoppedContainers(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func pruneDockerSystemAll() {
+        isPruningDockerAction = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let res = self.engine.pruneDockerSystemAll(homePath: home)
+            DispatchQueue.main.async {
+                self.isPruningDockerAction = false
+                self.dockerActionStatusMessage = res.message
+                self.loadDockerSummary()
+                self.loadPackageCaches()
+            }
+        }
+    }
+
+    public func loadAiModels() {
+        isLoadingAiModels = true
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let summary = self.engine.inspectAiModels(homePath: home)
+            DispatchQueue.main.async {
+                self.aiModelSummary = summary
+                self.isLoadingAiModels = false
+            }
+        }
+    }
+
+    public func pruneOllamaBlobs() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let freed = self.engine.pruneOllamaOrphanedBlobs(homePath: home)
+            let formatted = ByteCountFormatter.string(fromByteCount: Int64(freed), countStyle: .file)
+            DispatchQueue.main.async {
+                self.pruneOllamaBlobsStatus = freed > 0 ? "Pruned \(formatted) of orphaned blobs." : "No orphaned blobs found."
+                self.loadAiModels()
+            }
+        }
+    }
+
     public func loadInstalledApps() {
         isLoadingApps = true
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -355,6 +533,7 @@ public final class VeloraViewModel {
         loadDevArtifacts()
         loadXcodeSummary()
         loadPackageCaches()
+        loadAiModels()
         loadInstalledApps()
         loadOrphanedResidues()
         loadLargeOldMatrix()
@@ -385,6 +564,18 @@ public final class VeloraViewModel {
         if isLoadingPackageCaches || isLoadingSnapshot || isScanning { return nil }
         if !hasBinaryIndex && !hasIndexedData && packageCacheSummary == nil { return nil }
         return packageCacheSummary?.totalBytes
+    }
+
+    public var dockerStorageBytes: UInt64? {
+        if isLoadingDocker || isLoadingSnapshot || isScanning { return nil }
+        guard let summary = dockerSummary else { return nil }
+        return summary.totalHostAllocatedBytes > 0 ? summary.totalHostAllocatedBytes : summary.totalGuestActiveBytes
+    }
+
+    public var aiModelsBytes: UInt64? {
+        if isLoadingAiModels || isLoadingSnapshot || isScanning { return nil }
+        if !hasBinaryIndex && !hasIndexedData && aiModelSummary == nil { return nil }
+        return aiModelSummary?.totalBytes
     }
 
     public var duplicatesBytes: UInt64? {
@@ -929,6 +1120,9 @@ public final class VeloraViewModel {
                 if self.packageCacheSummary != nil {
                     self.loadPackageCaches()
                 }
+                if self.aiModelSummary != nil {
+                    self.loadAiModels()
+                }
 
                 if !errors.isEmpty {
                     self.cleaningErrorMessage = "\(errors.count) items could not be moved to Trash. \(errors.first ?? "")"
@@ -936,6 +1130,253 @@ public final class VeloraViewModel {
 
                 self.isCleaning = false
             }
+        }
+    }
+
+    // MARK: - Cryptographic Secure Shredder Actions
+
+    public func queueForShredding(paths: [String]) {
+        guard !paths.isEmpty else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            var newItems: [ShredQueueItem] = []
+
+            for p in paths {
+                let url = URL(fileURLWithPath: p)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: p, isDirectory: &isDirectory) else { continue }
+
+                var size: UInt64 = 0
+                if isDirectory.boolValue {
+                    if let enumerator = FileManager.default.enumerator(
+                        at: url,
+                        includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey]
+                    ) {
+                        for case let fileURL as URL in enumerator {
+                            if let res = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+                               res.isDirectory != true {
+                                size += UInt64(res.fileSize ?? 0)
+                            }
+                        }
+                    }
+                } else {
+                    if let attrs = try? FileManager.default.attributesOfItem(atPath: p) {
+                        size = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
+                    }
+                }
+                newItems.append(ShredQueueItem(path: p, sizeBytes: size, isDir: isDirectory.boolValue))
+            }
+
+            DispatchQueue.main.async {
+                for item in newItems {
+                    if !self.shredQueue.contains(where: { $0.path == item.path }) {
+                        self.shredQueue.append(item)
+                    }
+                }
+            }
+        }
+    }
+
+    public func removeFromShredQueue(id: String) {
+        shredQueue.removeAll { $0.id == id }
+    }
+
+    public func clearShredQueue() {
+        shredQueue.removeAll()
+    }
+
+    public func cancelShredding() {
+        cancelShredRequested = true
+        engine.cancelShred()
+    }
+
+    public func startShredding() {
+        guard !isShredding, !shredQueue.isEmpty else { return }
+
+        let itemsToShred = shredQueue
+        let totalItems = itemsToShred.count
+        let totalRawBytes = shredQueueTotalSize
+        let paths = itemsToShred.map(\.path)
+        let algo = selectedShredAlgorithm
+        let passes = UInt64(algo.totalPassesCount)
+
+        isShredding = true
+        cancelShredRequested = false
+        shredCurrentIndex = 0
+        shredTotalCount = totalItems
+        shredBytesProcessed = 0
+        shredTotalBytes = totalRawBytes * passes
+        shredCurrentFileName = itemsToShred.first?.name ?? ""
+        shredCurrentPass = 1
+        shredTotalPasses = Int(passes)
+        shredPassDescription = "Initializing overwrite pipeline..."
+        shredThroughputBytesPerSec = 0
+        shredEstimatedSecondsRemaining = nil
+        shredErrorMessage = nil
+
+        let startTime = Date()
+        var lastUiUpdate = Date()
+        let lock = NSLock()
+
+        let bridge = SwiftShredCallbackBridge { [weak self] currentPath, fileIndex, totalFiles, currentPass, totalPasses, passName, bytesWrittenFile, fileSizeBytes, totalBytesWritten, totalBytesAllFiles in
+            guard let self = self else { return }
+            let now = Date()
+            lock.lock()
+            let shouldUpdate = now.timeIntervalSince(lastUiUpdate) >= 0.05 || totalBytesWritten >= totalBytesAllFiles
+            if shouldUpdate {
+                lastUiUpdate = now
+            }
+            lock.unlock()
+
+            if shouldUpdate {
+                let elapsed = max(0.01, now.timeIntervalSince(startTime))
+                let speed = Double(totalBytesWritten) / elapsed
+                let remainingBytes = totalBytesAllFiles > totalBytesWritten ? totalBytesAllFiles - totalBytesWritten : 0
+                let eta = speed > 1024 ? Double(remainingBytes) / speed : nil
+                let fileName = (currentPath as NSString).lastPathComponent
+
+                DispatchQueue.main.async {
+                    self.shredCurrentIndex = Int(fileIndex)
+                    self.shredTotalCount = Int(totalFiles)
+                    self.shredCurrentFileName = fileName
+                    self.shredCurrentPass = Int(currentPass)
+                    self.shredTotalPasses = Int(totalPasses)
+                    self.shredPassDescription = passName
+                    self.shredBytesProcessed = totalBytesWritten
+                    self.shredTotalBytes = totalBytesAllFiles
+                    self.shredThroughputBytesPerSec = speed
+                    self.shredEstimatedSecondsRemaining = eta
+                }
+            }
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let result = self.engine.shredPaths(paths: paths, algorithm: algo, callback: bridge)
+
+            // Asynchronously persist the updated index with tombstoned files to catalog.bin
+            SnapshotManager.shared.saveSnapshot(engine: self.engine)
+
+            DispatchQueue.main.async {
+                self.isShredding = false
+                if result.success || result.filesShredded > 0 {
+                    let successfulPaths = Set(paths.filter { !FileManager.default.fileExists(atPath: $0) })
+                    self.shredQueue.removeAll { successfulPaths.contains($0.path) }
+                }
+
+                if !result.errors.isEmpty {
+                    self.shredErrorMessage = result.errors.joined(separator: "\n")
+                }
+
+                self.syncCollectorState()
+                self.scannedCount = self.engine.activeFiles()
+                self.currentSunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+                if let root = self.currentSunburst {
+                    self.sectorStack = [root]
+                }
+                self.refreshTableItems()
+                self.refreshStorageReconciliation()
+
+                if !self.installedApps.isEmpty {
+                    self.loadInstalledApps()
+                }
+                if !self.orphanedResidues.isEmpty {
+                    self.loadOrphanedResidues()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Shredder Models & Bridge
+
+public struct ShredQueueItem: Identifiable, Equatable {
+    public let id: String
+    public let path: String
+    public let name: String
+    public let sizeBytes: UInt64
+    public let isDir: Bool
+
+    public init(path: String, sizeBytes: UInt64, isDir: Bool) {
+        self.id = path
+        self.path = path
+        self.name = (path as NSString).lastPathComponent
+        self.sizeBytes = sizeBytes
+        self.isDir = isDir
+    }
+}
+
+final class SwiftShredCallbackBridge: ShredProgressCallback {
+    private let onProgressClosure: (String, UInt32, UInt32, UInt32, UInt32, String, UInt64, UInt64, UInt64, UInt64) -> Void
+
+    init(onProgress: @escaping (String, UInt32, UInt32, UInt32, UInt32, String, UInt64, UInt64, UInt64, UInt64) -> Void) {
+        self.onProgressClosure = onProgress
+    }
+
+    func onProgress(
+        currentPath: String,
+        fileIndex: UInt32,
+        totalFiles: UInt32,
+        currentPass: UInt32,
+        totalPasses: UInt32,
+        passName: String,
+        bytesWrittenFile: UInt64,
+        fileSizeBytes: UInt64,
+        totalBytesWritten: UInt64,
+        totalBytesAllFiles: UInt64
+    ) {
+        onProgressClosure(
+            currentPath,
+            fileIndex,
+            totalFiles,
+            currentPass,
+            totalPasses,
+            passName,
+            bytesWrittenFile,
+            fileSizeBytes,
+            totalBytesWritten,
+            totalBytesAllFiles
+        )
+    }
+}
+
+extension ShredAlgorithm: Identifiable {
+    public var id: String {
+        switch self {
+        case .zero: return "zero"
+        case .randomNist80088: return "nist"
+        case .dod522022M: return "dod"
+        case .dod522022MEce: return "dod_ece"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .zero: return "Quick Zero (1-Pass)"
+        case .randomNist80088: return "NIST SP 800-88 (1-Pass CSPRNG)"
+        case .dod522022M: return "DoD 5220.22-M (3-Pass)"
+        case .dod522022MEce: return "DoD 5220.22-M ECE (7-Pass)"
+        }
+    }
+
+    public var totalPassesCount: Int {
+        switch self {
+        case .zero, .randomNist80088: return 1
+        case .dod522022M: return 3
+        case .dod522022MEce: return 7
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .zero:
+            return "Overwrites all bytes with 0x00 zeros. Fast and minimizes SSD write cycle wear."
+        case .randomNist80088:
+            return "Single-pass overwrite using hardware-accelerated cryptographically secure pseudo-random numbers."
+        case .dod522022M:
+            return "U.S. DoD 3-pass standard: 0x00 zeros, 0xFF complement, followed by CSPRNG random bytes."
+        case .dod522022MEce:
+            return "High-security 7-pass military sanitization with alternating bit patterns and cryptographic random passes."
         }
     }
 }

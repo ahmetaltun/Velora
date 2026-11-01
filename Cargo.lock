@@ -1204,6 +1204,7 @@ name = "velora-dev"
 version = "0.3.0"
 dependencies = [
  "serde",
+ "serde_json",
  "velora-analyzer",
  "velora-index",
 ]
@@ -1221,6 +1222,7 @@ dependencies = [
  "velora-dev",
  "velora-hygiene",
  "velora-index",
+ "velora-models",
  "velora-ops",
  "velora-scanner",
  "velora-search",
@@ -1253,9 +1255,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "velora-models"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "velora-analyzer",
+ "velora-index",
+]
+
+[[package]]
 name = "velora-ops"
 version = "0.3.0"
 dependencies = [
+ "libc",
+ "rayon",
  "serde",
  "trash",
  "velora-index",

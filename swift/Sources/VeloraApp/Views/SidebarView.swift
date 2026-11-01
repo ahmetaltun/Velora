@@ -32,10 +32,6 @@ public struct SidebarView: View {
         viewModel.isInteractionDisabled
     }
 
-    private var appVersionString: String {
-        VeloraAppInfo.formattedSidebarVersion
-    }
-
     private func selectSidebarTool(_ id: String, loader: (() -> Void)? = nil) {
         guard !viewModel.isInteractionDisabled else { return }
         if viewModel.isSearchActive {
@@ -190,6 +186,36 @@ public struct SidebarView: View {
                             }
                         }
                     }
+
+                    SidebarRowItem(
+                        title: "Docker Storage",
+                        systemImage: "cylinder.split.1x2",
+                        accentColor: VeloraTheme.accentBlue,
+                        badge: formatBadge(viewModel.dockerStorageBytes, isLoading: viewModel.isLoadingDocker),
+                        isSelected: viewModel.activeSidebarId == "tool_docker" && !viewModel.isSearchActive,
+                        isDisabled: viewModel.isInteractionDisabled
+                    ) {
+                        selectSidebarTool("tool_docker") {
+                            if viewModel.dockerSummary == nil {
+                                viewModel.loadDockerSummary()
+                            }
+                        }
+                    }
+
+                    SidebarRowItem(
+                        title: "AI Models",
+                        systemImage: "sparkles.rectangle.stack.fill",
+                        accentColor: VeloraTheme.accentViolet,
+                        badge: formatBadge(viewModel.aiModelsBytes, isLoading: viewModel.isLoadingAiModels),
+                        isSelected: viewModel.activeSidebarId == "tool_ai_models" && !viewModel.isSearchActive,
+                        isDisabled: viewModel.isInteractionDisabled
+                    ) {
+                        selectSidebarTool("tool_ai_models") {
+                            if viewModel.aiModelSummary == nil {
+                                viewModel.loadAiModels()
+                            }
+                        }
+                    }
                 }
 
                 Section("Protection") {
@@ -206,6 +232,17 @@ public struct SidebarView: View {
                                 viewModel.loadSecurityScan()
                             }
                         }
+                    }
+
+                    SidebarRowItem(
+                        title: "Secure Shredder",
+                        systemImage: "lock.shield.fill",
+                        accentColor: VeloraTheme.accentPink,
+                        badge: viewModel.shredQueue.isEmpty ? nil : "\(viewModel.shredQueue.count)",
+                        isSelected: viewModel.activeSidebarId == "tool_shredder" && !viewModel.isSearchActive,
+                        isDisabled: viewModel.isInteractionDisabled
+                    ) {
+                        selectSidebarTool("tool_shredder")
                     }
                 }
 
@@ -259,26 +296,6 @@ public struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .disabled(viewModel.isInteractionDisabled)
-
-            // Footer: App Version
-            Divider()
-                .overlay(VeloraTheme.cardBorder)
-                .padding(.horizontal, 12)
-
-            HStack {
-                Spacer()
-                Text(appVersionString)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(VeloraTheme.textMuted)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                AppAssetLoader.openAboutPanel()
-            }
-            .help("About Velora")
         }
         .background(VeloraTheme.obsidianSidebar)
     }

@@ -68,6 +68,10 @@ public struct MainWindowView: View {
                             XcodeStorageView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_package_caches" {
                             PackageCachesView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_docker" {
+                            DockerStorageView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_ai_models" {
+                            ModelWeightHunterView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_apps" {
                             AppUninstallerDashboardView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_orphans" {
@@ -78,6 +82,8 @@ public struct MainWindowView: View {
                             DuplicateFinderView(viewModel: viewModel)
                         } else if viewModel.activeSidebarId == "tool_security" {
                             MalwareScannerView(viewModel: viewModel)
+                        } else if viewModel.activeSidebarId == "tool_shredder" {
+                            SecureShredderView(viewModel: viewModel)
                         } else if viewModel.shouldShowScanUI {
                             SmartScanDashboardView(viewModel: viewModel)
                         } else {

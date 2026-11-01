@@ -77,12 +77,34 @@ public struct PackageCachesView: View {
                 accentColor: VeloraTheme.accentAmber
             ) {
                 HStack(spacing: 10) {
+                    // Docker Deep Inspection Jump Button
+                    Button(action: {
+                        viewModel.activeSidebarId = "tool_docker"
+                        if viewModel.dockerSummary == nil {
+                            viewModel.loadDockerSummary()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cylinder.split.1x2")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Deep Inspect Docker")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                        }
+                        .foregroundColor(VeloraTheme.accentBlue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(VeloraTheme.accentBlue.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(VeloraTheme.accentBlue.opacity(0.3), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Opens Docker Deep Inspection to audit dangling layers, unused volumes, and VM disk compaction")
+
                     // Prune Docker Button
                     Button(action: {
                         viewModel.pruneDocker()
                     }) {
                         HStack(spacing: 6) {
-                            Image(systemName: "cylinder.split.1x2")
+                            Image(systemName: "trash")
                                 .font(.system(size: 11, weight: .semibold))
                             Text("Prune Docker")
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -265,6 +287,12 @@ public struct PackageCachesView: View {
                                 } else {
                                     viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
                                 }
+                            },
+                            onInspectDocker: {
+                                viewModel.activeSidebarId = "tool_docker"
+                                if viewModel.dockerSummary == nil {
+                                    viewModel.loadDockerSummary()
+                                }
                             }
                         )
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -293,6 +321,7 @@ private struct PackageCacheCard: View {
     let formatBytes: (UInt64) -> String
     let formatDate: (UInt64) -> String
     let onToggleCollect: () -> Void
+    let onInspectDocker: () -> Void
 
     private var accentColor: Color {
         Color(hex: item.colorHex)
@@ -393,6 +422,21 @@ private struct PackageCacheCard: View {
                 }
                 .buttonStyle(.plain)
                 .help(isStaged ? "Remove from Collector Tray" : "Stage into Collector Tray")
+            } else if item.ecosystemName.localizedCaseInsensitiveContains("Docker") {
+                Button(action: onInspectDocker) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cylinder.split.1x2")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Deep Inspect")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(VeloraTheme.accentBlue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(VeloraTheme.accentBlue.opacity(0.15), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Launch Docker Deep Inspection to analyze dangling layers, unused volumes, and BuildKit cache")
             } else {
                 Image(systemName: "lock")
                     .foregroundColor(VeloraTheme.textMuted.opacity(0.5))

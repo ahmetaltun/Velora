@@ -172,6 +172,116 @@ pub struct PackageCacheSummaryRecord {
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerVmDiskRecord {
+    pub name: String,
+    pub path: String,
+    pub engine_name: String,
+    pub allocated_bytes: u64,
+    pub virtual_capacity_bytes: u64,
+    pub modified_secs: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerImageRecord {
+    pub id: String,
+    pub repo_tags: Vec<String>,
+    pub size_bytes: u64,
+    pub shared_size_bytes: u64,
+    pub is_dangling: bool,
+    pub in_use: bool,
+    pub created_secs: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerVolumeRecord {
+    pub name: String,
+    pub driver: String,
+    pub size_bytes: u64,
+    pub is_anonymous: bool,
+    pub in_use: bool,
+    pub ref_count: i64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerBuildCacheRecord {
+    pub id: String,
+    pub cache_type: String,
+    pub description: String,
+    pub size_bytes: u64,
+    pub in_use: bool,
+    pub shared: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerContainerRecord {
+    pub id: String,
+    pub names: Vec<String>,
+    pub image: String,
+    pub state: String,
+    pub size_rw_bytes: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerStorageSummaryRecord {
+    pub daemon_status: String,
+    pub engine_name: String,
+    pub socket_path: String,
+    pub vm_disks: Vec<DockerVmDiskRecord>,
+    pub total_host_allocated_bytes: u64,
+    pub total_guest_active_bytes: u64,
+    pub phantom_bloat_bytes: u64,
+    pub images_total_bytes: u64,
+    pub dangling_images_bytes: u64,
+    pub unused_images_bytes: u64,
+    pub volumes_total_bytes: u64,
+    pub dangling_anonymous_volumes_bytes: u64,
+    pub dangling_named_volumes_bytes: u64,
+    pub build_cache_total_bytes: u64,
+    pub build_cache_reclaimable_bytes: u64,
+    pub stopped_containers_bytes: u64,
+    pub images: Vec<DockerImageRecord>,
+    pub volumes: Vec<DockerVolumeRecord>,
+    pub build_cache: Vec<DockerBuildCacheRecord>,
+    pub containers: Vec<DockerContainerRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DockerPruneResultRecord {
+    pub success: bool,
+    pub reclaimed_bytes: u64,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct AiModelRecord {
+    pub name: String,
+    pub path: String,
+    pub organization: Option<String>,
+    pub ecosystem_name: String,
+    pub format_name: String,
+    pub architecture: Option<String>,
+    pub quantization: Option<String>,
+    pub parameter_size: Option<String>,
+    pub context_length: Option<u32>,
+    pub size_bytes: u64,
+    pub modified_secs: u64,
+    pub accessed_secs: u64,
+    pub inactivity_tier: String,
+    pub color_hex: String,
+    pub can_collect: bool,
+    pub associated_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct AiModelSummaryRecord {
+    pub total_bytes: u64,
+    pub stale_bytes: u64,
+    pub total_model_count: u32,
+    pub stale_model_count: u32,
+    pub items: Vec<AiModelRecord>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
 pub struct AppPartRecord {
     pub name: String,
     pub path: String,
@@ -294,6 +404,83 @@ pub struct RecordsBufferDescriptor {
     pub record_size: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ShredAlgorithm {
+    Zero,
+    RandomNist80088,
+    Dod522022M,
+    Dod522022MEce,
+}
+
+impl From<ShredAlgorithm> for velora_ops::ShredAlgorithm {
+    fn from(a: ShredAlgorithm) -> Self {
+        match a {
+            ShredAlgorithm::Zero => velora_ops::ShredAlgorithm::Zero,
+            ShredAlgorithm::RandomNist80088 => velora_ops::ShredAlgorithm::RandomNist80088,
+            ShredAlgorithm::Dod522022M => velora_ops::ShredAlgorithm::Dod522022M,
+            ShredAlgorithm::Dod522022MEce => velora_ops::ShredAlgorithm::Dod522022MEce,
+        }
+    }
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ShredResultRecord {
+    pub success: bool,
+    pub files_shredded: u32,
+    pub bytes_shredded: u64,
+    pub errors: Vec<String>,
+}
+
+#[uniffi::export(callback_interface)]
+pub trait ShredProgressCallback: Send + Sync + 'static {
+    fn on_progress(
+        &self,
+        current_path: String,
+        file_index: u32,
+        total_files: u32,
+        current_pass: u32,
+        total_passes: u32,
+        pass_name: String,
+        bytes_written_file: u64,
+        file_size_bytes: u64,
+        total_bytes_written: u64,
+        total_bytes_all_files: u64,
+    );
+}
+
+struct ShredCallbackBridge<'a> {
+    callback: &'a dyn ShredProgressCallback,
+}
+
+impl<'a> velora_ops::ShredProgressListener for ShredCallbackBridge<'a> {
+    fn on_progress(
+        &self,
+        current_path: &str,
+        file_index: u32,
+        total_files: u32,
+        current_pass: u32,
+        total_passes: u32,
+        pass_name: &str,
+        bytes_written_file: u64,
+        file_size_bytes: u64,
+        total_bytes_written: u64,
+        total_bytes_all_files: u64,
+    ) {
+        self.callback.on_progress(
+            current_path.to_string(),
+            file_index,
+            total_files,
+            current_pass,
+            total_passes,
+            pass_name.to_string(),
+            bytes_written_file,
+            file_size_bytes,
+            total_bytes_written,
+            total_bytes_all_files,
+        );
+    }
+}
+
 #[uniffi::export(callback_interface)]
 pub trait ScanProgressCallback: Send + Sync + 'static {
     fn on_progress(&self, current_path: String, scanned_count: u64, bytes_scanned: u64);
@@ -314,6 +501,7 @@ pub struct VeloraEngine {
     volume: RwLock<VolumeIndex>,
     collector: RwLock<CollectorTray>,
     cancel_token: Arc<AtomicBool>,
+    cancel_shred_token: Arc<AtomicBool>,
 }
 
 #[uniffi::export]
@@ -327,6 +515,7 @@ impl VeloraEngine {
             volume: RwLock::new(VolumeIndex::new("Macintosh HD", "/")),
             collector: RwLock::new(CollectorTray::new()),
             cancel_token: Arc::new(AtomicBool::new(false)),
+            cancel_shred_token: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -583,6 +772,186 @@ impl VeloraEngine {
         velora_dev::PackageCacheScanner::prune_docker()
     }
 
+    pub fn inspect_docker(&self, home_path: String) -> DockerStorageSummaryRecord {
+        let summary = velora_dev::DockerInspector::inspect(Path::new(&home_path));
+        DockerStorageSummaryRecord {
+            daemon_status: summary.daemon_status.display_name().to_string(),
+            engine_name: summary.engine_name,
+            socket_path: summary.socket_path,
+            vm_disks: summary
+                .vm_disks
+                .into_iter()
+                .map(|d| DockerVmDiskRecord {
+                    name: d.name,
+                    path: d.path,
+                    engine_name: d.engine.display_name().to_string(),
+                    allocated_bytes: d.allocated_bytes,
+                    virtual_capacity_bytes: d.virtual_capacity_bytes,
+                    modified_secs: d.modified_secs,
+                })
+                .collect(),
+            total_host_allocated_bytes: summary.total_host_allocated_bytes,
+            total_guest_active_bytes: summary.total_guest_active_bytes,
+            phantom_bloat_bytes: summary.phantom_bloat_bytes,
+            images_total_bytes: summary.images_total_bytes,
+            dangling_images_bytes: summary.dangling_images_bytes,
+            unused_images_bytes: summary.unused_images_bytes,
+            volumes_total_bytes: summary.volumes_total_bytes,
+            dangling_anonymous_volumes_bytes: summary.dangling_anonymous_volumes_bytes,
+            dangling_named_volumes_bytes: summary.dangling_named_volumes_bytes,
+            build_cache_total_bytes: summary.build_cache_total_bytes,
+            build_cache_reclaimable_bytes: summary.build_cache_reclaimable_bytes,
+            stopped_containers_bytes: summary.stopped_containers_bytes,
+            images: summary
+                .images
+                .into_iter()
+                .map(|i| DockerImageRecord {
+                    id: i.id,
+                    repo_tags: i.repo_tags,
+                    size_bytes: i.size_bytes,
+                    shared_size_bytes: i.shared_size_bytes,
+                    is_dangling: i.is_dangling,
+                    in_use: i.in_use,
+                    created_secs: i.created_secs,
+                })
+                .collect(),
+            volumes: summary
+                .volumes
+                .into_iter()
+                .map(|v| DockerVolumeRecord {
+                    name: v.name,
+                    driver: v.driver,
+                    size_bytes: v.size_bytes,
+                    is_anonymous: v.is_anonymous,
+                    in_use: v.in_use,
+                    ref_count: v.ref_count,
+                })
+                .collect(),
+            build_cache: summary
+                .build_cache
+                .into_iter()
+                .map(|b| DockerBuildCacheRecord {
+                    id: b.id,
+                    cache_type: b.cache_type,
+                    description: b.description,
+                    size_bytes: b.size_bytes,
+                    in_use: b.in_use,
+                    shared: b.shared,
+                })
+                .collect(),
+            containers: summary
+                .containers
+                .into_iter()
+                .map(|c| DockerContainerRecord {
+                    id: c.id,
+                    names: c.names,
+                    image: c.image,
+                    state: c.state,
+                    size_rw_bytes: c.size_rw_bytes,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn prune_docker_dangling_images(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_dangling_images(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_unused_images(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_unused_images(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_anonymous_volumes(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_anonymous_volumes(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_all_unattached_volumes(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_all_unattached_volumes(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_build_cache(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_build_cache(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_stopped_containers(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_stopped_containers(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn prune_docker_system_all(&self, home_path: String) -> DockerPruneResultRecord {
+        let res = velora_dev::DockerInspector::prune_system_all(Path::new(&home_path));
+        DockerPruneResultRecord {
+            success: res.success,
+            reclaimed_bytes: res.reclaimed_bytes,
+            message: res.message,
+        }
+    }
+
+    pub fn inspect_ai_models(&self, home_path: String) -> AiModelSummaryRecord {
+        let summary = velora_models::ModelWeightHunter::hunt_home(Path::new(&home_path));
+        AiModelSummaryRecord {
+            total_bytes: summary.total_bytes,
+            stale_bytes: summary.stale_bytes,
+            total_model_count: summary.total_model_count,
+            stale_model_count: summary.stale_model_count,
+            items: summary
+                .items
+                .into_iter()
+                .map(|item| AiModelRecord {
+                    name: item.name,
+                    path: item.path,
+                    organization: item.organization,
+                    ecosystem_name: item.ecosystem.display_name().to_string(),
+                    format_name: item.format.display_name().to_string(),
+                    architecture: item.metadata.architecture,
+                    quantization: item.metadata.quantization,
+                    parameter_size: item.metadata.parameter_size,
+                    context_length: item.metadata.context_length,
+                    size_bytes: item.size_bytes,
+                    modified_secs: item.modified_secs,
+                    accessed_secs: item.accessed_secs,
+                    inactivity_tier: item.inactivity.label().to_string(),
+                    color_hex: item.ecosystem.color_hex().to_string(),
+                    can_collect: item.can_collect,
+                    associated_paths: item.associated_paths,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn prune_ollama_orphaned_blobs(&self, home_path: String) -> u64 {
+        velora_models::locators::OllamaLocator::prune_orphaned_blobs(Path::new(&home_path))
+    }
+
     pub fn list_apps_with_footprint(&self, home_path: String) -> Vec<InstalledAppRecord> {
         let vol = self.volume.read();
         let apps = velora_apps::AppManager::list_apps_with_footprint(Path::new(&home_path), Some(&*vol));
@@ -799,5 +1168,54 @@ impl VeloraEngine {
     pub fn restore_quarantined_threat(&self, home_path: String, id: String) -> bool {
         let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
         vault.restore(&id).unwrap_or(false)
+    }
+
+    pub fn shred_paths(
+        &self,
+        paths: Vec<String>,
+        algorithm: ShredAlgorithm,
+        callback: Option<Box<dyn ShredProgressCallback>>,
+    ) -> ShredResultRecord {
+        self.cancel_shred_token.store(false, Ordering::SeqCst);
+        let cancel = self.cancel_shred_token.clone();
+        let rust_paths: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+        let ops_algo = algorithm.into();
+
+        let stats = match callback.as_ref() {
+            Some(cb) => {
+                let bridge = ShredCallbackBridge { callback: cb.as_ref() };
+                velora_ops::shred_paths(&rust_paths, ops_algo, &cancel, Some(&bridge))
+            }
+            None => velora_ops::shred_paths(&rust_paths, ops_algo, &cancel, None),
+        };
+
+        // Batch mark successfully shredded paths as deleted in the volume index
+        if stats.files_shredded > 0 {
+            let mut successful_paths = Vec::new();
+            for p in &paths {
+                if !std::path::Path::new(p).exists() {
+                    successful_paths.push(p.clone());
+                }
+            }
+            if !successful_paths.is_empty() {
+                self.volume.write().mark_deleted_batch(&successful_paths);
+            }
+            // Also remove shredded items from collector tray if present
+            let mut col = self.collector.write();
+            for p in &successful_paths {
+                col.remove(std::path::Path::new(p));
+            }
+        }
+
+        ShredResultRecord {
+            success: stats.errors.is_empty() && stats.files_shredded > 0,
+            files_shredded: stats.files_shredded,
+            bytes_shredded: stats.bytes_shredded,
+            errors: stats.errors,
+        }
+    }
+
+    pub fn cancel_shred(&self) {
+        self.cancel_shred_token.store(true, Ordering::SeqCst);
     }
 }

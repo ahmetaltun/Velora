@@ -16,6 +16,7 @@ velora-watcher = { path = "../velora-watcher" }
 velora-ops = { path = "../velora-ops" }
 velora-apfs = { path = "../velora-apfs" }
 velora-dev = { path = "../velora-dev" }
+velora-models = { path = "../velora-models" }
 velora-apps = { path = "../velora-apps" }
 velora-hygiene = { path = "../velora-hygiene" }
 velora-security = { path = "../velora-security" }

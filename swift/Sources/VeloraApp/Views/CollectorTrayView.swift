@@ -168,6 +168,30 @@ public struct CollectorTrayView: View {
                             .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
                             .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
 
+                            Button(action: {
+                                let paths = viewModel.collectorItems.map(\.path)
+                                viewModel.queueForShredding(paths: paths)
+                                viewModel.activeSidebarId = "tool_shredder"
+                                viewModel.isShredConfirmationPresented = true
+                            }) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(VeloraTheme.accentPink)
+                                    Text("Secure Shred")
+                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                        .foregroundColor(VeloraTheme.accentPink)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(VeloraTheme.accentPink.opacity(0.12), in: Capsule())
+                                .overlay(Capsule().stroke(VeloraTheme.accentPink.opacity(0.35), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isInteractionDisabled || viewModel.isCleaning)
+                            .opacity(viewModel.isInteractionDisabled ? 0.45 : 1.0)
+                            .help("Permanently overwrite and sanitize all staged basket items")
+
                             FreeSpaceButton(
                                 itemCount: viewModel.collectorItems.count,
                                 totalBytes: viewModel.collectorTotalSize,

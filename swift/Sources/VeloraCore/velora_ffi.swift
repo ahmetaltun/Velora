@@ -431,6 +431,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -520,6 +536,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func cancelScan() 
     
+    func cancelShred() 
+    
     func clearCollector() 
     
     func collectItem(path: String, sizeBytes: UInt64, isDir: Bool) 
@@ -542,6 +560,10 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func getRecordsBufferDescriptor()  -> RecordsBufferDescriptor
     
+    func inspectAiModels(homePath: String)  -> AiModelSummaryRecord
+    
+    func inspectDocker(homePath: String)  -> DockerStorageSummaryRecord
+    
     func inspectPackageCaches(homePath: String)  -> PackageCacheSummaryRecord
     
     func inspectXcode(homePath: String)  -> XcodeSummaryRecord
@@ -557,6 +579,22 @@ public protocol VeloraEngineProtocol : AnyObject {
     func markDeletedByPath(path: String)  -> UInt64
     
     func pruneDocker()  -> Bool
+    
+    func pruneDockerAllUnattachedVolumes(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerAnonymousVolumes(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerBuildCache(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerDanglingImages(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerStoppedContainers(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerSystemAll(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneDockerUnusedImages(homePath: String)  -> DockerPruneResultRecord
+    
+    func pruneOllamaOrphanedBlobs(homePath: String)  -> UInt64
     
     func pruneUnavailableSimulators()  -> Bool
     
@@ -577,6 +615,8 @@ public protocol VeloraEngineProtocol : AnyObject {
     func scanVolume(mountPoint: String, volumeName: String, callback: ScanProgressCallback?)  -> Bool
     
     func search(queryStr: String, maxResults: UInt32)  -> [SearchResultItem]
+    
+    func shredPaths(paths: [String], algorithm: ShredAlgorithm, callback: ShredProgressCallback?)  -> ShredResultRecord
     
     func totalFiles()  -> UInt64
     
@@ -655,6 +695,12 @@ open func activeFiles() -> UInt64 {
     
 open func cancelScan() {try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_cancel_scan(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func cancelShred() {try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_cancel_shred(self.uniffiClonePointer(),$0
     )
 }
 }
@@ -745,6 +791,22 @@ open func getRecordsBufferDescriptor() -> RecordsBufferDescriptor {
 })
 }
     
+open func inspectAiModels(homePath: String) -> AiModelSummaryRecord {
+    return try!  FfiConverterTypeAiModelSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_inspect_ai_models(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func inspectDocker(homePath: String) -> DockerStorageSummaryRecord {
+    return try!  FfiConverterTypeDockerStorageSummaryRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_inspect_docker(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
 open func inspectPackageCaches(homePath: String) -> PackageCacheSummaryRecord {
     return try!  FfiConverterTypePackageCacheSummaryRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_inspect_package_caches(self.uniffiClonePointer(),
@@ -803,6 +865,70 @@ open func markDeletedByPath(path: String) -> UInt64 {
 open func pruneDocker() -> Bool {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_prune_docker(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func pruneDockerAllUnattachedVolumes(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_all_unattached_volumes(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerAnonymousVolumes(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_anonymous_volumes(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerBuildCache(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_build_cache(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerDanglingImages(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_dangling_images(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerStoppedContainers(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_stopped_containers(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerSystemAll(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_system_all(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneDockerUnusedImages(homePath: String) -> DockerPruneResultRecord {
+    return try!  FfiConverterTypeDockerPruneResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_docker_unused_images(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
+    )
+})
+}
+    
+open func pruneOllamaOrphanedBlobs(homePath: String) -> UInt64 {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_prune_ollama_orphaned_blobs(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
     )
 })
 }
@@ -893,6 +1019,16 @@ open func search(queryStr: String, maxResults: UInt32) -> [SearchResultItem] {
 })
 }
     
+open func shredPaths(paths: [String], algorithm: ShredAlgorithm, callback: ShredProgressCallback?) -> ShredResultRecord {
+    return try!  FfiConverterTypeShredResultRecord.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_shred_paths(self.uniffiClonePointer(),
+        FfiConverterSequenceString.lower(paths),
+        FfiConverterTypeShredAlgorithm.lower(algorithm),
+        FfiConverterOptionCallbackInterfaceShredProgressCallback.lower(callback),$0
+    )
+})
+}
+    
 open func totalFiles() -> UInt64 {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_total_files(self.uniffiClonePointer(),$0
@@ -952,6 +1088,274 @@ public func FfiConverterTypeVeloraEngine_lift(_ pointer: UnsafeMutableRawPointer
 #endif
 public func FfiConverterTypeVeloraEngine_lower(_ value: VeloraEngine) -> UnsafeMutableRawPointer {
     return FfiConverterTypeVeloraEngine.lower(value)
+}
+
+
+public struct AiModelRecord {
+    public var name: String
+    public var path: String
+    public var organization: String?
+    public var ecosystemName: String
+    public var formatName: String
+    public var architecture: String?
+    public var quantization: String?
+    public var parameterSize: String?
+    public var contextLength: UInt32?
+    public var sizeBytes: UInt64
+    public var modifiedSecs: UInt64
+    public var accessedSecs: UInt64
+    public var inactivityTier: String
+    public var colorHex: String
+    public var canCollect: Bool
+    public var associatedPaths: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, organization: String?, ecosystemName: String, formatName: String, architecture: String?, quantization: String?, parameterSize: String?, contextLength: UInt32?, sizeBytes: UInt64, modifiedSecs: UInt64, accessedSecs: UInt64, inactivityTier: String, colorHex: String, canCollect: Bool, associatedPaths: [String]) {
+        self.name = name
+        self.path = path
+        self.organization = organization
+        self.ecosystemName = ecosystemName
+        self.formatName = formatName
+        self.architecture = architecture
+        self.quantization = quantization
+        self.parameterSize = parameterSize
+        self.contextLength = contextLength
+        self.sizeBytes = sizeBytes
+        self.modifiedSecs = modifiedSecs
+        self.accessedSecs = accessedSecs
+        self.inactivityTier = inactivityTier
+        self.colorHex = colorHex
+        self.canCollect = canCollect
+        self.associatedPaths = associatedPaths
+    }
+}
+
+
+
+extension AiModelRecord: Equatable, Hashable {
+    public static func ==(lhs: AiModelRecord, rhs: AiModelRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.organization != rhs.organization {
+            return false
+        }
+        if lhs.ecosystemName != rhs.ecosystemName {
+            return false
+        }
+        if lhs.formatName != rhs.formatName {
+            return false
+        }
+        if lhs.architecture != rhs.architecture {
+            return false
+        }
+        if lhs.quantization != rhs.quantization {
+            return false
+        }
+        if lhs.parameterSize != rhs.parameterSize {
+            return false
+        }
+        if lhs.contextLength != rhs.contextLength {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        if lhs.accessedSecs != rhs.accessedSecs {
+            return false
+        }
+        if lhs.inactivityTier != rhs.inactivityTier {
+            return false
+        }
+        if lhs.colorHex != rhs.colorHex {
+            return false
+        }
+        if lhs.canCollect != rhs.canCollect {
+            return false
+        }
+        if lhs.associatedPaths != rhs.associatedPaths {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(organization)
+        hasher.combine(ecosystemName)
+        hasher.combine(formatName)
+        hasher.combine(architecture)
+        hasher.combine(quantization)
+        hasher.combine(parameterSize)
+        hasher.combine(contextLength)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedSecs)
+        hasher.combine(accessedSecs)
+        hasher.combine(inactivityTier)
+        hasher.combine(colorHex)
+        hasher.combine(canCollect)
+        hasher.combine(associatedPaths)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAiModelRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AiModelRecord {
+        return
+            try AiModelRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                organization: FfiConverterOptionString.read(from: &buf), 
+                ecosystemName: FfiConverterString.read(from: &buf), 
+                formatName: FfiConverterString.read(from: &buf), 
+                architecture: FfiConverterOptionString.read(from: &buf), 
+                quantization: FfiConverterOptionString.read(from: &buf), 
+                parameterSize: FfiConverterOptionString.read(from: &buf), 
+                contextLength: FfiConverterOptionUInt32.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf), 
+                accessedSecs: FfiConverterUInt64.read(from: &buf), 
+                inactivityTier: FfiConverterString.read(from: &buf), 
+                colorHex: FfiConverterString.read(from: &buf), 
+                canCollect: FfiConverterBool.read(from: &buf), 
+                associatedPaths: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AiModelRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterOptionString.write(value.organization, into: &buf)
+        FfiConverterString.write(value.ecosystemName, into: &buf)
+        FfiConverterString.write(value.formatName, into: &buf)
+        FfiConverterOptionString.write(value.architecture, into: &buf)
+        FfiConverterOptionString.write(value.quantization, into: &buf)
+        FfiConverterOptionString.write(value.parameterSize, into: &buf)
+        FfiConverterOptionUInt32.write(value.contextLength, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+        FfiConverterUInt64.write(value.accessedSecs, into: &buf)
+        FfiConverterString.write(value.inactivityTier, into: &buf)
+        FfiConverterString.write(value.colorHex, into: &buf)
+        FfiConverterBool.write(value.canCollect, into: &buf)
+        FfiConverterSequenceString.write(value.associatedPaths, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAiModelRecord_lift(_ buf: RustBuffer) throws -> AiModelRecord {
+    return try FfiConverterTypeAiModelRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAiModelRecord_lower(_ value: AiModelRecord) -> RustBuffer {
+    return FfiConverterTypeAiModelRecord.lower(value)
+}
+
+
+public struct AiModelSummaryRecord {
+    public var totalBytes: UInt64
+    public var staleBytes: UInt64
+    public var totalModelCount: UInt32
+    public var staleModelCount: UInt32
+    public var items: [AiModelRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalBytes: UInt64, staleBytes: UInt64, totalModelCount: UInt32, staleModelCount: UInt32, items: [AiModelRecord]) {
+        self.totalBytes = totalBytes
+        self.staleBytes = staleBytes
+        self.totalModelCount = totalModelCount
+        self.staleModelCount = staleModelCount
+        self.items = items
+    }
+}
+
+
+
+extension AiModelSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: AiModelSummaryRecord, rhs: AiModelSummaryRecord) -> Bool {
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.staleBytes != rhs.staleBytes {
+            return false
+        }
+        if lhs.totalModelCount != rhs.totalModelCount {
+            return false
+        }
+        if lhs.staleModelCount != rhs.staleModelCount {
+            return false
+        }
+        if lhs.items != rhs.items {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalBytes)
+        hasher.combine(staleBytes)
+        hasher.combine(totalModelCount)
+        hasher.combine(staleModelCount)
+        hasher.combine(items)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAiModelSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AiModelSummaryRecord {
+        return
+            try AiModelSummaryRecord(
+                totalBytes: FfiConverterUInt64.read(from: &buf), 
+                staleBytes: FfiConverterUInt64.read(from: &buf), 
+                totalModelCount: FfiConverterUInt32.read(from: &buf), 
+                staleModelCount: FfiConverterUInt32.read(from: &buf), 
+                items: FfiConverterSequenceTypeAiModelRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AiModelSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.totalBytes, into: &buf)
+        FfiConverterUInt64.write(value.staleBytes, into: &buf)
+        FfiConverterUInt32.write(value.totalModelCount, into: &buf)
+        FfiConverterUInt32.write(value.staleModelCount, into: &buf)
+        FfiConverterSequenceTypeAiModelRecord.write(value.items, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAiModelSummaryRecord_lift(_ buf: RustBuffer) throws -> AiModelSummaryRecord {
+    return try FfiConverterTypeAiModelSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAiModelSummaryRecord_lower(_ value: AiModelSummaryRecord) -> RustBuffer {
+    return FfiConverterTypeAiModelSummaryRecord.lower(value)
 }
 
 
@@ -1230,6 +1634,780 @@ public func FfiConverterTypeDevArtifactRecord_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeDevArtifactRecord_lower(_ value: DevArtifactRecord) -> RustBuffer {
     return FfiConverterTypeDevArtifactRecord.lower(value)
+}
+
+
+public struct DockerBuildCacheRecord {
+    public var id: String
+    public var cacheType: String
+    public var description: String
+    public var sizeBytes: UInt64
+    public var inUse: Bool
+    public var shared: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, cacheType: String, description: String, sizeBytes: UInt64, inUse: Bool, shared: Bool) {
+        self.id = id
+        self.cacheType = cacheType
+        self.description = description
+        self.sizeBytes = sizeBytes
+        self.inUse = inUse
+        self.shared = shared
+    }
+}
+
+
+
+extension DockerBuildCacheRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerBuildCacheRecord, rhs: DockerBuildCacheRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.cacheType != rhs.cacheType {
+            return false
+        }
+        if lhs.description != rhs.description {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.inUse != rhs.inUse {
+            return false
+        }
+        if lhs.shared != rhs.shared {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(cacheType)
+        hasher.combine(description)
+        hasher.combine(sizeBytes)
+        hasher.combine(inUse)
+        hasher.combine(shared)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerBuildCacheRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerBuildCacheRecord {
+        return
+            try DockerBuildCacheRecord(
+                id: FfiConverterString.read(from: &buf), 
+                cacheType: FfiConverterString.read(from: &buf), 
+                description: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                inUse: FfiConverterBool.read(from: &buf), 
+                shared: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerBuildCacheRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.cacheType, into: &buf)
+        FfiConverterString.write(value.description, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterBool.write(value.inUse, into: &buf)
+        FfiConverterBool.write(value.shared, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerBuildCacheRecord_lift(_ buf: RustBuffer) throws -> DockerBuildCacheRecord {
+    return try FfiConverterTypeDockerBuildCacheRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerBuildCacheRecord_lower(_ value: DockerBuildCacheRecord) -> RustBuffer {
+    return FfiConverterTypeDockerBuildCacheRecord.lower(value)
+}
+
+
+public struct DockerContainerRecord {
+    public var id: String
+    public var names: [String]
+    public var image: String
+    public var state: String
+    public var sizeRwBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, names: [String], image: String, state: String, sizeRwBytes: UInt64) {
+        self.id = id
+        self.names = names
+        self.image = image
+        self.state = state
+        self.sizeRwBytes = sizeRwBytes
+    }
+}
+
+
+
+extension DockerContainerRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerContainerRecord, rhs: DockerContainerRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.names != rhs.names {
+            return false
+        }
+        if lhs.image != rhs.image {
+            return false
+        }
+        if lhs.state != rhs.state {
+            return false
+        }
+        if lhs.sizeRwBytes != rhs.sizeRwBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(names)
+        hasher.combine(image)
+        hasher.combine(state)
+        hasher.combine(sizeRwBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerContainerRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerContainerRecord {
+        return
+            try DockerContainerRecord(
+                id: FfiConverterString.read(from: &buf), 
+                names: FfiConverterSequenceString.read(from: &buf), 
+                image: FfiConverterString.read(from: &buf), 
+                state: FfiConverterString.read(from: &buf), 
+                sizeRwBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerContainerRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterSequenceString.write(value.names, into: &buf)
+        FfiConverterString.write(value.image, into: &buf)
+        FfiConverterString.write(value.state, into: &buf)
+        FfiConverterUInt64.write(value.sizeRwBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerContainerRecord_lift(_ buf: RustBuffer) throws -> DockerContainerRecord {
+    return try FfiConverterTypeDockerContainerRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerContainerRecord_lower(_ value: DockerContainerRecord) -> RustBuffer {
+    return FfiConverterTypeDockerContainerRecord.lower(value)
+}
+
+
+public struct DockerImageRecord {
+    public var id: String
+    public var repoTags: [String]
+    public var sizeBytes: UInt64
+    public var sharedSizeBytes: UInt64
+    public var isDangling: Bool
+    public var inUse: Bool
+    public var createdSecs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, repoTags: [String], sizeBytes: UInt64, sharedSizeBytes: UInt64, isDangling: Bool, inUse: Bool, createdSecs: UInt64) {
+        self.id = id
+        self.repoTags = repoTags
+        self.sizeBytes = sizeBytes
+        self.sharedSizeBytes = sharedSizeBytes
+        self.isDangling = isDangling
+        self.inUse = inUse
+        self.createdSecs = createdSecs
+    }
+}
+
+
+
+extension DockerImageRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerImageRecord, rhs: DockerImageRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.repoTags != rhs.repoTags {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.sharedSizeBytes != rhs.sharedSizeBytes {
+            return false
+        }
+        if lhs.isDangling != rhs.isDangling {
+            return false
+        }
+        if lhs.inUse != rhs.inUse {
+            return false
+        }
+        if lhs.createdSecs != rhs.createdSecs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(repoTags)
+        hasher.combine(sizeBytes)
+        hasher.combine(sharedSizeBytes)
+        hasher.combine(isDangling)
+        hasher.combine(inUse)
+        hasher.combine(createdSecs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerImageRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerImageRecord {
+        return
+            try DockerImageRecord(
+                id: FfiConverterString.read(from: &buf), 
+                repoTags: FfiConverterSequenceString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                sharedSizeBytes: FfiConverterUInt64.read(from: &buf), 
+                isDangling: FfiConverterBool.read(from: &buf), 
+                inUse: FfiConverterBool.read(from: &buf), 
+                createdSecs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerImageRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterSequenceString.write(value.repoTags, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterUInt64.write(value.sharedSizeBytes, into: &buf)
+        FfiConverterBool.write(value.isDangling, into: &buf)
+        FfiConverterBool.write(value.inUse, into: &buf)
+        FfiConverterUInt64.write(value.createdSecs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerImageRecord_lift(_ buf: RustBuffer) throws -> DockerImageRecord {
+    return try FfiConverterTypeDockerImageRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerImageRecord_lower(_ value: DockerImageRecord) -> RustBuffer {
+    return FfiConverterTypeDockerImageRecord.lower(value)
+}
+
+
+public struct DockerPruneResultRecord {
+    public var success: Bool
+    public var reclaimedBytes: UInt64
+    public var message: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(success: Bool, reclaimedBytes: UInt64, message: String) {
+        self.success = success
+        self.reclaimedBytes = reclaimedBytes
+        self.message = message
+    }
+}
+
+
+
+extension DockerPruneResultRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerPruneResultRecord, rhs: DockerPruneResultRecord) -> Bool {
+        if lhs.success != rhs.success {
+            return false
+        }
+        if lhs.reclaimedBytes != rhs.reclaimedBytes {
+            return false
+        }
+        if lhs.message != rhs.message {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(success)
+        hasher.combine(reclaimedBytes)
+        hasher.combine(message)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerPruneResultRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerPruneResultRecord {
+        return
+            try DockerPruneResultRecord(
+                success: FfiConverterBool.read(from: &buf), 
+                reclaimedBytes: FfiConverterUInt64.read(from: &buf), 
+                message: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerPruneResultRecord, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.success, into: &buf)
+        FfiConverterUInt64.write(value.reclaimedBytes, into: &buf)
+        FfiConverterString.write(value.message, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerPruneResultRecord_lift(_ buf: RustBuffer) throws -> DockerPruneResultRecord {
+    return try FfiConverterTypeDockerPruneResultRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerPruneResultRecord_lower(_ value: DockerPruneResultRecord) -> RustBuffer {
+    return FfiConverterTypeDockerPruneResultRecord.lower(value)
+}
+
+
+public struct DockerStorageSummaryRecord {
+    public var daemonStatus: String
+    public var engineName: String
+    public var socketPath: String
+    public var vmDisks: [DockerVmDiskRecord]
+    public var totalHostAllocatedBytes: UInt64
+    public var totalGuestActiveBytes: UInt64
+    public var phantomBloatBytes: UInt64
+    public var imagesTotalBytes: UInt64
+    public var danglingImagesBytes: UInt64
+    public var unusedImagesBytes: UInt64
+    public var volumesTotalBytes: UInt64
+    public var danglingAnonymousVolumesBytes: UInt64
+    public var danglingNamedVolumesBytes: UInt64
+    public var buildCacheTotalBytes: UInt64
+    public var buildCacheReclaimableBytes: UInt64
+    public var stoppedContainersBytes: UInt64
+    public var images: [DockerImageRecord]
+    public var volumes: [DockerVolumeRecord]
+    public var buildCache: [DockerBuildCacheRecord]
+    public var containers: [DockerContainerRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(daemonStatus: String, engineName: String, socketPath: String, vmDisks: [DockerVmDiskRecord], totalHostAllocatedBytes: UInt64, totalGuestActiveBytes: UInt64, phantomBloatBytes: UInt64, imagesTotalBytes: UInt64, danglingImagesBytes: UInt64, unusedImagesBytes: UInt64, volumesTotalBytes: UInt64, danglingAnonymousVolumesBytes: UInt64, danglingNamedVolumesBytes: UInt64, buildCacheTotalBytes: UInt64, buildCacheReclaimableBytes: UInt64, stoppedContainersBytes: UInt64, images: [DockerImageRecord], volumes: [DockerVolumeRecord], buildCache: [DockerBuildCacheRecord], containers: [DockerContainerRecord]) {
+        self.daemonStatus = daemonStatus
+        self.engineName = engineName
+        self.socketPath = socketPath
+        self.vmDisks = vmDisks
+        self.totalHostAllocatedBytes = totalHostAllocatedBytes
+        self.totalGuestActiveBytes = totalGuestActiveBytes
+        self.phantomBloatBytes = phantomBloatBytes
+        self.imagesTotalBytes = imagesTotalBytes
+        self.danglingImagesBytes = danglingImagesBytes
+        self.unusedImagesBytes = unusedImagesBytes
+        self.volumesTotalBytes = volumesTotalBytes
+        self.danglingAnonymousVolumesBytes = danglingAnonymousVolumesBytes
+        self.danglingNamedVolumesBytes = danglingNamedVolumesBytes
+        self.buildCacheTotalBytes = buildCacheTotalBytes
+        self.buildCacheReclaimableBytes = buildCacheReclaimableBytes
+        self.stoppedContainersBytes = stoppedContainersBytes
+        self.images = images
+        self.volumes = volumes
+        self.buildCache = buildCache
+        self.containers = containers
+    }
+}
+
+
+
+extension DockerStorageSummaryRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerStorageSummaryRecord, rhs: DockerStorageSummaryRecord) -> Bool {
+        if lhs.daemonStatus != rhs.daemonStatus {
+            return false
+        }
+        if lhs.engineName != rhs.engineName {
+            return false
+        }
+        if lhs.socketPath != rhs.socketPath {
+            return false
+        }
+        if lhs.vmDisks != rhs.vmDisks {
+            return false
+        }
+        if lhs.totalHostAllocatedBytes != rhs.totalHostAllocatedBytes {
+            return false
+        }
+        if lhs.totalGuestActiveBytes != rhs.totalGuestActiveBytes {
+            return false
+        }
+        if lhs.phantomBloatBytes != rhs.phantomBloatBytes {
+            return false
+        }
+        if lhs.imagesTotalBytes != rhs.imagesTotalBytes {
+            return false
+        }
+        if lhs.danglingImagesBytes != rhs.danglingImagesBytes {
+            return false
+        }
+        if lhs.unusedImagesBytes != rhs.unusedImagesBytes {
+            return false
+        }
+        if lhs.volumesTotalBytes != rhs.volumesTotalBytes {
+            return false
+        }
+        if lhs.danglingAnonymousVolumesBytes != rhs.danglingAnonymousVolumesBytes {
+            return false
+        }
+        if lhs.danglingNamedVolumesBytes != rhs.danglingNamedVolumesBytes {
+            return false
+        }
+        if lhs.buildCacheTotalBytes != rhs.buildCacheTotalBytes {
+            return false
+        }
+        if lhs.buildCacheReclaimableBytes != rhs.buildCacheReclaimableBytes {
+            return false
+        }
+        if lhs.stoppedContainersBytes != rhs.stoppedContainersBytes {
+            return false
+        }
+        if lhs.images != rhs.images {
+            return false
+        }
+        if lhs.volumes != rhs.volumes {
+            return false
+        }
+        if lhs.buildCache != rhs.buildCache {
+            return false
+        }
+        if lhs.containers != rhs.containers {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(daemonStatus)
+        hasher.combine(engineName)
+        hasher.combine(socketPath)
+        hasher.combine(vmDisks)
+        hasher.combine(totalHostAllocatedBytes)
+        hasher.combine(totalGuestActiveBytes)
+        hasher.combine(phantomBloatBytes)
+        hasher.combine(imagesTotalBytes)
+        hasher.combine(danglingImagesBytes)
+        hasher.combine(unusedImagesBytes)
+        hasher.combine(volumesTotalBytes)
+        hasher.combine(danglingAnonymousVolumesBytes)
+        hasher.combine(danglingNamedVolumesBytes)
+        hasher.combine(buildCacheTotalBytes)
+        hasher.combine(buildCacheReclaimableBytes)
+        hasher.combine(stoppedContainersBytes)
+        hasher.combine(images)
+        hasher.combine(volumes)
+        hasher.combine(buildCache)
+        hasher.combine(containers)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerStorageSummaryRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerStorageSummaryRecord {
+        return
+            try DockerStorageSummaryRecord(
+                daemonStatus: FfiConverterString.read(from: &buf), 
+                engineName: FfiConverterString.read(from: &buf), 
+                socketPath: FfiConverterString.read(from: &buf), 
+                vmDisks: FfiConverterSequenceTypeDockerVmDiskRecord.read(from: &buf), 
+                totalHostAllocatedBytes: FfiConverterUInt64.read(from: &buf), 
+                totalGuestActiveBytes: FfiConverterUInt64.read(from: &buf), 
+                phantomBloatBytes: FfiConverterUInt64.read(from: &buf), 
+                imagesTotalBytes: FfiConverterUInt64.read(from: &buf), 
+                danglingImagesBytes: FfiConverterUInt64.read(from: &buf), 
+                unusedImagesBytes: FfiConverterUInt64.read(from: &buf), 
+                volumesTotalBytes: FfiConverterUInt64.read(from: &buf), 
+                danglingAnonymousVolumesBytes: FfiConverterUInt64.read(from: &buf), 
+                danglingNamedVolumesBytes: FfiConverterUInt64.read(from: &buf), 
+                buildCacheTotalBytes: FfiConverterUInt64.read(from: &buf), 
+                buildCacheReclaimableBytes: FfiConverterUInt64.read(from: &buf), 
+                stoppedContainersBytes: FfiConverterUInt64.read(from: &buf), 
+                images: FfiConverterSequenceTypeDockerImageRecord.read(from: &buf), 
+                volumes: FfiConverterSequenceTypeDockerVolumeRecord.read(from: &buf), 
+                buildCache: FfiConverterSequenceTypeDockerBuildCacheRecord.read(from: &buf), 
+                containers: FfiConverterSequenceTypeDockerContainerRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerStorageSummaryRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.daemonStatus, into: &buf)
+        FfiConverterString.write(value.engineName, into: &buf)
+        FfiConverterString.write(value.socketPath, into: &buf)
+        FfiConverterSequenceTypeDockerVmDiskRecord.write(value.vmDisks, into: &buf)
+        FfiConverterUInt64.write(value.totalHostAllocatedBytes, into: &buf)
+        FfiConverterUInt64.write(value.totalGuestActiveBytes, into: &buf)
+        FfiConverterUInt64.write(value.phantomBloatBytes, into: &buf)
+        FfiConverterUInt64.write(value.imagesTotalBytes, into: &buf)
+        FfiConverterUInt64.write(value.danglingImagesBytes, into: &buf)
+        FfiConverterUInt64.write(value.unusedImagesBytes, into: &buf)
+        FfiConverterUInt64.write(value.volumesTotalBytes, into: &buf)
+        FfiConverterUInt64.write(value.danglingAnonymousVolumesBytes, into: &buf)
+        FfiConverterUInt64.write(value.danglingNamedVolumesBytes, into: &buf)
+        FfiConverterUInt64.write(value.buildCacheTotalBytes, into: &buf)
+        FfiConverterUInt64.write(value.buildCacheReclaimableBytes, into: &buf)
+        FfiConverterUInt64.write(value.stoppedContainersBytes, into: &buf)
+        FfiConverterSequenceTypeDockerImageRecord.write(value.images, into: &buf)
+        FfiConverterSequenceTypeDockerVolumeRecord.write(value.volumes, into: &buf)
+        FfiConverterSequenceTypeDockerBuildCacheRecord.write(value.buildCache, into: &buf)
+        FfiConverterSequenceTypeDockerContainerRecord.write(value.containers, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerStorageSummaryRecord_lift(_ buf: RustBuffer) throws -> DockerStorageSummaryRecord {
+    return try FfiConverterTypeDockerStorageSummaryRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerStorageSummaryRecord_lower(_ value: DockerStorageSummaryRecord) -> RustBuffer {
+    return FfiConverterTypeDockerStorageSummaryRecord.lower(value)
+}
+
+
+public struct DockerVmDiskRecord {
+    public var name: String
+    public var path: String
+    public var engineName: String
+    public var allocatedBytes: UInt64
+    public var virtualCapacityBytes: UInt64
+    public var modifiedSecs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, path: String, engineName: String, allocatedBytes: UInt64, virtualCapacityBytes: UInt64, modifiedSecs: UInt64) {
+        self.name = name
+        self.path = path
+        self.engineName = engineName
+        self.allocatedBytes = allocatedBytes
+        self.virtualCapacityBytes = virtualCapacityBytes
+        self.modifiedSecs = modifiedSecs
+    }
+}
+
+
+
+extension DockerVmDiskRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerVmDiskRecord, rhs: DockerVmDiskRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.engineName != rhs.engineName {
+            return false
+        }
+        if lhs.allocatedBytes != rhs.allocatedBytes {
+            return false
+        }
+        if lhs.virtualCapacityBytes != rhs.virtualCapacityBytes {
+            return false
+        }
+        if lhs.modifiedSecs != rhs.modifiedSecs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(path)
+        hasher.combine(engineName)
+        hasher.combine(allocatedBytes)
+        hasher.combine(virtualCapacityBytes)
+        hasher.combine(modifiedSecs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerVmDiskRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerVmDiskRecord {
+        return
+            try DockerVmDiskRecord(
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                engineName: FfiConverterString.read(from: &buf), 
+                allocatedBytes: FfiConverterUInt64.read(from: &buf), 
+                virtualCapacityBytes: FfiConverterUInt64.read(from: &buf), 
+                modifiedSecs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerVmDiskRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.engineName, into: &buf)
+        FfiConverterUInt64.write(value.allocatedBytes, into: &buf)
+        FfiConverterUInt64.write(value.virtualCapacityBytes, into: &buf)
+        FfiConverterUInt64.write(value.modifiedSecs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerVmDiskRecord_lift(_ buf: RustBuffer) throws -> DockerVmDiskRecord {
+    return try FfiConverterTypeDockerVmDiskRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerVmDiskRecord_lower(_ value: DockerVmDiskRecord) -> RustBuffer {
+    return FfiConverterTypeDockerVmDiskRecord.lower(value)
+}
+
+
+public struct DockerVolumeRecord {
+    public var name: String
+    public var driver: String
+    public var sizeBytes: UInt64
+    public var isAnonymous: Bool
+    public var inUse: Bool
+    public var refCount: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, driver: String, sizeBytes: UInt64, isAnonymous: Bool, inUse: Bool, refCount: Int64) {
+        self.name = name
+        self.driver = driver
+        self.sizeBytes = sizeBytes
+        self.isAnonymous = isAnonymous
+        self.inUse = inUse
+        self.refCount = refCount
+    }
+}
+
+
+
+extension DockerVolumeRecord: Equatable, Hashable {
+    public static func ==(lhs: DockerVolumeRecord, rhs: DockerVolumeRecord) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.driver != rhs.driver {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.isAnonymous != rhs.isAnonymous {
+            return false
+        }
+        if lhs.inUse != rhs.inUse {
+            return false
+        }
+        if lhs.refCount != rhs.refCount {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(driver)
+        hasher.combine(sizeBytes)
+        hasher.combine(isAnonymous)
+        hasher.combine(inUse)
+        hasher.combine(refCount)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDockerVolumeRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DockerVolumeRecord {
+        return
+            try DockerVolumeRecord(
+                name: FfiConverterString.read(from: &buf), 
+                driver: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt64.read(from: &buf), 
+                isAnonymous: FfiConverterBool.read(from: &buf), 
+                inUse: FfiConverterBool.read(from: &buf), 
+                refCount: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DockerVolumeRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.driver, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterBool.write(value.isAnonymous, into: &buf)
+        FfiConverterBool.write(value.inUse, into: &buf)
+        FfiConverterInt64.write(value.refCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerVolumeRecord_lift(_ buf: RustBuffer) throws -> DockerVolumeRecord {
+    return try FfiConverterTypeDockerVolumeRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDockerVolumeRecord_lower(_ value: DockerVolumeRecord) -> RustBuffer {
+    return FfiConverterTypeDockerVolumeRecord.lower(value)
 }
 
 
@@ -2613,6 +3791,88 @@ public func FfiConverterTypeSecurityThreatRecord_lower(_ value: SecurityThreatRe
 }
 
 
+public struct ShredResultRecord {
+    public var success: Bool
+    public var filesShredded: UInt32
+    public var bytesShredded: UInt64
+    public var errors: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(success: Bool, filesShredded: UInt32, bytesShredded: UInt64, errors: [String]) {
+        self.success = success
+        self.filesShredded = filesShredded
+        self.bytesShredded = bytesShredded
+        self.errors = errors
+    }
+}
+
+
+
+extension ShredResultRecord: Equatable, Hashable {
+    public static func ==(lhs: ShredResultRecord, rhs: ShredResultRecord) -> Bool {
+        if lhs.success != rhs.success {
+            return false
+        }
+        if lhs.filesShredded != rhs.filesShredded {
+            return false
+        }
+        if lhs.bytesShredded != rhs.bytesShredded {
+            return false
+        }
+        if lhs.errors != rhs.errors {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(success)
+        hasher.combine(filesShredded)
+        hasher.combine(bytesShredded)
+        hasher.combine(errors)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeShredResultRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ShredResultRecord {
+        return
+            try ShredResultRecord(
+                success: FfiConverterBool.read(from: &buf), 
+                filesShredded: FfiConverterUInt32.read(from: &buf), 
+                bytesShredded: FfiConverterUInt64.read(from: &buf), 
+                errors: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ShredResultRecord, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.success, into: &buf)
+        FfiConverterUInt32.write(value.filesShredded, into: &buf)
+        FfiConverterUInt64.write(value.bytesShredded, into: &buf)
+        FfiConverterSequenceString.write(value.errors, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShredResultRecord_lift(_ buf: RustBuffer) throws -> ShredResultRecord {
+    return try FfiConverterTypeShredResultRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShredResultRecord_lower(_ value: ShredResultRecord) -> RustBuffer {
+    return FfiConverterTypeShredResultRecord.lower(value)
+}
+
+
 public struct StorageReconciliationItem {
     public var containerTotalBytes: UInt64
     public var containerFreeBytes: UInt64
@@ -3126,6 +4386,84 @@ public func FfiConverterTypeXcodeSummaryRecord_lower(_ value: XcodeSummaryRecord
     return FfiConverterTypeXcodeSummaryRecord.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ShredAlgorithm {
+    
+    case zero
+    case randomNist80088
+    case dod522022M
+    case dod522022MEce
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeShredAlgorithm: FfiConverterRustBuffer {
+    typealias SwiftType = ShredAlgorithm
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ShredAlgorithm {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .zero
+        
+        case 2: return .randomNist80088
+        
+        case 3: return .dod522022M
+        
+        case 4: return .dod522022MEce
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ShredAlgorithm, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .zero:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .randomNist80088:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .dod522022M:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .dod522022MEce:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShredAlgorithm_lift(_ buf: RustBuffer) throws -> ShredAlgorithm {
+    return try FfiConverterTypeShredAlgorithm.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShredAlgorithm_lower(_ value: ShredAlgorithm) -> RustBuffer {
+    return FfiConverterTypeShredAlgorithm.lower(value)
+}
+
+
+
+extension ShredAlgorithm: Equatable, Hashable {}
+
+
+
 
 
 
@@ -3235,6 +4573,171 @@ extension FfiConverterCallbackInterfaceScanProgressCallback : FfiConverter {
     }
 }
 
+
+
+
+public protocol ShredProgressCallback : AnyObject {
+    
+    func onProgress(currentPath: String, fileIndex: UInt32, totalFiles: UInt32, currentPass: UInt32, totalPasses: UInt32, passName: String, bytesWrittenFile: UInt64, fileSizeBytes: UInt64, totalBytesWritten: UInt64, totalBytesAllFiles: UInt64) 
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceShredProgressCallback {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceShredProgressCallback = UniffiVTableCallbackInterfaceShredProgressCallback(
+        onProgress: { (
+            uniffiHandle: UInt64,
+            currentPath: RustBuffer,
+            fileIndex: UInt32,
+            totalFiles: UInt32,
+            currentPass: UInt32,
+            totalPasses: UInt32,
+            passName: RustBuffer,
+            bytesWrittenFile: UInt64,
+            fileSizeBytes: UInt64,
+            totalBytesWritten: UInt64,
+            totalBytesAllFiles: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceShredProgressCallback.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onProgress(
+                     currentPath: try FfiConverterString.lift(currentPath),
+                     fileIndex: try FfiConverterUInt32.lift(fileIndex),
+                     totalFiles: try FfiConverterUInt32.lift(totalFiles),
+                     currentPass: try FfiConverterUInt32.lift(currentPass),
+                     totalPasses: try FfiConverterUInt32.lift(totalPasses),
+                     passName: try FfiConverterString.lift(passName),
+                     bytesWrittenFile: try FfiConverterUInt64.lift(bytesWrittenFile),
+                     fileSizeBytes: try FfiConverterUInt64.lift(fileSizeBytes),
+                     totalBytesWritten: try FfiConverterUInt64.lift(totalBytesWritten),
+                     totalBytesAllFiles: try FfiConverterUInt64.lift(totalBytesAllFiles)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceShredProgressCallback.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ShredProgressCallback: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitShredProgressCallback() {
+    uniffi_velora_ffi_fn_init_callback_vtable_shredprogresscallback(&UniffiCallbackInterfaceShredProgressCallback.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceShredProgressCallback {
+    fileprivate static var handleMap = UniffiHandleMap<ShredProgressCallback>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceShredProgressCallback : FfiConverter {
+    typealias SwiftType = ShredProgressCallback
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -3286,6 +4789,30 @@ fileprivate struct FfiConverterOptionCallbackInterfaceScanProgressCallback: FfiC
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionCallbackInterfaceShredProgressCallback: FfiConverterRustBuffer {
+    typealias SwiftType = ShredProgressCallback?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceShredProgressCallback.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceShredProgressCallback.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceUInt32: FfiConverterRustBuffer {
     typealias SwiftType = [UInt32]
 
@@ -3328,6 +4855,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeAiModelRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [AiModelRecord]
+
+    public static func write(_ value: [AiModelRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAiModelRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AiModelRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AiModelRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAiModelRecord.read(from: &buf))
         }
         return seq
     }
@@ -3403,6 +4955,131 @@ fileprivate struct FfiConverterSequenceTypeDevArtifactRecord: FfiConverterRustBu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDevArtifactRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDockerBuildCacheRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DockerBuildCacheRecord]
+
+    public static func write(_ value: [DockerBuildCacheRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDockerBuildCacheRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DockerBuildCacheRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DockerBuildCacheRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDockerBuildCacheRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDockerContainerRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DockerContainerRecord]
+
+    public static func write(_ value: [DockerContainerRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDockerContainerRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DockerContainerRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DockerContainerRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDockerContainerRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDockerImageRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DockerImageRecord]
+
+    public static func write(_ value: [DockerImageRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDockerImageRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DockerImageRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DockerImageRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDockerImageRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDockerVmDiskRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DockerVmDiskRecord]
+
+    public static func write(_ value: [DockerVmDiskRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDockerVmDiskRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DockerVmDiskRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DockerVmDiskRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDockerVmDiskRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDockerVolumeRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [DockerVolumeRecord]
+
+    public static func write(_ value: [DockerVolumeRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDockerVolumeRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DockerVolumeRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DockerVolumeRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDockerVolumeRecord.read(from: &buf))
         }
         return seq
     }
@@ -3732,6 +5409,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_cancel_scan() != 58278) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_cancel_shred() != 25001) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_clear_collector() != 39824) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3765,6 +5445,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_get_records_buffer_descriptor() != 34644) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_ai_models() != 50264) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_docker() != 57092) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_package_caches() != 31799) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3787,6 +5473,30 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker() != 38498) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_all_unattached_volumes() != 7047) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_anonymous_volumes() != 49231) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_build_cache() != 25105) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_dangling_images() != 13305) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_stopped_containers() != 30351) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_system_all() != 28786) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_docker_unused_images() != 4120) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_prune_ollama_orphaned_blobs() != 7251) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_prune_unavailable_simulators() != 15692) {
@@ -3819,6 +5529,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_search() != 32308) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_shred_paths() != 39853) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_total_files() != 23052) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3828,8 +5541,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_scanprogresscallback_on_progress() != 8118) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_shredprogresscallback_on_progress() != 52091) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
     uniffiCallbackInitScanProgressCallback()
+    uniffiCallbackInitShredProgressCallback()
     return InitializationResult.ok
 }()
 

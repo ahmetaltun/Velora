@@ -100,12 +100,24 @@ const TARGETS: &[CacheTarget] = &[
         ecosystem: CacheEcosystem::AppleCocoaPods,
         can_collect: true,
     },
-    // Docker
+    // Docker & Container Runtimes
     CacheTarget {
         name: "Docker Virtual Machine Disk",
         relative_path: "Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw",
         ecosystem: CacheEcosystem::Docker,
         can_collect: false, // Don't move active VM raw disk to trash directly
+    },
+    CacheTarget {
+        name: "OrbStack Container Machine Disk",
+        relative_path: ".orbstack/data/docker.img",
+        ecosystem: CacheEcosystem::Docker,
+        can_collect: false,
+    },
+    CacheTarget {
+        name: "Colima Machine Disk",
+        relative_path: ".colima/default/diffdisk.qcow2",
+        ecosystem: CacheEcosystem::Docker,
+        can_collect: false,
     },
 ];
 
