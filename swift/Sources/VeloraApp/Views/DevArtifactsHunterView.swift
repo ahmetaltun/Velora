@@ -9,33 +9,57 @@ extension DevArtifactRecord: Identifiable {
 public struct DevArtifactsHunterView: View {
     @Bindable public var viewModel: VeloraViewModel
     @State private var selectedFilter: String = "All"
-    @State private var selectedItemIds = Set<String>()
+    @State private var searchFilter: String = ""
 
     public init(viewModel: VeloraViewModel) {
         self.viewModel = viewModel
     }
 
     private var filteredArtifacts: [DevArtifactRecord] {
+        var result: [DevArtifactRecord]
         switch selectedFilter {
         case "Stale":
-            return viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }
+            result = viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }
         case "Rust":
-            return viewModel.devArtifacts.filter { $0.kindName.contains("Rust") }
+            result = viewModel.devArtifacts.filter { $0.kindName.contains("Rust") }
         case "Node":
-            return viewModel.devArtifacts.filter { $0.kindName.contains("Node") }
+            result = viewModel.devArtifacts.filter { $0.kindName.contains("Node") }
         case "Python":
-            return viewModel.devArtifacts.filter { $0.kindName.contains("Python") }
+            result = viewModel.devArtifacts.filter { $0.kindName.contains("Python") }
         case "Swift":
-            return viewModel.devArtifacts.filter { $0.kindName.contains("Swift") }
+            result = viewModel.devArtifacts.filter { $0.kindName.contains("Swift") }
         default:
-            return viewModel.devArtifacts
+            result = viewModel.devArtifacts
         }
+
+        let query = searchFilter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            result = result.filter {
+                $0.parentProjectName.lowercased().contains(query) ||
+                $0.name.lowercased().contains(query) ||
+                $0.kindName.lowercased().contains(query) ||
+                $0.path.lowercased().contains(query) ||
+                $0.inactivityLabel.lowercased().contains(query)
+            }
+        }
+
+        return result
+    }
+
+    private var stagedPaths: Set<String> {
+        Set(viewModel.collectorItems.map { $0.path })
+    }
+
+    private var staleItems: [DevArtifactRecord] {
+        viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }
     }
 
     private var staleTotalBytes: UInt64 {
-        viewModel.devArtifacts
-            .filter { $0.inactivityLabel.contains("Stale") }
-            .reduce(0) { $0 + $1.sizeBytes }
+        staleItems.reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    private var allStaleStaged: Bool {
+        !staleItems.isEmpty && staleItems.allSatisfy { stagedPaths.contains($0.path) }
     }
 
     private var totalFoundBytes: UInt64 {
@@ -44,6 +68,14 @@ public struct DevArtifactsHunterView: View {
 
     private func formatBytes(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    private func formatRelativeDate(secs: UInt64) -> String {
+        guard secs > 0 else { return "Unknown" }
+        let date = Date(timeIntervalSince1970: TimeInterval(secs))
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     public var body: some View {
@@ -58,15 +90,20 @@ public struct DevArtifactsHunterView: View {
                 HStack(spacing: 10) {
                     if staleTotalBytes > 0 {
                         Button(action: {
-                            let staleItems = viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }
-                            for item in staleItems {
-                                viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                            if allStaleStaged {
+                                for item in staleItems {
+                                    viewModel.removeCollected(path: item.path)
+                                }
+                            } else {
+                                for item in staleItems {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
                             }
                         }) {
                             HStack(spacing: 6) {
-                                Image(systemName: "sparkles")
+                                Image(systemName: allStaleStaged ? "checkmark.circle.fill" : "sparkles")
                                     .font(.system(size: 11, weight: .bold))
-                                Text("Collect Stale (\(formatBytes(staleTotalBytes)))")
+                                Text(allStaleStaged ? "Unstage Stale" : "Collect Stale (\(formatBytes(staleTotalBytes)))")
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                             }
                             .foregroundColor(.white)
@@ -74,13 +111,15 @@ public struct DevArtifactsHunterView: View {
                             .padding(.vertical, 7)
                             .background(
                                 LinearGradient(
-                                    colors: [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
+                                    colors: allStaleStaged
+                                        ? [VeloraTheme.accentEmerald, VeloraTheme.accentCyan]
+                                        : [VeloraTheme.accentViolet, VeloraTheme.accentPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
                                 in: Capsule()
                             )
-                            .shadow(color: VeloraTheme.accentViolet.opacity(0.35), radius: 6, x: 0, y: 2)
+                            .shadow(color: (allStaleStaged ? VeloraTheme.accentEmerald : VeloraTheme.accentViolet).opacity(0.35), radius: 6, x: 0, y: 2)
                         }
                         .buttonStyle(.plain)
                     }
@@ -102,26 +141,90 @@ public struct DevArtifactsHunterView: View {
 
             // Filter Chips Bar
             HStack(spacing: 8) {
-                ToolFilterChip(title: "All (\(viewModel.devArtifacts.count))", isSelected: selectedFilter == "All", accentColor: VeloraTheme.accentAmber) {
+                ToolFilterChip(
+                    title: "All (\(viewModel.devArtifacts.count))",
+                    isSelected: selectedFilter == "All",
+                    accentColor: VeloraTheme.accentAmber
+                ) {
                     selectedFilter = "All"
                 }
-                ToolFilterChip(title: "Stale >60d", isSelected: selectedFilter == "Stale", accentColor: VeloraTheme.accentPink) {
-                    selectedFilter = "Stale"
+
+                let staleCount = viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }.count
+                if staleCount > 0 {
+                    ToolFilterChip(
+                        title: "Stale >60d (\(staleCount))",
+                        isSelected: selectedFilter == "Stale",
+                        accentColor: VeloraTheme.accentPink
+                    ) {
+                        selectedFilter = "Stale"
+                    }
                 }
-                ToolFilterChip(title: "Rust target/", isSelected: selectedFilter == "Rust", accentColor: VeloraTheme.accentAmber) {
-                    selectedFilter = "Rust"
+
+                let rustCount = viewModel.devArtifacts.filter { $0.kindName.contains("Rust") }.count
+                if rustCount > 0 {
+                    ToolFilterChip(
+                        title: "Rust target/ (\(rustCount))",
+                        isSelected: selectedFilter == "Rust",
+                        accentColor: VeloraTheme.accentAmber
+                    ) {
+                        selectedFilter = "Rust"
+                    }
                 }
-                ToolFilterChip(title: "node_modules", isSelected: selectedFilter == "Node", accentColor: VeloraTheme.accentEmerald) {
-                    selectedFilter = "Node"
+
+                let nodeCount = viewModel.devArtifacts.filter { $0.kindName.contains("Node") }.count
+                if nodeCount > 0 {
+                    ToolFilterChip(
+                        title: "node_modules (\(nodeCount))",
+                        isSelected: selectedFilter == "Node",
+                        accentColor: VeloraTheme.accentEmerald
+                    ) {
+                        selectedFilter = "Node"
+                    }
                 }
-                ToolFilterChip(title: "Python .venv", isSelected: selectedFilter == "Python", accentColor: VeloraTheme.accentBlue) {
-                    selectedFilter = "Python"
+
+                let pythonCount = viewModel.devArtifacts.filter { $0.kindName.contains("Python") }.count
+                if pythonCount > 0 {
+                    ToolFilterChip(
+                        title: "Python .venv (\(pythonCount))",
+                        isSelected: selectedFilter == "Python",
+                        accentColor: VeloraTheme.accentBlue
+                    ) {
+                        selectedFilter = "Python"
+                    }
                 }
-                ToolFilterChip(title: "Swift .build", isSelected: selectedFilter == "Swift", accentColor: VeloraTheme.accentViolet) {
-                    selectedFilter = "Swift"
+
+                let swiftCount = viewModel.devArtifacts.filter { $0.kindName.contains("Swift") }.count
+                if swiftCount > 0 {
+                    ToolFilterChip(
+                        title: "Swift .build (\(swiftCount))",
+                        isSelected: selectedFilter == "Swift",
+                        accentColor: VeloraTheme.accentViolet
+                    ) {
+                        selectedFilter = "Swift"
+                    }
                 }
 
                 Spacer()
+
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(VeloraTheme.textSecondary)
+                    TextField("Search build artifacts...", text: $searchFilter)
+                        .textFieldStyle(.plain)
+                        .foregroundColor(VeloraTheme.textPrimary)
+                        .frame(width: 140)
+                    if !searchFilter.isEmpty {
+                        Button(action: { searchFilter = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(VeloraTheme.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
                 Text("Total: \(formatBytes(totalFoundBytes))")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -134,7 +237,7 @@ public struct DevArtifactsHunterView: View {
                 Divider().overlay(VeloraTheme.cardBorder)
             }
 
-            // Content Table
+            // Content Area
             if viewModel.isLoadingDevArtifacts {
                 VStack(spacing: 14) {
                     Spacer()
@@ -147,7 +250,7 @@ public struct DevArtifactsHunterView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(VeloraTheme.obsidianBase)
-            } else if viewModel.devArtifacts.isEmpty {
+            } else if filteredArtifacts.isEmpty {
                 VStack(spacing: 14) {
                     Spacer()
                     ZStack {
@@ -158,10 +261,10 @@ public struct DevArtifactsHunterView: View {
                             .font(.system(size: 32))
                             .foregroundColor(VeloraTheme.accentEmerald)
                     }
-                    Text("No Large Build Artifacts Found")
+                    Text("No Build Artifacts Found")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Your indexed workspaces are clean, or a volume scan has not yet been executed.")
+                    Text("Your indexed workspaces are clean, or no artifacts match the active filter.")
                         .font(.system(size: 12))
                         .foregroundColor(VeloraTheme.textSecondary)
                     Spacer()
@@ -169,115 +272,193 @@ public struct DevArtifactsHunterView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(VeloraTheme.obsidianBase)
             } else {
-                Table(filteredArtifacts, selection: $selectedItemIds) {
-                    TableColumn("Project / Folder") { item in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(Color(hex: item.colorHex))
-                                .frame(width: 8, height: 8)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.parentProjectName)
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                    .foregroundColor(VeloraTheme.textPrimary)
-                                Text(item.path)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(VeloraTheme.textMuted)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
+                List {
+                    ForEach(filteredArtifacts) { item in
+                        let isStaged = stagedPaths.contains(item.path)
+                        BuildArtifactCard(
+                            item: item,
+                            isStaged: isStaged,
+                            formatBytes: formatBytes,
+                            formatDate: formatRelativeDate,
+                            onToggleCollect: {
+                                if isStaged {
+                                    viewModel.removeCollected(path: item.path)
+                                } else {
+                                    viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
+                                }
                             }
-                        }
+                        )
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        .listRowSeparator(.hidden)
                     }
-                    .width(min: 220, ideal: 320)
-
-                    TableColumn("Kind") { item in
-                        Text(item.kindName)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color(hex: item.colorHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .width(min: 120, ideal: 160)
-
-                    TableColumn("Size") { item in
-                        Text(formatBytes(item.sizeBytes))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
-                    }
-                    .width(min: 90, ideal: 110)
-
-                    TableColumn("Staleness") { item in
-                        let color: Color = item.inactivityLabel.contains("Stale") ? VeloraTheme.accentPink : (item.inactivityLabel.contains("Idle") ? VeloraTheme.accentAmber : VeloraTheme.accentEmerald)
-                        Text(item.inactivityLabel)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundColor(color)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .width(min: 110, ideal: 130)
-
-                    TableColumn("Action") { item in
-                        Button(action: {
-                            viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
-                        }) {
-                            Text("Collect")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(VeloraTheme.textSecondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(VeloraTheme.obsidianElevated, in: Capsule())
-                                .overlay(Capsule().stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .width(min: 70, ideal: 80)
                 }
                 .scrollContentBackground(.hidden)
                 .background(VeloraTheme.obsidianBase)
-                .onKeyPress(.space) {
-                    if let firstId = selectedItemIds.first, let item = filteredArtifacts.first(where: { $0.id == firstId }) {
-                        QuickLookCoordinator.shared.togglePreview(for: item.path)
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .contextMenu(forSelectionType: String.self) { ids in
-                    if let firstId = ids.first, let item = filteredArtifacts.first(where: { $0.id == firstId }) {
-                        Button("Quick Look") {
-                            QuickLookCoordinator.shared.togglePreview(for: item.path)
-                        }
-                        .keyboardShortcut(.space, modifiers: [])
-
-                        Divider()
-
-                        Button("Reveal in Finder") {
-                            let url = URL(fileURLWithPath: item.path)
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }
-
-                        Button("Open in Terminal") {
-                            let script = "tell application \"Terminal\" to do script \"cd '\(item.path)'\""
-                            if let appleScript = NSAppleScript(source: script) {
-                                var error: NSDictionary?
-                                appleScript.executeAndReturnError(&error)
-                            }
-                        }
-
-                        Divider()
-
-                        Button("Collect for Cleanup") {
-                            viewModel.collect(path: item.path, size: item.sizeBytes, isDir: true)
-                        }
-                    }
-                }
+                .listStyle(.plain)
             }
         }
         .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.devArtifacts.isEmpty {
                 viewModel.loadDevArtifacts()
+            }
+        }
+    }
+}
+
+// MARK: - Build Artifact Card Component
+
+private struct BuildArtifactCard: View {
+    let item: DevArtifactRecord
+    let isStaged: Bool
+    let formatBytes: (UInt64) -> String
+    let formatDate: (UInt64) -> String
+    let onToggleCollect: () -> Void
+
+    private var accentColor: Color {
+        Color(hex: item.colorHex)
+    }
+
+    private var stalenessColor: Color {
+        if item.inactivityLabel.contains("Stale") {
+            return VeloraTheme.accentPink
+        } else if item.inactivityLabel.contains("Idle") {
+            return VeloraTheme.accentAmber
+        } else {
+            return VeloraTheme.accentEmerald
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(accentColor)
+                .frame(width: 4, height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(item.parentProjectName)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(VeloraTheme.textPrimary)
+
+                    Text(item.kindName)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(accentColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(accentColor.opacity(0.15), in: Capsule())
+
+                    Text(item.inactivityLabel)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(stalenessColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(stalenessColor.opacity(0.15), in: Capsule())
+
+                    if isStaged {
+                        Text("STAGED")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(VeloraTheme.accentCyan)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(VeloraTheme.accentCyan.opacity(0.18), in: Capsule())
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Text(item.path)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(VeloraTheme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    if item.modifiedSecs > 0 {
+                        Text("• Modified \(formatDate(item.modifiedSecs))")
+                            .font(.system(size: 10))
+                            .foregroundColor(VeloraTheme.textSecondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Text(formatBytes(item.sizeBytes))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundColor(VeloraTheme.textPrimary)
+
+            // Reveal in Finder
+            Button(action: {
+                let url = URL(fileURLWithPath: item.path)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }) {
+                Image(systemName: "arrow.right.circle")
+                    .foregroundColor(VeloraTheme.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("Reveal in Finder")
+
+            // QuickLook preview
+            Button(action: {
+                let url = URL(fileURLWithPath: item.path)
+                QuickLookCoordinator.shared.togglePreview(for: url)
+            }) {
+                Image(systemName: "eye")
+                    .foregroundColor(VeloraTheme.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("QuickLook preview")
+
+            // Stage into Collector / Remove
+            Button(action: onToggleCollect) {
+                Image(systemName: isStaged ? "checkmark.circle.fill" : "plus.circle.fill")
+                    .foregroundColor(isStaged ? VeloraTheme.accentCyan : VeloraTheme.accentAmber)
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .help(isStaged ? "Remove from Collector Tray" : "Stage into Collector Tray")
+        }
+        .padding(12)
+        .background(
+            isStaged
+                ? VeloraTheme.accentCyan.opacity(0.08)
+                : VeloraTheme.obsidianSurface,
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    isStaged
+                        ? VeloraTheme.accentCyan.opacity(0.4)
+                        : VeloraTheme.cardBorder,
+                    lineWidth: 1
+                )
+        )
+        .contextMenu {
+            Button("Quick Look") {
+                let url = URL(fileURLWithPath: item.path)
+                QuickLookCoordinator.shared.togglePreview(for: url)
+            }
+            .keyboardShortcut(.space, modifiers: [])
+
+            Divider()
+
+            Button("Reveal in Finder") {
+                let url = URL(fileURLWithPath: item.path)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+
+            Button("Open in Terminal") {
+                let script = "tell application \"Terminal\" to do script \"cd '\(item.path)'\""
+                if let appleScript = NSAppleScript(source: script) {
+                    var error: NSDictionary?
+                    appleScript.executeAndReturnError(&error)
+                }
+            }
+
+            Divider()
+
+            Button(isStaged ? "Remove from Collector" : "Stage for Cleanup") {
+                onToggleCollect()
             }
         }
     }

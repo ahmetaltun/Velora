@@ -17,14 +17,24 @@ mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
 # Copy binary (remove old inode first to avoid 'Text file busy' if running)
 rm -f "$MACOS/Velora"
-if [ -f "swift/.build/arm64-apple-macosx/release/Velora" ]; then
-    cp "swift/.build/arm64-apple-macosx/release/Velora" "$MACOS/Velora"
-elif [ -f "swift/.build/release/Velora" ]; then
-    cp "swift/.build/release/Velora" "$MACOS/Velora"
-elif [ -f "swift/.build/arm64-apple-macosx/debug/Velora" ]; then
-    cp "swift/.build/arm64-apple-macosx/debug/Velora" "$MACOS/Velora"
-elif [ -f "swift/.build/debug/Velora" ]; then
-    cp "swift/.build/debug/Velora" "$MACOS/Velora"
+CANDIDATES=(
+    "swift/.build/arm64-apple-macosx/release/Velora"
+    "swift/.build/release/Velora"
+    "swift/.build/arm64-apple-macosx/debug/Velora"
+    "swift/.build/debug/Velora"
+)
+NEWEST_FILE=""
+for cand in "${CANDIDATES[@]}"; do
+    if [ -f "$cand" ]; then
+        if [ -z "$NEWEST_FILE" ] || [ "$cand" -nt "$NEWEST_FILE" ]; then
+            NEWEST_FILE="$cand"
+        fi
+    fi
+done
+
+if [ -n "$NEWEST_FILE" ]; then
+    echo "📦 Bundling newest binary: $NEWEST_FILE"
+    cp "$NEWEST_FILE" "$MACOS/Velora"
 else
     echo "❌ Error: Velora binary not found. Please compile with 'swift build --arch arm64' first."
     exit 1
