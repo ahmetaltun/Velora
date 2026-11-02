@@ -17,15 +17,15 @@ set -euo pipefail
 #   ./scripts/create_dmg.sh [version] [--app <path>] [--output <path>] [--sign <identity>]
 # Examples:
 #   ./scripts/create_dmg.sh
-#   ./scripts/create_dmg.sh 0.3.0
-#   ./scripts/create_dmg.sh 0.3.0 --sign "Developer ID Application: Company (TEAMID)"
+#   ./scripts/create_dmg.sh 0.4.0
+#   ./scripts/create_dmg.sh 0.4.0 --sign "Developer ID Application: Company (TEAMID)"
 # -----------------------------------------------------------------------------
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
-RAW_VERSION="${DEFAULT_VERSION:-0.3.0}"
+RAW_VERSION="${DEFAULT_VERSION:-0.4.0}"
 APP_PATH="$ROOT_DIR/build/Velora.app"
 CUSTOM_OUTPUT=""
 SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"

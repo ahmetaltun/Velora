@@ -5,9 +5,9 @@ import AppKit
 /// Single source of truth for runtime version, build number, and UI formatting.
 public enum VeloraAppInfo {
     /// Canonical fallback matching Cargo.toml workspace version
-    public static let fallbackVersion = "0.3.0"
+    public static let fallbackVersion = "0.4.0"
 
-    /// Marketing release version (e.g. "0.3.0")
+    /// Marketing release version (e.g. "0.4.0")
     public static var shortVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? fallbackVersion
     }

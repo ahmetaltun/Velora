@@ -36,7 +36,7 @@ if [ "$OS_MAJOR" -lt 15 ]; then
 fi
 
 DEFAULT_VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$ROOT_DIR/Cargo.toml" | head -n 1)
-VERSION="${1:-${DEFAULT_VERSION:-0.3.0}}"
+VERSION="${1:-${DEFAULT_VERSION:-0.4.0}}"
 
 APP_DIR="Velora.app"
 CONTENTS="$APP_DIR/Contents"
