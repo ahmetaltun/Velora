@@ -268,59 +268,16 @@ jobs:
           fi
           echo "::endgroup::"
 
-      - name: Install create-dmg
+      - name: Install dmgbuild
         run: |
-          echo "[INFO] Installing create-dmg utility for styled DMG generation..."
-          brew install create-dmg
+          echo "[INFO] Installing dmgbuild utility for headless styled DMG generation..."
+          python3 -m pip install --upgrade dmgbuild
 
       - name: Create Styled DMG Image
         run: |
           echo "::group::Assembling Styled DMG image"
-          DMG_STAGE="build/dmg_stage"
           DMG_FILE="build/Velora-${{ steps.version.outputs.TAG }}.dmg"
-          BG_IMAGE="assets/dmg/background.png"
-          [ -f "$BG_IMAGE" ] || BG_IMAGE="assets/dmg/background@2x.png"
-
-          rm -rf "$DMG_STAGE" "$DMG_FILE"
-          mkdir -p "$DMG_STAGE"
-          cp -R build/Velora.app "$DMG_STAGE/"
-
-          if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
-            echo "[INFO] Applying custom visual presentation via create-dmg..."
-            # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
-            sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE"
-            # Hide extension at filesystem metadata level
-            SetFile -a E "$DMG_STAGE/Velora.app" 2>/dev/null || true
-            create-dmg \
-              --volname "Velora" \
-              --volicon "assets/icons/AppIcon.icns" \
-              --background "$BG_IMAGE" \
-              --window-pos 200 120 \
-              --window-size 660 448 \
-              --icon-size 110 \
-              --text-size 13 \
-              --icon "Velora.app" 160 185 \
-              --hide-extension "Velora.app" \
-              --app-drop-link 500 185 \
-              --no-internet-enable \
-              "$DMG_FILE" \
-              "$DMG_STAGE" || {
-                echo "[WARN] create-dmg encountered an issue, falling back to standard hdiutil..."
-                ln -s /Applications "$DMG_STAGE/Applications"
-                hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_FILE"
-              }
-          else
-            echo "[INFO] create-dmg not found or background missing; using native hdiutil fallback..."
-            ln -s /Applications "$DMG_STAGE/Applications"
-            hdiutil create \
-              -volname "Velora" \
-              -srcfolder "$DMG_STAGE" \
-              -ov \
-              -format UDZO \
-              "$DMG_FILE"
-          fi
-
-          rm -rf "$DMG_STAGE"
+          ./scripts/create_dmg.sh "${{ steps.version.outputs.TAG }}" --output "$DMG_FILE"
           echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
           echo "[OK] Styled DMG created at: $DMG_FILE"
           echo "::endgroup::"

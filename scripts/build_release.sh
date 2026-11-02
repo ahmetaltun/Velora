@@ -360,69 +360,14 @@ fi
 
 # 8. Optional DMG generation
 if [ "$GENERATE_DMG" = true ]; then
-    echo "[STEP 8/8] Packaging into styled DMG..."
-    DMG_STAGE="$BUILD_DIR/dmg_stage"
-    DMG_OUTPUT="$BUILD_DIR/Velora-${VERSION}.dmg"
-    BG_IMAGE="$ROOT_DIR/assets/dmg/background.png"
-    if [ ! -f "$BG_IMAGE" ]; then
-        BG_IMAGE="$ROOT_DIR/assets/dmg/background@2x.png"
-    fi
-    VOL_ICON="$ROOT_DIR/assets/icons/AppIcon.icns"
-
-    rm -rf "$DMG_STAGE" "$DMG_OUTPUT"
-    mkdir -p "$DMG_STAGE"
-    cp -R "$APP_DIR" "$DMG_STAGE/"
-
-    if command -v create-dmg >/dev/null 2>&1 && [ -f "$BG_IMAGE" ]; then
-        echo "[INFO] Using create-dmg for styled installer presentation..."
-        # Normalize DPI to 144 so Finder scales the 1320x840 Retina graphic to exactly 660x420 pt
-        sips -s dpiWidth 144 -s dpiHeight 144 "$BG_IMAGE" >/dev/null 2>&1 || true
-        # Hide extension at filesystem metadata level
-        SetFile -a E "$DMG_STAGE/Velora.app" 2>/dev/null || true
-
-        CREATE_DMG_ARGS=(
-            --volname "Velora"
-            --window-pos 200 120
-            --window-size 660 448
-            --icon-size 110
-            --text-size 13
-            --icon "Velora.app" 160 185
-            --hide-extension "Velora.app"
-            --app-drop-link 500 185
-            --no-internet-enable
-        )
-
-        if [ -f "$VOL_ICON" ]; then
-            CREATE_DMG_ARGS+=(--volicon "$VOL_ICON")
-        fi
-
-        CREATE_DMG_ARGS+=(--background "$BG_IMAGE")
-
-        create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_OUTPUT" "$DMG_STAGE" || {
-            echo "[WARN] create-dmg encountered an issue, falling back to standard hdiutil..."
-            ln -s /Applications "$DMG_STAGE/Applications"
-            hdiutil create -volname "Velora" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_OUTPUT"
-        }
-    else
-        echo "[INFO] create-dmg not found or background missing; using native hdiutil fallback..."
-        ln -s /Applications "$DMG_STAGE/Applications"
-        hdiutil create \
-            -volname "Velora" \
-            -srcfolder "$DMG_STAGE" \
-            -ov \
-            -format UDZO \
-            "$DMG_OUTPUT"
-    fi
-
-    rm -rf "$DMG_STAGE"
-    echo "[OK] DMG generated at: $DMG_OUTPUT"
-
+    echo "[STEP 8/8] Packaging into styled DMG with scripts/create_dmg.sh..."
+    CREATE_DMG_SCRIPT="$ROOT_DIR/scripts/create_dmg.sh"
+    CREATE_DMG_OPTS=("$VERSION" --app "$APP_DIR" --output "$BUILD_DIR/Velora.dmg")
     if [ -n "$SIGN_IDENTITY" ]; then
-        echo "[INFO] Signing DMG..."
-        codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_OUTPUT"
-        codesign --verify --strict --verbose=2 "$DMG_OUTPUT"
-        echo "[OK] DMG signed and verified."
+        CREATE_DMG_OPTS+=(--sign "$SIGN_IDENTITY")
     fi
+    "$CREATE_DMG_SCRIPT" "${CREATE_DMG_OPTS[@]}"
+    DMG_OUTPUT="$BUILD_DIR/Velora.dmg"
 else
     echo "[INFO] [STEP 8/8] Skipping DMG generation (--dmg not specified)."
 fi
