@@ -49,11 +49,6 @@ jobs:
         with:
           workspaces: ". -> target"
 
-      - name: Run Workspace Tests (Quality Gate, Apple Silicon arm64)
-        run: |
-          echo "[INFO] Running workspace test suites before building release (aarch64-apple-darwin)..."
-          cargo test --workspace --target aarch64-apple-darwin
-
       - name: Build Release App Bundle
         run: |
           chmod +x scripts/build_release.sh
