@@ -217,8 +217,28 @@ jobs:
           echo "[OK] Notarization for Velora.app succeeded!"
           rm -f "$APP_NOTARIZE_ZIP"
 
-          echo "[INFO] Stapling notarization ticket directly to build/Velora.app..."
-          xcrun stapler staple build/Velora.app
+          # Function to staple with retry and exponential backoff to handle CloudKit CDN replication lag
+          staple_with_retry() {
+            local target="$1"
+            local max_attempts=6
+            local delay=15
+            echo "[INFO] Stapling notarization ticket to $target (with CloudKit propagation retry)..."
+            for ((attempt=1; attempt<=max_attempts; attempt++)); do
+              echo "[INFO] Staple attempt $attempt of $max_attempts..."
+              if xcrun stapler staple "$target"; then
+                echo "[OK] Successfully stapled notarization ticket to $target."
+                return 0
+              fi
+              if [ "$attempt" -lt "$max_attempts" ]; then
+                echo "[WARN] Staple attempt $attempt failed (ticket may still be propagating through CloudKit CDN). Retrying in ${delay}s..."
+                sleep "$delay"
+              fi
+            done
+            echo "[ERROR] Failed to staple notarization ticket to $target after $max_attempts attempts."
+            return 1
+          }
+
+          staple_with_retry "build/Velora.app"
 
           echo "[INFO] Validating stapled ticket on build/Velora.app..."
           xcrun stapler validate build/Velora.app
@@ -328,8 +348,28 @@ jobs:
 
           echo "[OK] Notarization for DMG succeeded!"
 
-          echo "[INFO] Stapling notarization ticket to DMG..."
-          xcrun stapler staple "$DMG_FILE"
+          # Function to staple with retry and exponential backoff to handle CloudKit CDN replication lag
+          staple_with_retry() {
+            local target="$1"
+            local max_attempts=6
+            local delay=15
+            echo "[INFO] Stapling notarization ticket to $target (with CloudKit propagation retry)..."
+            for ((attempt=1; attempt<=max_attempts; attempt++)); do
+              echo "[INFO] Staple attempt $attempt of $max_attempts..."
+              if xcrun stapler staple "$target"; then
+                echo "[OK] Successfully stapled notarization ticket to $target."
+                return 0
+              fi
+              if [ "$attempt" -lt "$max_attempts" ]; then
+                echo "[WARN] Staple attempt $attempt failed (ticket may still be propagating through CloudKit CDN). Retrying in ${delay}s..."
+                sleep "$delay"
+              fi
+            done
+            echo "[ERROR] Failed to staple notarization ticket to $target after $max_attempts attempts."
+            return 1
+          }
+
+          staple_with_retry "$DMG_FILE"
 
           echo "[INFO] Validating stapled ticket on DMG..."
           xcrun stapler validate "$DMG_FILE"
