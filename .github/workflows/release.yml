@@ -286,7 +286,7 @@ jobs:
       - name: Install dmgbuild
         run: |
           echo "[INFO] Installing dmgbuild utility for headless styled DMG generation..."
-          python3 -m pip install --upgrade dmgbuild
+          python3 -m pip install --break-system-packages dmgbuild || pipx install dmgbuild
 
       - name: Create Styled DMG Image
         run: |
