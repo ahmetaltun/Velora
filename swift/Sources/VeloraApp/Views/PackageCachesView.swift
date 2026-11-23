@@ -194,15 +194,15 @@ public struct PackageCachesView: View {
                 }
             }
 
-            ToolFilterBar(title: "Ecosystem", prompt: "Search package caches", selection: $selectedEcosystem, query: $searchFilter, summary: formatBytes(totalBytes) + " total") {
-                Text("All ecosystems").tag("All")
-                Text("Homebrew").tag("Homebrew")
-                Text("Cargo").tag("Cargo")
-                Text("npm / Yarn").tag("Node")
-                Text("Python").tag("Python")
-                Text("Gradle").tag("JVM")
-                Text("Docker").tag("Docker")
-            }
+            ToolFilterBar(title: "Ecosystem", prompt: "Search package caches", selection: $selectedEcosystem, query: $searchFilter, summary: formatBytes(totalBytes) + " total", options: [
+                .init("All ecosystems", "All"),
+                .init("Homebrew", "Homebrew"),
+                .init("Cargo", "Cargo"),
+                .init("npm / Yarn", "Node"),
+                .init("Python", "Python"),
+                .init("Gradle", "JVM"),
+                .init("Docker", "Docker")
+            ])
 
             // Content Area
             if viewModel.isLoadingPackageCaches {

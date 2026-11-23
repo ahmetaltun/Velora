@@ -167,13 +167,23 @@ struct ToolSearchField: View {
     }
 }
 
-struct ToolFilterBar<Selection: Hashable, Options: View>: View {
+struct ToolFilterOption<Selection: Hashable> {
+    let title: String
+    let value: Selection
+
+    init(_ title: String, _ value: Selection) {
+        self.title = title
+        self.value = value
+    }
+}
+
+struct ToolFilterBar<Selection: Hashable>: View {
     var title = "Category"
     let prompt: String
     @Binding var selection: Selection
     @Binding var query: String
     var summary: String? = nil
-    @ViewBuilder var options: Options
+    let options: [ToolFilterOption<Selection>]
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -203,11 +213,16 @@ struct ToolFilterBar<Selection: Hashable, Options: View>: View {
     }
 
     private var picker: some View {
-        Picker(title, selection: $selection) { options }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
-            .accessibilityLabel(title)
+        let selectedTitle = options.first { $0.value == selection }?.title ?? title
+
+        return ToolDropdown(
+            title: selectedTitle,
+            accessibilityTitle: title,
+            items: options.map { option in
+                .command(option.title, selected: option.value == selection) { selection = option.value }
+            }
+        )
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var search: some View {

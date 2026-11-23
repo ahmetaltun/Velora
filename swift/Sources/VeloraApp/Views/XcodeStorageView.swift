@@ -185,13 +185,13 @@ public struct XcodeStorageView: View {
                 }
             }
 
-            ToolFilterBar(prompt: "Search Xcode storage", selection: $selectedCategory, query: $searchFilter) {
-                Text("All categories").tag("All")
-                Text("DerivedData").tag("DerivedData")
-                Text("Archives").tag("Archives")
-                Text("Device Support").tag("Device")
-                Text("Simulators").tag("Simulator")
-            }
+            ToolFilterBar(prompt: "Search Xcode storage", selection: $selectedCategory, query: $searchFilter, options: [
+                .init("All categories", "All"),
+                .init("DerivedData", "DerivedData"),
+                .init("Archives", "Archives"),
+                .init("Device Support", "Device"),
+                .init("Simulators", "Simulator")
+            ])
 
             // Content Area
             if viewModel.isLoadingXcode {

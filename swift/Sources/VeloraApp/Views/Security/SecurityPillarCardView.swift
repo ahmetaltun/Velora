@@ -29,16 +29,17 @@ public struct SecurityPillarCardView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 9) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(accentColor.opacity(0.18))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 30, height: 30)
 
                     Image(systemName: systemImage)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(accentColor)
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -49,14 +50,12 @@ public struct SecurityPillarCardView: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(VeloraTheme.textSecondary)
                 }
-
-                Spacer()
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(description)
                 .font(.system(size: 11, weight: .regular, design: .rounded))
                 .foregroundColor(VeloraTheme.textSecondary)
-                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 4)
@@ -80,7 +79,7 @@ public struct SecurityPillarCardView: View {
             )
         }
         .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             VeloraTheme.cardTintGradient(accent: accentColor),
             in: RoundedRectangle(cornerRadius: 14)

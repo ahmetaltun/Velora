@@ -255,17 +255,17 @@ public struct ModelWeightHunterView: View {
                 }
             }
 
-            ToolFilterBar(title: "Model source", prompt: "Search local models", selection: $selectedFilter, query: $searchFilter) {
-                Text("All models").tag("All")
-                Text("LM Studio").tag("LM Studio")
-                Text("Ollama").tag("Ollama")
-                Text("Hugging Face").tag("Hugging Face")
-                Text("Apple MLX").tag("Apple MLX")
-                Text("PyTorch").tag("PyTorch")
-                Text("ComfyUI").tag("ComfyUI")
-                Text("Loose files").tag("Loose")
-                Text("Stale (over 60 days)").tag("Stale")
-            }
+            ToolFilterBar(title: "Model source", prompt: "Search local models", selection: $selectedFilter, query: $searchFilter, options: [
+                .init("All models", "All"),
+                .init("LM Studio", "LM Studio"),
+                .init("Ollama", "Ollama"),
+                .init("Hugging Face", "Hugging Face"),
+                .init("Apple MLX", "Apple MLX"),
+                .init("PyTorch", "PyTorch"),
+                .init("ComfyUI", "ComfyUI"),
+                .init("Loose files", "Loose"),
+                .init("Stale (over 60 days)", "Stale")
+            ])
 
             // Content List
             if viewModel.isLoadingAiModels {

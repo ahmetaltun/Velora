@@ -158,13 +158,13 @@ public struct LargeOldFilesMatrixView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
 
-                ToolFilterBar(prompt: "Search files", selection: $selectedCategory, query: $searchFilter) {
-                    Text("All categories").tag("All")
-                    Text("Media").tag("Media")
-                    Text("Archives").tag("Archives")
-                    Text("Documents").tag("Documents")
-                    Text("Developer").tag("Developer")
-                }
+                ToolFilterBar(prompt: "Search files", selection: $selectedCategory, query: $searchFilter, options: [
+                    .init("All categories", "All"),
+                    .init("Media", "Media"),
+                    .init("Archives", "Archives"),
+                    .init("Documents", "Documents"),
+                    .init("Developer", "Developer")
+                ])
 
                 if selectedCellId != nil {
                     Button("Reset Cell Filter", systemImage: "xmark.circle") {

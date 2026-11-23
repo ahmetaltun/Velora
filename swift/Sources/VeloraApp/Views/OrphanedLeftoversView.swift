@@ -134,13 +134,13 @@ public struct OrphanedLeftoversView: View {
                 }
             }
 
-            ToolFilterBar(prompt: "Search leftovers", selection: $selectedFilter, query: $searchFilter) {
-                Text("All leftovers (\(viewModel.orphanedResidues.count))").tag("All")
-                Text("App Support").tag("Application Support")
-                Text("Caches & Logs").tag("Caches & Logs")
-                Text("Containers").tag("Sandboxed Container")
-                Text("Preferences").tag("Preferences")
-            }
+            ToolFilterBar(prompt: "Search leftovers", selection: $selectedFilter, query: $searchFilter, options: [
+                .init("All leftovers (\(viewModel.orphanedResidues.count))", "All"),
+                .init("App Support", "Application Support"),
+                .init("Caches & Logs", "Caches & Logs"),
+                .init("Containers", "Sandboxed Container"),
+                .init("Preferences", "Preferences")
+            ])
 
             if viewModel.isLoadingOrphans {
                 ToolStatusView(title: "Looking for app leftovers…")

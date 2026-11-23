@@ -200,15 +200,15 @@ public struct DockerStorageView: View {
                 }
             }
 
-            ToolFilterBar(prompt: "Search Docker items", selection: $selectedFilter, query: $searchFilter) {
-                Text("All items").tag("All")
-                Text("Dangling Layers").tag("Dangling Layers")
-                Text("Unused Images").tag("Unused Images")
-                Text("Anonymous Volumes").tag("Anonymous Volumes")
-                Text("Named Volumes").tag("Named Volumes")
-                Text("BuildKit Cache").tag("BuildKit Cache")
-                Text("Containers").tag("Containers")
-            }
+            ToolFilterBar(prompt: "Search Docker items", selection: $selectedFilter, query: $searchFilter, options: [
+                .init("All items", "All"),
+                .init("Dangling Layers", "Dangling Layers"),
+                .init("Unused Images", "Unused Images"),
+                .init("Anonymous Volumes", "Anonymous Volumes"),
+                .init("Named Volumes", "Named Volumes"),
+                .init("BuildKit Cache", "BuildKit Cache"),
+                .init("Containers", "Containers")
+            ])
 
             // Content List
             if viewModel.isLoadingDocker {
@@ -259,13 +259,13 @@ public struct DockerStorageView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack {
                 Spacer()
-                Menu("Prune Actions", systemImage: "trash") {
-                    Button("Prune Dangling Layers") { viewModel.pruneDockerDanglingImages() }
-                    Button("Prune Anonymous Volumes") { viewModel.pruneDockerAnonymousVolumes() }
-                    Button("Prune BuildKit Cache") { viewModel.pruneDockerBuildCache() }
-                    Divider()
-                    Button("System Prune All…", role: .destructive) { showSystemPruneConfirmation = true }
-                }
+                ToolDropdown(title: "Prune Actions", icon: "trash", items: [
+                    .command("Prune Dangling Layers") { viewModel.pruneDockerDanglingImages() },
+                    .command("Prune Anonymous Volumes") { viewModel.pruneDockerAnonymousVolumes() },
+                    .command("Prune BuildKit Cache") { viewModel.pruneDockerBuildCache() },
+                    .separator,
+                    .command("System Prune All…", destructive: true) { showSystemPruneConfirmation = true }
+                ])
                 .fixedSize()
                 .disabled(viewModel.isPruningDockerAction || viewModel.isInteractionDisabled || viewModel.isLoadingDocker)
                 .confirmationDialog(

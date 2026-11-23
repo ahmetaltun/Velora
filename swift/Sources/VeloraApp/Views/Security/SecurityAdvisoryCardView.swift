@@ -17,10 +17,7 @@ public struct SecurityAdvisoryCardView: View {
                 Spacer()
             }
 
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 175), spacing: 12)],
-                spacing: 12
-            ) {
+            ToolCardRows(minimumCardWidth: 210) {
                 tipTile(
                     title: "Gatekeeper & Notarization",
                     icon: "checkmark.seal.fill",
@@ -56,7 +53,7 @@ public struct SecurityAdvisoryCardView: View {
         description: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(accent)
@@ -64,16 +61,16 @@ public struct SecurityAdvisoryCardView: View {
                 Text(title)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(description)
                 .font(.system(size: 11, weight: .regular, design: .rounded))
                 .foregroundColor(VeloraTheme.textSecondary)
-                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(VeloraTheme.cardBorder, lineWidth: 1))
     }

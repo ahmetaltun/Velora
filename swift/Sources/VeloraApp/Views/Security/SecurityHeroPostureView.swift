@@ -4,19 +4,13 @@ import VeloraCore
 public struct SecurityHeroPostureView: View {
     public let summary: SecuritySummaryRecord
     public let activeThreatCount: Int
-    public let onRescan: () -> Void
-    public let onQuarantineAll: (() -> Void)?
 
     public init(
         summary: SecuritySummaryRecord,
-        activeThreatCount: Int,
-        onRescan: @escaping () -> Void,
-        onQuarantineAll: (() -> Void)? = nil
+        activeThreatCount: Int
     ) {
         self.summary = summary
         self.activeThreatCount = activeThreatCount
-        self.onRescan = onRescan
-        self.onQuarantineAll = onQuarantineAll
     }
 
     public var body: some View {
@@ -38,16 +32,6 @@ public struct SecurityHeroPostureView: View {
                 ToolMetricCardView(title: "Catalog candidates", value: summary.totalCandidatesTriaged.formatted())
                 ToolMetricCardView(title: "Scan duration", value: "\(summary.scanDurationMs.formatted()) ms",
                                    accentColor: VeloraTheme.textPrimary)
-            }
-
-            HStack(spacing: 8) {
-                Button("Rescan", systemImage: "arrow.clockwise", action: onRescan)
-                    .buttonStyle(.bordered)
-                if !isClean, let onQuarantineAll {
-                    Button("Quarantine Flagged Items…", systemImage: "lock.shield", action: onQuarantineAll)
-                        .buttonStyle(.bordered)
-                        .tint(VeloraTheme.accentPink)
-                }
             }
         }
         .padding(16)

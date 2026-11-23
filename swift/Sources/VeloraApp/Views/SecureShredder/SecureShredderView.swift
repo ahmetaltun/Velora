@@ -416,33 +416,35 @@ public struct SecureShredderView: View {
 
             let algorithms: [ShredAlgorithm] = [.zero, .randomNist80088, .dod522022M, .dod522022MEce]
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 10)], spacing: 10) {
+            ToolCardRows {
                 ForEach(algorithms) { algo in
                     let isSelected = viewModel.selectedShredAlgorithm == algo
                     Button(action: {
                         viewModel.selectedShredAlgorithm = algo
                     }) {
                         VStack(alignment: .leading, spacing: 6) {
-                            HStack {
+                            HStack(alignment: .top, spacing: 8) {
                                 Text(algo.title)
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundColor(isSelected ? VeloraTheme.textPrimary : VeloraTheme.textSecondary)
-                                Spacer()
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(VeloraTheme.accentPink)
-                                        .font(.system(size: 12))
-                                }
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(VeloraTheme.accentPink)
+                                    .opacity(isSelected ? 1 : 0)
+                                    .accessibilityHidden(true)
                             }
 
                             Text(algo.description)
                                 .font(.system(size: 11))
-                                .foregroundColor(VeloraTheme.textMuted)
+                                .foregroundColor(VeloraTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .background(
                             isSelected ? VeloraTheme.accentPink.opacity(0.12) : VeloraTheme.obsidianElevated,
                             in: RoundedRectangle(cornerRadius: 10)
@@ -451,8 +453,10 @@ public struct SecureShredderView: View {
                             RoundedRectangle(cornerRadius: 10)
                                 .stroke(isSelected ? VeloraTheme.accentPink : VeloraTheme.cardBorder, lineWidth: isSelected ? 1.5 : 1)
                         )
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
         }

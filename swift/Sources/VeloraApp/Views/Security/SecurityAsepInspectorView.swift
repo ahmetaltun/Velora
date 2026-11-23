@@ -42,10 +42,7 @@ public struct SecurityAsepInspectorView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
             // 3 Scopes Grid
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 174), spacing: 12)],
-                spacing: 12
-            ) {
+            ToolCardRows(minimumCardWidth: 210) {
                 scopeCard(
                     title: "User LaunchAgents",
                     path: "~/Library/LaunchAgents",
@@ -122,11 +119,10 @@ public struct SecurityAsepInspectorView: View {
         accent: Color
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.textPrimary)
-                Spacer()
                 Text(role)
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
                     .foregroundColor(accent)
@@ -134,6 +130,7 @@ public struct SecurityAsepInspectorView: View {
                     .padding(.vertical, 2)
                     .background(accent.opacity(0.12), in: Capsule())
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             Text(path)
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -144,7 +141,6 @@ public struct SecurityAsepInspectorView: View {
             Text(description)
                 .font(.system(size: 11, weight: .regular, design: .rounded))
                 .foregroundColor(VeloraTheme.textSecondary)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 6)
@@ -181,7 +177,7 @@ public struct SecurityAsepInspectorView: View {
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 125, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(VeloraTheme.cardBorder, lineWidth: 1))
     }

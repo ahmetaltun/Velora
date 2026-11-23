@@ -129,12 +129,12 @@ public struct DuplicateFinderView: View {
                 }
             }
 
-            ToolFilterBar(title: "Minimum size", prompt: "Search duplicates", selection: $minSizeFilter, query: $searchFilter) {
-                Text("1 MB").tag(UInt64(1_000_000))
-                Text("10 MB").tag(UInt64(10_000_000))
-                Text("50 MB").tag(UInt64(50_000_000))
-                Text("100 MB").tag(UInt64(100_000_000))
-            }
+            ToolFilterBar(title: "Minimum size", prompt: "Search duplicates", selection: $minSizeFilter, query: $searchFilter, options: [
+                .init("1 MB", UInt64(1_000_000)),
+                .init("10 MB", UInt64(10_000_000)),
+                .init("50 MB", UInt64(50_000_000)),
+                .init("100 MB", UInt64(100_000_000))
+            ])
             .onChange(of: minSizeFilter) { _, newValue in
                 viewModel.loadDuplicates(minSizeBytes: newValue)
             }

@@ -7,9 +7,10 @@ public struct SmartScanHeroView: View {
         self.viewModel = viewModel
     }
 
-    private var status: String {
-        if viewModel.isLoadingSnapshot { return "Loading your saved catalog…" }
-        if viewModel.isScanning { return "Indexing files…" }
+    private var detail: String {
+        if viewModel.isLoadingSnapshot || viewModel.isScanning {
+            return "Browse and search indexed files."
+        }
         if viewModel.hasIndexedData {
             let count = viewModel.scannedCount
             return count == 1 ? "1 item indexed" : "\(count.formatted()) items indexed"
@@ -32,12 +33,19 @@ public struct SmartScanHeroView: View {
                 actions
             }
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            LinearGradient(
+                colors: [VeloraTheme.accentViolet.opacity(0.07), VeloraTheme.obsidianElevated],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 14)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 12).strokeBorder(VeloraTheme.cardBorder)
+            RoundedRectangle(cornerRadius: 14).strokeBorder(VeloraTheme.cardBorder)
         }
     }
 
@@ -56,9 +64,10 @@ public struct SmartScanHeroView: View {
                     .foregroundStyle(VeloraTheme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text(status)
+                Text(detail)
                     .font(.callout)
                     .foregroundStyle(VeloraTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -66,32 +75,34 @@ public struct SmartScanHeroView: View {
     @ViewBuilder
     private var actions: some View {
         if viewModel.isLoadingSnapshot {
-            ProgressView()
-                .controlSize(.small)
-                .accessibilityLabel("Loading file catalog")
-        } else if !viewModel.isScanning {
-            HStack(spacing: 8) {
-                if viewModel.hasIndexedData {
-                    Button("Browse Files", systemImage: "folder") {
-                        viewModel.navigateToRoot()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(VeloraTheme.accentViolet)
+            ToolActionProgress(title: "Loading Catalog…")
+        } else if viewModel.isScanning {
+            ToolActionProgress(title: "Indexing Files…")
+        } else if viewModel.hasIndexedData {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    catalogActions
+                }
+                .fixedSize(horizontal: true, vertical: false)
 
-                    Button("Rescan Catalog", systemImage: "arrow.clockwise") {
-                        viewModel.scanCatalog()
-                    }
-                    .buttonStyle(.bordered)
-                } else {
-                    Button("Scan Home Folder", systemImage: "magnifyingglass") {
-                        viewModel.scanCatalog()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(VeloraTheme.accentViolet)
+                VStack(alignment: .leading, spacing: 8) {
+                    catalogActions
                 }
             }
-            .controlSize(.large)
             .disabled(viewModel.isInteractionDisabled)
+        } else {
+            Button("Scan Home Folder", systemImage: "magnifyingglass", action: viewModel.scanCatalog)
+                .buttonStyle(ToolActionButtonStyle(prominent: true))
+                .disabled(viewModel.isInteractionDisabled)
         }
+    }
+
+    @ViewBuilder
+    private var catalogActions: some View {
+        Button("Browse Files", systemImage: "folder", action: viewModel.navigateToRoot)
+            .buttonStyle(ToolActionButtonStyle(prominent: true))
+
+        Button("Rescan Catalog", systemImage: "arrow.clockwise", action: viewModel.scanCatalog)
+            .buttonStyle(ToolActionButtonStyle())
     }
 }

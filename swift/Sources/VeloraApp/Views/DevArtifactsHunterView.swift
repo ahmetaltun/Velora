@@ -139,14 +139,14 @@ public struct DevArtifactsHunterView: View {
                 }
             }
 
-            ToolFilterBar(prompt: "Search build artifacts", selection: $selectedFilter, query: $searchFilter, summary: formatBytes(totalFoundBytes) + " total") {
-                Text("All artifacts (\(viewModel.devArtifacts.count))").tag("All")
-                Text("Stale (over 60 days)").tag("Stale")
-                Text("Rust").tag("Rust")
-                Text("Node.js").tag("Node")
-                Text("Python").tag("Python")
-                Text("Swift").tag("Swift")
-            }
+            ToolFilterBar(prompt: "Search build artifacts", selection: $selectedFilter, query: $searchFilter, summary: formatBytes(totalFoundBytes) + " total", options: [
+                .init("All artifacts (\(viewModel.devArtifacts.count))", "All"),
+                .init("Stale (over 60 days)", "Stale"),
+                .init("Rust", "Rust"),
+                .init("Node.js", "Node"),
+                .init("Python", "Python"),
+                .init("Swift", "Swift")
+            ])
 
             // Content Area
             if viewModel.isLoadingDevArtifacts {

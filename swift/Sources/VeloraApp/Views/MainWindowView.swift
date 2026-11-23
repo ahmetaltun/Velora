@@ -264,6 +264,8 @@ public struct MainWindowView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbarBackground(VeloraTheme.obsidianBase, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .tint(VeloraTheme.accentViolet)
         .onChange(of: viewModel.isInteractionDisabled) { _, isDisabled in
             if isDisabled {
