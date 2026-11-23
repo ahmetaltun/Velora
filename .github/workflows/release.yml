@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v0.4.0)'
+        description: 'Version tag (e.g. v0.5.0)'
         required: true
-        default: 'v0.4.0'
+        default: 'v0.5.0'
 
 concurrency:
   group: release-${{ github.ref }}
@@ -394,13 +394,14 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
+          target_commitish: ${{ github.sha }}
           name: Velora ${{ steps.version.outputs.TAG }}
           files: |
             ${{ env.DMG_FILE }}
             ${{ env.ZIP_FILE }}
             build/appcast.xml
             ${{ env.CHECKSUM_FILE }}
-          draft: false
+          draft: true
           prerelease: false
           generate_release_notes: true
 
