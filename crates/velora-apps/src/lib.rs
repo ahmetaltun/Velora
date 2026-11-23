@@ -35,7 +35,7 @@ impl AppManager {
     }
 
     /// Discovers all installed apps and resolves their complete ~/Library footprints,
-    /// leveraging the pre-indexed `VolumeIndex` when available to bypass physical disk I/O.
+    /// leveraging the pre-indexed `VolumeIndex` for discovery and refreshing matched sizes on disk.
     pub fn list_apps_with_footprint(
         home_path: &Path,
         volume: Option<&VolumeIndex>,

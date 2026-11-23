@@ -1,10 +1,11 @@
+use crate::bundle::BundleScanner;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use velora_analyzer::SizeRollup;
 use velora_index::{DirId, VolumeIndex};
 
-/// In-memory catalog resolver for application bundles and associated library footprints.
-/// Queries the pre-indexed `VolumeIndex` and `SizeRollup` in RAM, avoiding physical disk I/O.
+/// Catalog resolver for application bundles and associated library footprints.
+/// Uses indexed paths for discovery and refreshes matched footprints from allocated bytes on disk.
 pub struct IndexFootprintResolver<'a> {
     pub volume: &'a VolumeIndex,
     pub rollup: SizeRollup,
@@ -22,6 +23,7 @@ impl<'a> IndexFootprintResolver<'a> {
 
         let home_str = home_path.to_string_lossy().to_string();
         let lib_prefix = format!("{}/Library", home_str.trim_end_matches('/'));
+        let user_apps = home_path.join("Applications");
 
         // 1. Index relevant directories (/Applications and ~/Library) with their precomputed rollup sizes
         for i in 0..dir_count {
@@ -32,6 +34,7 @@ impl<'a> IndexFootprintResolver<'a> {
 
             if clean.starts_with("/Applications")
                 || clean.starts_with("/System/Applications")
+                || Path::new(&clean).starts_with(&user_apps)
                 || clean.starts_with(&lib_prefix)
             {
                 let size = rollup.get_size(id);
@@ -41,7 +44,7 @@ impl<'a> IndexFootprintResolver<'a> {
 
         // 2. Index relevant single files (e.g. Preferences plists and LaunchAgents)
         for record in &volume.records {
-            if record.is_deleted() || record.is_dir() {
+            if record.is_deleted() || record.is_dir() || record.is_symlink() {
                 continue;
             }
 
@@ -59,8 +62,19 @@ impl<'a> IndexFootprintResolver<'a> {
         }
     }
 
-    /// Queries the pre-computed size of a directory or file in memory.
+    /// Measures current disk allocation for matched paths, including paths omitted by a
+    /// partial catalog. Falls back to the saved size when the path is unavailable offline.
     pub fn query_size(&self, path: &Path) -> Option<u64> {
+        if let Ok(metadata) = std::fs::symlink_metadata(path) {
+            return Some(if metadata.is_dir() {
+                BundleScanner::calculate_dir_size(path)
+            } else if metadata.is_file() {
+                BundleScanner::file_size_on_disk(&metadata)
+            } else {
+                0
+            });
+        }
+
         let path_str = path.to_string_lossy();
         let clean = path_str.trim_end_matches('/');
 

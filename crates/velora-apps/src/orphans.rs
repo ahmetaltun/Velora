@@ -62,6 +62,12 @@ impl OrphanDetector {
         // Collect candidate tuples (path, raw_name, size_bytes)
         let candidates: Vec<(PathBuf, String, u64)> = if let Some(res) = resolver {
             res.list_subdirs(dir)
+                .into_iter()
+                .map(|(path, name, size)| {
+                    let size = res.query_size(&path).unwrap_or(size);
+                    (path, name, size)
+                })
+                .collect()
         } else {
             let entries = match fs::read_dir(dir) {
                 Ok(e) => e,
@@ -74,7 +80,9 @@ impl OrphanDetector {
                     let p = e.path();
                     let name = e.file_name().to_string_lossy().to_string();
                     let sz = if p.is_file() {
-                        p.metadata().map(|m| m.len()).unwrap_or(0)
+                        p.metadata()
+                            .map(|m| BundleScanner::file_size_on_disk(&m))
+                            .unwrap_or(0)
                     } else {
                         BundleScanner::calculate_dir_size(&p)
                     };
@@ -171,7 +179,10 @@ mod tests {
         let orphans = OrphanDetector::find_orphaned_residue(&temp, &installed_apps, None);
         assert_eq!(orphans.len(), 1);
         assert_eq!(orphans[0].name, "com.olduninstalled.app");
-        assert_eq!(orphans[0].size_bytes, 2_000_000);
+        assert_eq!(
+            orphans[0].size_bytes,
+            BundleScanner::file_size_on_disk(&fs::metadata(orphan_dir.join("data")).unwrap())
+        );
 
         let _ = fs::remove_dir_all(&temp);
     }

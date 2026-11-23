@@ -3,13 +3,14 @@ use crate::model::{AppPart, AppPartKind, InstalledApp};
 use plist::Value;
 use std::fs;
 use std::io::Cursor;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 pub struct BundleScanner;
 
 impl BundleScanner {
     /// Discovers all installed applications. If catalog metadata is available in `resolver.volume.apps`,
-    /// queries memory with zero physical disk I/O. Otherwise falls back to disk scan.
+    /// uses it for app discovery and refreshes each footprint on disk. Otherwise falls back to disk scan.
     pub fn scan_installed_apps(
         home_path: &Path,
         resolver: Option<&IndexFootprintResolver>,
@@ -201,13 +202,18 @@ impl BundleScanner {
                 for entry_res in entries {
                     if let Ok(entry) = entry_res {
                         let p = entry.path();
-                        if p.is_symlink() {
+                        let Ok(file_type) = entry.file_type() else {
+                            continue;
+                        };
+                        if file_type.is_symlink() {
                             continue;
                         }
-                        if p.is_dir() {
+                        if file_type.is_dir() {
                             stack.push(p);
-                        } else if let Ok(meta) = entry.metadata() {
-                            total += meta.len();
+                        } else if file_type.is_file() {
+                            if let Ok(meta) = entry.metadata() {
+                                total += Self::file_size_on_disk(&meta);
+                            }
                         }
                     }
                 }
@@ -215,6 +221,11 @@ impl BundleScanner {
         }
 
         total
+    }
+
+    pub(crate) fn file_size_on_disk(metadata: &fs::Metadata) -> u64 {
+        // st_blocks uses 512-byte units, including on APFS. Sparse holes occupy no blocks.
+        metadata.blocks().saturating_mul(512)
     }
 }
 

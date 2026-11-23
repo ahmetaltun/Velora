@@ -91,7 +91,7 @@ public struct AppUninstallerDashboardView: View {
             // Header Bar
             BloomToolHeaderView(
                 title: "App Uninstaller",
-                subtitle: "Review installed apps and their files before cleanup.",
+                subtitle: "Review installed apps and their size on disk before cleanup.",
                 systemImage: "app.badge.checkmark",
                 accentColor: VeloraTheme.accentBlue
             ) {
@@ -410,6 +410,10 @@ private struct AppDetailView: View {
                     Text(formatBytes(app.totalSizeBytes))
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundColor(VeloraTheme.textPrimary)
+
+                    Text("Size on disk")
+                        .font(.system(size: 10))
+                        .foregroundColor(VeloraTheme.textMuted)
 
                     Button(action: {
                         for part in app.parts {

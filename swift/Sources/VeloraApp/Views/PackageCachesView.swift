@@ -55,6 +55,10 @@ public struct PackageCachesView: View {
         summary?.totalBytes ?? 0
     }
 
+    private var collectableBytes: UInt64 {
+        collectableItems.reduce(0) { $0 + $1.sizeBytes }
+    }
+
     private func formatBytes(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
@@ -119,7 +123,7 @@ public struct PackageCachesView: View {
                     .help("Prunes dangling Docker images and build cache via docker system prune")
 
                     // Collect All Collectable Caches
-                    if totalBytes > 0 {
+                    if collectableBytes > 0 {
                         Button(action: {
                             if allCollectableStaged {
                                 for item in collectableItems {
@@ -134,7 +138,7 @@ public struct PackageCachesView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: allCollectableStaged ? "checkmark.circle.fill" : "tray.and.arrow.down.fill")
                                     .font(.system(size: 11, weight: .bold))
-                                Text(allCollectableStaged ? "Unstage All" : "Collect All (\(formatBytes(totalBytes)))")
+                                Text(allCollectableStaged ? "Unstage All" : "Collect All (\(formatBytes(collectableBytes)))")
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                             }
                             .foregroundColor(.white)

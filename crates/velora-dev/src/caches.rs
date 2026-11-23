@@ -1,3 +1,4 @@
+use crate::docker::DockerInspector;
 use crate::model::{CacheEcosystem, PackageCacheItem, PackageCacheSummary};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -123,12 +124,35 @@ const TARGETS: &[CacheTarget] = &[
 
 impl PackageCacheScanner {
     /// Discovers and measures all package manager and developer tool caches under the user's home directory.
-    /// When a populated `VolumeIndex` is provided, queries memory/catalog.bin with zero disk I/O.
+    /// When a populated `VolumeIndex` is provided, queries memory/catalog.bin for package caches.
+    /// VM disk sizes are refreshed from host allocation metadata, matching Docker Deep Inspection.
     pub fn scan_home(home_path: &Path, volume: Option<&VolumeIndex>) -> PackageCacheSummary {
-        if let Some(vol) = volume.filter(|v| v.total_files() > 0) {
-            return Self::scan_from_volume(home_path, vol);
-        }
-        Self::scan_from_disk(home_path)
+        let mut summary = if let Some(vol) = volume.filter(|v| v.total_files() > 0) {
+            Self::scan_from_volume(home_path, vol)
+        } else {
+            Self::scan_from_disk(home_path)
+        };
+
+        // Catalog lengths describe virtual capacity, not space occupied by sparse VM disks.
+        let vm_disks = DockerInspector::detect_vm_disks(home_path);
+        summary.items.retain_mut(|item| {
+            if item.ecosystem != CacheEcosystem::Docker {
+                return true;
+            }
+            if let Some(disk) = vm_disks.iter().find(|disk| disk.path == item.path) {
+                item.size_bytes = disk.allocated_bytes;
+                item.modified_secs = disk.modified_secs;
+                true
+            } else {
+                // An unavailable disk cannot be measured; never present its capacity as disk usage.
+                false
+            }
+        });
+        summary.total_bytes = summary.items.iter().map(|item| item.size_bytes).sum();
+        summary
+            .items
+            .sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        summary
     }
 
     fn scan_from_volume(home_path: &Path, volume: &VolumeIndex) -> PackageCacheSummary {
@@ -158,10 +182,14 @@ impl PackageCacheScanner {
                 });
             } else {
                 // If it's a single file (e.g. Docker.raw), check volume records
-                let clean_full = full_path.to_string_lossy().trim_end_matches('/').to_string();
+                let clean_full = full_path
+                    .to_string_lossy()
+                    .trim_end_matches('/')
+                    .to_string();
                 if let Some(parent_path) = full_path.parent() {
                     if let Some(parent_id) = volume.find_dir_by_path(parent_path) {
-                        let file_name = full_path.file_name().and_then(|f| f.to_str()).unwrap_or("");
+                        let file_name =
+                            full_path.file_name().and_then(|f| f.to_str()).unwrap_or("");
                         for rec in &volume.records {
                             if !rec.is_deleted() && !rec.is_dir() && rec.parent_dir == parent_id {
                                 if volume.get_file_name(rec) == file_name && rec.size > 0 {
@@ -185,7 +213,9 @@ impl PackageCacheScanner {
         }
 
         // Sort largest caches first
-        summary.items.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        summary
+            .items
+            .sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
         summary
     }
 
@@ -236,7 +266,9 @@ impl PackageCacheScanner {
         }
 
         // Sort largest caches first
-        summary.items.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+        summary
+            .items
+            .sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
         summary
     }
 
@@ -280,6 +312,119 @@ impl PackageCacheScanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use velora_index::{FileFlags, FileRecord};
+
+    struct CacheFixture(PathBuf);
+
+    impl Drop for CacheFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn index_file(volume: &mut VolumeIndex, path: &Path) {
+        let mut parent = None;
+        let mut current = PathBuf::from("/");
+        for component in path.parent().unwrap().components() {
+            if let std::path::Component::Normal(name) = component {
+                current.push(name);
+                let id = volume.find_dir_by_path(&current).unwrap_or_else(|| {
+                    let (offset, len) = volume.pool.push(&name.to_string_lossy());
+                    volume.dirs.insert(offset, len, parent)
+                });
+                parent = Some(id);
+            }
+        }
+        let (offset, len) = volume
+            .pool
+            .push(&path.file_name().unwrap().to_string_lossy());
+        volume.add_file(FileRecord::new(
+            offset,
+            len,
+            FileFlags::empty(),
+            parent.unwrap(),
+            fs::metadata(path).unwrap().len(),
+            0,
+        ));
+    }
+
+    #[test]
+    fn sparse_vm_usage_matches_inspector_from_disk_and_saved_catalog() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let fixture = CacheFixture(std::env::temp_dir().join(format!(
+            "velora-sparse-caches-{}-{nonce}",
+            std::process::id()
+        )));
+        let mut volume = VolumeIndex::new("Fixture", "/");
+        let cache = fixture.0.join(".cargo/registry/cache/dummy.crate");
+        fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        fs::write(&cache, vec![0u8; 100_000]).unwrap();
+        index_file(&mut volume, &cache);
+
+        for target in TARGETS
+            .iter()
+            .filter(|target| target.ecosystem == CacheEcosystem::Docker)
+        {
+            let path = fixture.0.join(target.relative_path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut file = fs::File::create(&path).unwrap();
+            file.set_len(1_000_000_000_000).unwrap();
+            // Also exercise a completely unallocated sparse image.
+            if target.relative_path != ".orbstack/data/docker.img" {
+                file.write_all(b"allocated data").unwrap();
+            }
+            file.sync_all().unwrap();
+            index_file(&mut volume, &path);
+        }
+        let snapshot = fixture.0.join("catalog.bin");
+        volume.save_snapshot(&snapshot).unwrap();
+        let saved = VolumeIndex::load_snapshot(&snapshot).unwrap();
+        let disks = DockerInspector::detect_vm_disks(&fixture.0);
+        assert_eq!(disks.len(), 3);
+        let expected_total = 100_000 + disks.iter().map(|disk| disk.allocated_bytes).sum::<u64>();
+        for catalog in [None, Some(&saved)] {
+            let summary = PackageCacheScanner::scan_home(&fixture.0, catalog);
+            assert_eq!(summary.items.len(), 4);
+            assert_eq!(summary.total_bytes, expected_total);
+            assert!(summary
+                .items
+                .windows(2)
+                .all(|pair| pair[0].size_bytes >= pair[1].size_bytes));
+            assert_eq!(
+                summary
+                    .items
+                    .iter()
+                    .find(|item| item.can_collect)
+                    .unwrap()
+                    .size_bytes,
+                100_000
+            );
+            for disk in &disks {
+                let item = summary
+                    .items
+                    .iter()
+                    .find(|item| item.path == disk.path)
+                    .unwrap();
+                assert_eq!(item.size_bytes, disk.allocated_bytes);
+                assert!(item.size_bytes < disk.virtual_capacity_bytes);
+                assert_eq!(item.modified_secs, disk.modified_secs);
+                assert!(!item.can_collect);
+            }
+        }
+
+        // A stale catalog must not turn a missing disk's capacity into measured usage.
+        fs::remove_file(&disks[0].path).unwrap();
+        let summary = PackageCacheScanner::scan_home(&fixture.0, Some(&saved));
+        assert!(summary.items.iter().all(|item| item.path != disks[0].path));
+        assert_eq!(
+            summary.total_bytes,
+            expected_total - disks[0].allocated_bytes
+        );
+    }
 
     #[test]
     fn test_package_cache_scanner() {

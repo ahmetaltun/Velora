@@ -224,7 +224,9 @@ impl AssociatedFileResolver {
                 return;
             }
             if path.is_file() {
-                path.metadata().map(|m| m.len()).unwrap_or(0)
+                path.metadata()
+                    .map(|m| BundleScanner::file_size_on_disk(&m))
+                    .unwrap_or(0)
             } else {
                 BundleScanner::calculate_dir_size(path)
             }
