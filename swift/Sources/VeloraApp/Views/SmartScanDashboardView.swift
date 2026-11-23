@@ -20,9 +20,9 @@ public struct SmartScanDashboardView: View {
                         .foregroundStyle(VeloraTheme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
 
-                    storagePanel(sideBySide: contentWidth >= 620)
-
                     SmartScanHeroView(viewModel: viewModel)
+
+                    storagePanel(sideBySide: contentWidth >= 620)
 
                     tools(columnCount: contentWidth >= 790 ? 3 : contentWidth >= 490 ? 2 : 1)
                 }
