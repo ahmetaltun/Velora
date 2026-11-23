@@ -156,6 +156,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Project Documentation
 
+- [Release Notes](CHANGELOG.md): Changes prepared for the next release.
 - [Contributing Guidelines](CONTRIBUTING.md): Standards for code, testing, branching, and pull requests.
 - [Privacy Policy](PRIVACY.md): Overview of local-first design, data boundaries, and zero-telemetry policy.
 - [Security Policy](SECURITY.md): Vulnerability reporting instructions, threat model, and platform mitigations.
