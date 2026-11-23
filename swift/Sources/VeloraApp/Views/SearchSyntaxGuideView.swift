@@ -14,7 +14,7 @@ public struct SearchSyntaxChipsView: View {
         ("size:>100MB", "size:>100MB", "Filter files larger than 100MB (>100MB, <1GB, etc.)"),
         ("ext:rs", "ext:rs", "Filter by file extension (e.g. ext:rs, ext:swift,dmg)"),
         ("type:dir", "type:dir", "Match folders only (or type:file)"),
-        ("dm:today", "dm:today", "Modified today (also dm:pastweek, dm:pastmonth)"),
+        ("dm:today", "dm:today", "Modified in the past 24 hours"),
         ("!target", "!target", "Exclude files matching keyword")
     ]
 
@@ -75,28 +75,21 @@ public struct SearchSyntaxChipsView: View {
     }
 
     private func isTokenActive(_ token: String) -> Bool {
-        viewModel.searchQuery.contains(token)
+        viewModel.searchQuery.split(whereSeparator: \.isWhitespace).contains(Substring(token))
     }
 
     private func toggleQueryToken(_ token: String) {
-        var query = viewModel.searchQuery.trimmingCharacters(in: .whitespaces)
-        if query.contains(token) {
-            query = query.replacingOccurrences(of: token, with: "").trimmingCharacters(in: .whitespaces)
-            while query.contains("  ") {
-                query = query.replacingOccurrences(of: "  ", with: " ")
-            }
+        var terms = viewModel.searchQuery.split(whereSeparator: \.isWhitespace).map(String.init)
+        if let index = terms.firstIndex(of: token) {
+            terms.remove(at: index)
         } else {
             if let colonIndex = token.firstIndex(of: ":") {
-                let prefix = String(token[...colonIndex])
-                let parts = query.components(separatedBy: " ")
-                let filtered = parts.filter { !$0.starts(with: prefix) }
-                query = (filtered + [token]).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-            } else {
-                query = query.isEmpty ? token : "\(query) \(token)"
+                let prefix = token[...colonIndex]
+                terms.removeAll { $0.hasPrefix(prefix) }
             }
+            terms.append(token)
         }
-        viewModel.searchQuery = query
-        viewModel.performSearch(query: query, debounce: false)
+        viewModel.performSearch(query: terms.joined(separator: " "))
     }
 }
 
@@ -120,7 +113,7 @@ public struct SearchSyntaxGuidePopover: View {
         QuerySyntaxItem(
             syntax: "size:<op><val>",
             example: "size:>100MB",
-            description: "Filter by file size (>, >=, <, <=, =). Units: B, KB, MB, GB",
+            description: "Filter by file size (>, >=, <, <=, =). Units: B, KB, MB, GB, TB",
             color: VeloraTheme.accentAmber
         ),
         QuerySyntaxItem(
@@ -132,7 +125,7 @@ public struct SearchSyntaxGuidePopover: View {
         QuerySyntaxItem(
             syntax: "dm:<timeframe>",
             example: "dm:today",
-            description: "Modified date: today, yesterday, pastweek, pastmonth, pastyear",
+            description: "Modified within 24 hours, 48 hours, 7 days, 30 days, or 365 days",
             color: VeloraTheme.accentEmerald
         ),
         QuerySyntaxItem(
@@ -144,19 +137,19 @@ public struct SearchSyntaxGuidePopover: View {
         QuerySyntaxItem(
             syntax: "!<exclude_term>",
             example: "!target",
-            description: "Exclude files or paths containing this term",
+            description: "Exclude names containing this term",
             color: VeloraTheme.accentPink
         ),
         QuerySyntaxItem(
             syntax: "<term1> | <term2>",
             example: "swift | rust",
-            description: "Boolean OR: matches either term across names and paths",
+            description: "Matches names containing either term",
             color: VeloraTheme.accentBlue
         ),
         QuerySyntaxItem(
             syntax: "path:<prefix>",
             example: "path:Documents",
-            description: "Restrict search to items within a specific directory path",
+            description: "Match an absolute path prefix or part of a path",
             color: VeloraTheme.textSecondary
         )
     ]
@@ -170,14 +163,9 @@ public struct SearchSyntaxGuidePopover: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.textPrimary)
 
-                Spacer()
-
-                Text("Sub-millisecond RAM Engine")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(VeloraTheme.accentEmerald)
             }
 
-            Text("Combine keywords with power filters to narrow down millions of files instantly. Click any pill to try it:")
+            Text("Select an example to add it to your search.")
                 .font(.system(size: 11, weight: .regular, design: .rounded))
                 .foregroundColor(VeloraTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -227,7 +215,6 @@ public struct SearchSyntaxGuidePopover: View {
         var query = viewModel.searchQuery.trimmingCharacters(in: .whitespaces)
         if !query.contains(example) {
             query = query.isEmpty ? example : "\(query) \(example)"
-            viewModel.searchQuery = query
             viewModel.performSearch(query: query, debounce: false)
         }
     }

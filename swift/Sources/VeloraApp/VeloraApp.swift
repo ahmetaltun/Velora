@@ -37,42 +37,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let icon = AppAssetLoader.appIcon {
             NSApp.applicationIconImage = icon
         }
-        configureAndCenterWindows()
-
-        // Ensure asynchronously restored or created windows are also sized and centered
-        DispatchQueue.main.async { [weak self] in
-            self?.configureAndCenterWindows()
-        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
 
-    private func configureAndCenterWindows() {
-        for window in NSApp.windows {
-            window.titlebarAppearsTransparent = true
-            window.backgroundColor = NSColor(red: 32/255.0, green: 32/255.0, blue: 49/255.0, alpha: 1.0)
-
-            // Set minimum window bounds
-            window.minSize = NSSize(width: VeloraTheme.minWindowWidth, height: VeloraTheme.minWindowHeight)
-
-            // Ensure window is at least minimum size and fits within visible screen
-            if let screen = window.screen ?? NSScreen.main {
-                let visible = screen.visibleFrame
-                var frame = window.frame
-                frame.size.width = min(visible.width, max(frame.size.width, VeloraTheme.minWindowWidth))
-                frame.size.height = min(visible.height, max(frame.size.height, VeloraTheme.minWindowHeight))
-                if frame.maxY > visible.maxY {
-                    frame.origin.y = visible.maxY - frame.size.height
-                }
-                if frame.origin.x < visible.origin.x {
-                    frame.origin.x = visible.origin.x
-                }
-                window.setFrame(frame, display: true)
-            }
-        }
-    }
 }
 
 extension Notification.Name {
@@ -97,6 +67,7 @@ struct VeloraApp: App {
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
+        .windowResizability(.contentMinSize)
         .defaultSize(width: 1350, height: 780)
         .commands {
             SidebarCommands()

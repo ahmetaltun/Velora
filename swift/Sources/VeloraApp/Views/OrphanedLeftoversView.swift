@@ -74,11 +74,11 @@ public struct OrphanedLeftoversView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Leftovers & Residue Hunter",
-                subtitle: "Detects residual caches, containers, and support files from previously uninstalled applications",
+                title: "App Leftovers",
+                subtitle: "Support files left by removed apps.",
                 systemImage: "trash.circle.fill",
                 accentColor: VeloraTheme.accentPink
             ) {
@@ -134,124 +134,24 @@ public struct OrphanedLeftoversView: View {
                 }
             }
 
-            // Filter Chips Bar
-            HStack(spacing: 8) {
-                ToolFilterChip(
-                    title: "All (\(viewModel.orphanedResidues.count))",
-                    isSelected: selectedFilter == "All",
-                    accentColor: VeloraTheme.accentPink
-                ) {
-                    selectedFilter = "All"
-                }
-
-                let appSupportCount = viewModel.orphanedResidues.filter { $0.categoryName == "Application Support" }.count
-                if appSupportCount > 0 {
-                    ToolFilterChip(
-                        title: "App Support (\(appSupportCount))",
-                        isSelected: selectedFilter == "Application Support",
-                        accentColor: VeloraTheme.accentBlue
-                    ) {
-                        selectedFilter = "Application Support"
-                    }
-                }
-
-                let cachesCount = viewModel.orphanedResidues.filter { $0.categoryName == "Caches & Logs" }.count
-                if cachesCount > 0 {
-                    ToolFilterChip(
-                        title: "Caches & Logs (\(cachesCount))",
-                        isSelected: selectedFilter == "Caches & Logs",
-                        accentColor: VeloraTheme.accentAmber
-                    ) {
-                        selectedFilter = "Caches & Logs"
-                    }
-                }
-
-                let containerCount = viewModel.orphanedResidues.filter { $0.categoryName == "Sandboxed Container" }.count
-                if containerCount > 0 {
-                    ToolFilterChip(
-                        title: "Containers (\(containerCount))",
-                        isSelected: selectedFilter == "Sandboxed Container",
-                        accentColor: VeloraTheme.accentViolet
-                    ) {
-                        selectedFilter = "Sandboxed Container"
-                    }
-                }
-
-                let prefCount = viewModel.orphanedResidues.filter { $0.categoryName == "Preferences" }.count
-                if prefCount > 0 {
-                    ToolFilterChip(
-                        title: "Preferences (\(prefCount))",
-                        isSelected: selectedFilter == "Preferences",
-                        accentColor: VeloraTheme.accentEmerald
-                    ) {
-                        selectedFilter = "Preferences"
-                    }
-                }
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Search leftovers...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(VeloraTheme.textPrimary)
-                        .frame(width: 140)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(VeloraTheme.obsidianElevated.opacity(0.6))
-            .overlay(alignment: .bottom) {
-                Divider().overlay(VeloraTheme.cardBorder)
+            ToolFilterBar(prompt: "Search leftovers", selection: $selectedFilter, query: $searchFilter) {
+                Text("All leftovers (\(viewModel.orphanedResidues.count))").tag("All")
+                Text("App Support").tag("Application Support")
+                Text("Caches & Logs").tag("Caches & Logs")
+                Text("Containers").tag("Sandboxed Container")
+                Text("Preferences").tag("Preferences")
             }
 
             if viewModel.isLoadingOrphans {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Scanning Library directories for abandoned footprints...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Looking for app leftovers…")
             } else if filteredResidues.isEmpty {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentEmerald)
-                    }
-                    Text("No Orphaned Leftovers Found")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Your ~/Library is free from residual traces of uninstalled applications.")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(
+                    title: viewModel.orphanedResidues.isEmpty ? "No app leftovers found" : "No matching leftovers",
+                    message: viewModel.orphanedResidues.isEmpty ? nil : "Try another category or clear the search.",
+                    icon: "trash"
+                )
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredResidues) { item in
                         let isStaged = stagedPaths.contains(item.path)
                         OrphanCard(
@@ -268,13 +168,10 @@ public struct OrphanedLeftoversView: View {
                                 }
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(VeloraTheme.obsidianBase)
-                .listStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
             }
         }
         .background(VeloraTheme.obsidianBase)

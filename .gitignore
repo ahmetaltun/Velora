@@ -53,3 +53,5 @@ Velora.app/
 # Graphify
 graphify-out/
 
+# Agents
+.agents/

@@ -75,55 +75,35 @@ impl SearchQuery {
                 if !cleaned.is_empty() {
                     query.negated_terms.push(cleaned);
                 }
-            } else if token == "|" {
-                pending_or = true;
-                if current_or_group.is_empty() {
-                    if let Some(prev) = query.terms.pop() {
-                        current_or_group.push(prev);
-                    }
-                }
             } else {
-                let cleaned = token.to_lowercase();
-                if cleaned.contains('|') {
-                    let parts: Vec<String> = cleaned
-                        .split('|')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                    if !current_or_group.is_empty() {
-                        current_or_group.extend(parts);
-                    } else if pending_or {
-                        if let Some(prev) = query.terms.pop() {
-                            current_or_group.push(prev);
+                for part in token.split_inclusive('|') {
+                    let connector = part.ends_with('|');
+                    let term = part.strip_suffix('|').unwrap_or(part);
+                    if !term.is_empty() {
+                        if pending_or {
+                            current_or_group.push(term.to_lowercase());
+                        } else {
+                            query.finish_or_group(&mut current_or_group);
+                            query.terms.push(term.to_lowercase());
                         }
-                        current_or_group.extend(parts);
-                    } else if parts.len() > 1 {
-                        query.or_groups.push(parts);
-                    } else if let Some(single) = parts.into_iter().next() {
-                        query.terms.push(single);
                     }
-                    pending_or = false;
-                } else if pending_or {
-                    current_or_group.push(cleaned);
-                    pending_or = false;
-                } else {
-                    if current_or_group.len() > 1 {
-                        query.or_groups.push(std::mem::take(&mut current_or_group));
-                    } else {
-                        current_or_group.clear();
+                    if connector && current_or_group.is_empty() {
+                        current_or_group.extend(query.terms.pop());
                     }
-                    query.terms.push(cleaned);
+                    pending_or = connector;
                 }
             }
         }
-
-        if current_or_group.len() > 1 {
-            query.or_groups.push(current_or_group);
-        } else if let Some(single) = current_or_group.pop() {
-            query.terms.push(single);
-        }
+        query.finish_or_group(&mut current_or_group);
 
         query
+    }
+    fn finish_or_group(&mut self, group: &mut Vec<String>) {
+        if group.len() > 1 {
+            self.or_groups.push(std::mem::take(group));
+        } else if let Some(term) = group.pop() {
+            self.terms.push(term);
+        }
     }
 }
 
@@ -142,21 +122,19 @@ fn parse_size_constraint(s: &str) -> Option<SizeConstraint> {
         (ComparisonOp::Equal, s)
     };
 
-    let multiplier = if rest.ends_with("gb") || rest.ends_with("GB") {
-        1024 * 1024 * 1024
-    } else if rest.ends_with("mb") || rest.ends_with("MB") {
-        1024 * 1024
-    } else if rest.ends_with("kb") || rest.ends_with("KB") {
-        1024
-    } else if rest.ends_with('b') || rest.ends_with('B') {
-        1
-    } else {
-        1
+    let unit_start = rest
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(rest.len());
+    let (number, unit) = rest.split_at(unit_start);
+    let multiplier = match unit.to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "kb" => 1024,
+        "mb" => 1024 * 1024,
+        "gb" => 1024 * 1024 * 1024,
+        "tb" => 1024u64.pow(4),
+        _ => return None,
     };
-
-    let numeric_part: String = rest.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect();
-    let value: f64 = numeric_part.parse().ok()?;
-    let bytes = (value * multiplier as f64) as u64;
+    let bytes = (number.parse::<f64>().ok()? * multiplier as f64) as u64;
 
     Some(SizeConstraint { op, bytes })
 }
@@ -178,13 +156,17 @@ fn parse_date_constraint(s: &str) -> Option<DateConstraint> {
             op: ComparisonOp::GreaterThanOrEqual,
             timestamp_secs: now_secs.saturating_sub(day_secs * 2),
         }),
-        "lastweek" | "week" => Some(DateConstraint {
+        "lastweek" | "pastweek" | "week" => Some(DateConstraint {
             op: ComparisonOp::GreaterThanOrEqual,
             timestamp_secs: now_secs.saturating_sub(day_secs * 7),
         }),
-        "lastmonth" | "month" => Some(DateConstraint {
+        "lastmonth" | "pastmonth" | "month" => Some(DateConstraint {
             op: ComparisonOp::GreaterThanOrEqual,
             timestamp_secs: now_secs.saturating_sub(day_secs * 30),
+        }),
+        "pastyear" | "lastyear" | "year" => Some(DateConstraint {
+            op: ComparisonOp::GreaterThanOrEqual,
+            timestamp_secs: now_secs.saturating_sub(day_secs * 365),
         }),
         _ => None,
     }

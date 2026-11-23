@@ -97,11 +97,11 @@ public struct ModelWeightHunterView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Local AI & LLM Model Weights",
-                subtitle: "Ollama, Hugging Face Hub, LM Studio, PyTorch, Apple MLX & ComfyUI caches",
+                title: "AI Models",
+                subtitle: "Local models and weights.",
                 systemImage: "sparkles.rectangle.stack.fill",
                 accentColor: VeloraTheme.accentViolet
             ) {
@@ -201,7 +201,7 @@ public struct ModelWeightHunterView: View {
 
             // 4-Column Metric Cards Row with Elevated Background & Bottom Separation Line
             if let s = summary {
-                HStack(spacing: 12) {
+                ToolMetrics {
                     ToolMetricCardView(
                         title: "Total AI Model Footprint",
                         value: formatBytes(s.totalBytes),
@@ -255,58 +255,21 @@ public struct ModelWeightHunterView: View {
                 }
             }
 
-            // Category Filter Bar & Action Strip with ToolFilterChip & Separation Line
-            HStack(spacing: 8) {
-                ToolFilterChip(title: "All", isSelected: selectedFilter == "All", accentColor: VeloraTheme.accentViolet) { selectedFilter = "All" }
-                ToolFilterChip(title: "LM Studio", isSelected: selectedFilter == "LM Studio", accentColor: VeloraTheme.accentCyan) { selectedFilter = "LM Studio" }
-                ToolFilterChip(title: "Ollama", isSelected: selectedFilter == "Ollama", accentColor: VeloraTheme.accentAmber) { selectedFilter = "Ollama" }
-                ToolFilterChip(title: "Hugging Face", isSelected: selectedFilter == "Hugging Face", accentColor: Color(hex: "#FBBF24")) { selectedFilter = "Hugging Face" }
-                ToolFilterChip(title: "Apple MLX", isSelected: selectedFilter == "Apple MLX", accentColor: VeloraTheme.accentPurple) { selectedFilter = "Apple MLX" }
-                ToolFilterChip(title: "PyTorch", isSelected: selectedFilter == "PyTorch", accentColor: VeloraTheme.accentPink) { selectedFilter = "PyTorch" }
-                ToolFilterChip(title: "ComfyUI", isSelected: selectedFilter == "ComfyUI", accentColor: VeloraTheme.accentEmerald) { selectedFilter = "ComfyUI" }
-                ToolFilterChip(title: "Loose", isSelected: selectedFilter == "Loose", accentColor: VeloraTheme.textSecondary) { selectedFilter = "Loose" }
-                ToolFilterChip(title: "Stale (> 60d)", isSelected: selectedFilter == "Stale", accentColor: VeloraTheme.accentPink) { selectedFilter = "Stale" }
-
-                Spacer()
-
-                // Search Filter Input
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Filter items...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(VeloraTheme.textMuted)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                .frame(width: 180)
+            ToolFilterBar(title: "Model source", prompt: "Search local models", selection: $selectedFilter, query: $searchFilter) {
+                Text("All models").tag("All")
+                Text("LM Studio").tag("LM Studio")
+                Text("Ollama").tag("Ollama")
+                Text("Hugging Face").tag("Hugging Face")
+                Text("Apple MLX").tag("Apple MLX")
+                Text("PyTorch").tag("PyTorch")
+                Text("ComfyUI").tag("ComfyUI")
+                Text("Loose files").tag("Loose")
+                Text("Stale (over 60 days)").tag("Stale")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-
-            Divider().overlay(VeloraTheme.cardBorder)
 
             // Content List
             if viewModel.isLoadingAiModels {
-                Spacer()
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Hunting local AI model weights in ~/.cache, ~/.ollama, and workspace caches...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                }
-                Spacer()
+                ToolStatusView(title: "Looking for local models…")
             } else if allItems.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
@@ -322,19 +285,19 @@ public struct ModelWeightHunterView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 Spacer()
+            } else if filteredItems.isEmpty {
+                ToolStatusView(title: "No matching models", message: "Try another model source or clear the search.", icon: "magnifyingglass")
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(filteredItems) { item in
-                            AiModelCardRow(
-                                item: item,
-                                isStaged: stagedPaths.contains(item.path),
-                                onToggleStage: { toggleStaging(for: item) }
-                            )
-                        }
+                LazyVStack(spacing: 8) {
+                    ForEach(filteredItems) { item in
+                        AiModelCardRow(
+                            item: item,
+                            isStaged: stagedPaths.contains(item.path),
+                            onToggleStage: { toggleStaging(for: item) }
+                        )
                     }
-                    .padding(20)
                 }
+                .padding(20)
             }
         }
         .background(VeloraTheme.obsidianBase)

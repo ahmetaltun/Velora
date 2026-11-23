@@ -46,7 +46,7 @@ public struct FreeSpaceButton: View {
                 } else {
                     Image(systemName: "trash.fill")
                         .font(.system(size: 11, weight: .bold))
-                    Text("Free Space")
+                    Text("Move to Trash")
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                 }
             }
@@ -79,7 +79,7 @@ public struct FreeSpaceButton: View {
             }
         } message: {
             let countText = itemCount == 1 ? "1 item" : "\(itemCount) items"
-            Text("Are you sure you want to move \(countText) (\(formattedSize)) to the Trash? You can restore them from the macOS Trash if needed.")
+            Text("Move \(countText) (\(formattedSize)) to the Trash? You can restore these items until the Trash is emptied.")
         }
     }
 }

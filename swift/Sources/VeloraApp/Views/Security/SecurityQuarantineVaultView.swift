@@ -3,14 +3,14 @@ import SwiftUI
 import VeloraCore
 
 public struct SecurityQuarantineVaultView: View {
-    public let quarantinedThreats: [SecurityThreatRecord]
-    public let onRestore: (SecurityThreatRecord) -> Void
+    public let quarantinedItems: [QuarantinedItemRecord]
+    public let onRestore: (QuarantinedItemRecord) -> Void
 
     public init(
-        quarantinedThreats: [SecurityThreatRecord],
-        onRestore: @escaping (SecurityThreatRecord) -> Void
+        quarantinedItems: [QuarantinedItemRecord],
+        onRestore: @escaping (QuarantinedItemRecord) -> Void
     ) {
-        self.quarantinedThreats = quarantinedThreats
+        self.quarantinedItems = quarantinedItems
         self.onRestore = onRestore
     }
 
@@ -35,11 +35,11 @@ public struct SecurityQuarantineVaultView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Secure Quarantine Sandbox")
+                    Text("Quarantine Vault")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(VeloraTheme.textPrimary)
 
-                    Text("Quarantined files are moved out of execution directories, stripped of execution permissions (chmod 000), and their launchctl daemons unloaded.")
+                    Text("Restore isolated items to their original locations from this list.")
                         .font(.system(size: 11, weight: .regular, design: .rounded))
                         .foregroundColor(VeloraTheme.textSecondary)
                 }
@@ -70,7 +70,7 @@ public struct SecurityQuarantineVaultView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(VeloraTheme.cardBorder, lineWidth: 1))
 
             // Quarantined Items List or Clean State
-            if quarantinedThreats.isEmpty {
+            if quarantinedItems.isEmpty {
                 VStack(spacing: 12) {
                     Spacer(minLength: 20)
 
@@ -102,7 +102,7 @@ public struct SecurityQuarantineVaultView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(VeloraTheme.cardBorder, lineWidth: 1))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(quarantinedThreats) { threat in
+                    ForEach(quarantinedItems, id: \.id) { threat in
                         quarantinedRow(threat: threat)
                     }
                 }
@@ -111,7 +111,7 @@ public struct SecurityQuarantineVaultView: View {
     }
 
     @ViewBuilder
-    private func quarantinedRow(threat: SecurityThreatRecord) -> some View {
+    private func quarantinedRow(threat: QuarantinedItemRecord) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
@@ -125,26 +125,16 @@ public struct SecurityQuarantineVaultView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(threat.name)
+                    Text((threat.originalPath as NSString).lastPathComponent)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(VeloraTheme.textPrimary)
 
-                    Text(threat.categoryName)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(VeloraTheme.obsidianElevated, in: Capsule())
-
-                    Text("Mode: 000 (Non-Executable)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(VeloraTheme.accentEmerald)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(VeloraTheme.accentEmerald.opacity(0.12), in: Capsule())
+                    Text(Date(timeIntervalSince1970: TimeInterval(threat.quarantinedAtSecs)), style: .date)
+                        .font(.caption)
+                        .foregroundStyle(VeloraTheme.textSecondary)
                 }
 
-                Text(threat.targetPath)
+                Text(threat.originalPath)
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
                     .foregroundColor(VeloraTheme.textMuted)
                     .lineLimit(1)

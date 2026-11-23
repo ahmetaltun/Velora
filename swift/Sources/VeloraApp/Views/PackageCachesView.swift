@@ -68,11 +68,11 @@ public struct PackageCachesView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Package & Container Caches",
-                subtitle: "Homebrew bottles, Cargo registry, npm/yarn, pip/uv wheels, Gradle, and Docker VM",
+                title: "Package Caches",
+                subtitle: "Downloaded packages and container caches.",
                 systemImage: "shippingbox.circle.fill",
                 accentColor: VeloraTheme.accentAmber
             ) {
@@ -194,85 +194,27 @@ public struct PackageCachesView: View {
                 }
             }
 
-            // Ecosystem Filter Chips
-            HStack(spacing: 8) {
-                ToolFilterChip(title: "All", isSelected: selectedEcosystem == "All", accentColor: VeloraTheme.accentAmber) { selectedEcosystem = "All" }
-                ToolFilterChip(title: "Homebrew", isSelected: selectedEcosystem == "Homebrew", accentColor: VeloraTheme.accentAmber) { selectedEcosystem = "Homebrew" }
-                ToolFilterChip(title: "Cargo (Rust)", isSelected: selectedEcosystem == "Cargo", accentColor: Color(hex: "#DEA584")) { selectedEcosystem = "Cargo" }
-                ToolFilterChip(title: "NPM / Yarn", isSelected: selectedEcosystem == "Node", accentColor: VeloraTheme.accentEmerald) { selectedEcosystem = "Node" }
-                ToolFilterChip(title: "Python (pip/uv)", isSelected: selectedEcosystem == "Python", accentColor: VeloraTheme.accentBlue) { selectedEcosystem = "Python" }
-                ToolFilterChip(title: "JVM (Gradle)", isSelected: selectedEcosystem == "JVM", accentColor: VeloraTheme.accentViolet) { selectedEcosystem = "JVM" }
-                ToolFilterChip(title: "Docker", isSelected: selectedEcosystem == "Docker", accentColor: VeloraTheme.accentCyan) { selectedEcosystem = "Docker" }
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Search package caches...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(VeloraTheme.textPrimary)
-                        .frame(width: 140)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-
-                Text("Total: \(formatBytes(totalBytes))")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(VeloraTheme.textMuted)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(VeloraTheme.obsidianElevated.opacity(0.6))
-            .overlay(alignment: .bottom) {
-                Divider().overlay(VeloraTheme.cardBorder)
+            ToolFilterBar(title: "Ecosystem", prompt: "Search package caches", selection: $selectedEcosystem, query: $searchFilter, summary: formatBytes(totalBytes) + " total") {
+                Text("All ecosystems").tag("All")
+                Text("Homebrew").tag("Homebrew")
+                Text("Cargo").tag("Cargo")
+                Text("npm / Yarn").tag("Node")
+                Text("Python").tag("Python")
+                Text("Gradle").tag("JVM")
+                Text("Docker").tag("Docker")
             }
 
             // Content Area
             if viewModel.isLoadingPackageCaches {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Scanning package manager and container caches...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Looking for package caches…")
             } else if filteredItems.isEmpty {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentAmber.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "cube.box.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentAmber)
-                    }
-                    Text("No Caches Detected")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Your global package manager directories are clean, or no caches match the active filter.")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(
+                    title: summary?.items.isEmpty == false ? "No matching caches" : "No package caches found",
+                    message: summary?.items.isEmpty == false ? "Try another ecosystem or clear the search." : nil,
+                    icon: "shippingbox"
+                )
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredItems) { item in
                         let isStaged = stagedPaths.contains(item.path)
                         PackageCacheCard(
@@ -295,13 +237,10 @@ public struct PackageCachesView: View {
                                 }
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(VeloraTheme.obsidianBase)
-                .listStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
             }
         }
         .background(VeloraTheme.obsidianBase)

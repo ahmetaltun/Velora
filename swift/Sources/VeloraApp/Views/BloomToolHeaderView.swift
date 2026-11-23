@@ -36,26 +36,24 @@ public struct BloomToolHeaderView<Actions: View>: View {
 
     public var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 15) {
+            HStack(alignment: .center, spacing: 20) {
                 identity
-                Spacer(minLength: 16)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 0)
                 actions
+                    .fixedSize()
             }
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 identity
-                actions
+                ScrollView(.horizontal) {
+                    actions.fixedSize()
+                }
             }
         }
-        .padding(.horizontal, 21)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [VeloraTheme.obsidianElevated, VeloraTheme.obsidianSurface.opacity(0.62)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(VeloraTheme.obsidianBase)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(VeloraTheme.cardBorder)
@@ -64,25 +62,23 @@ public struct BloomToolHeaderView<Actions: View>: View {
     }
 
     private var identity: some View {
-        HStack(alignment: .center, spacing: 13) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: systemImage)
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(accentColor)
-                .frame(width: 45, height: 45)
-                .background(accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(accentColor.opacity(0.20), lineWidth: 1))
+                .frame(width: 38, height: 38)
+                .background(accentColor.opacity(0.13), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
-                    .tracking(-0.55)
+                    .font(.system(size: 23, weight: .semibold, design: .rounded))
                     .foregroundStyle(VeloraTheme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .accessibilityAddTraits(.isHeader)
                 Text(subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.callout)
                     .foregroundStyle(VeloraTheme.textSecondary)
-                    .lineLimit(2)
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

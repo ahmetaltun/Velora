@@ -67,11 +67,11 @@ public struct DuplicateFinderView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
                 title: "Duplicate Finder",
-                subtitle: "3-Tier Progressive Pipeline: Exact Size → 4KB Prefix Probe → Cryptographic SHA-256 Stream",
+                subtitle: "Find files with identical contents.",
                 systemImage: "doc.on.doc.fill",
                 accentColor: VeloraTheme.accentCyan
             ) {
@@ -129,91 +129,26 @@ public struct DuplicateFinderView: View {
                 }
             }
 
-            // Filter bar
-            HStack(spacing: 12) {
-                Text("Minimum Size:")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(VeloraTheme.textSecondary)
-
-                Picker("", selection: $minSizeFilter) {
-                    Text("> 1 MB").tag(UInt64(1_000_000))
-                    Text("> 10 MB").tag(UInt64(10_000_000))
-                    Text("> 50 MB").tag(UInt64(50_000_000))
-                    Text("> 100 MB").tag(UInt64(100_000_000))
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 300)
-                .onChange(of: minSizeFilter) { _, newValue in
-                    viewModel.loadDuplicates(minSizeBytes: newValue)
-                }
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Filter duplicates...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(VeloraTheme.textPrimary)
-                        .frame(width: 160)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
+            ToolFilterBar(title: "Minimum size", prompt: "Search duplicates", selection: $minSizeFilter, query: $searchFilter) {
+                Text("1 MB").tag(UInt64(1_000_000))
+                Text("10 MB").tag(UInt64(10_000_000))
+                Text("50 MB").tag(UInt64(50_000_000))
+                Text("100 MB").tag(UInt64(100_000_000))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(VeloraTheme.obsidianElevated.opacity(0.6))
-            .overlay(alignment: .bottom) {
-                Divider().overlay(VeloraTheme.cardBorder)
+            .onChange(of: minSizeFilter) { _, newValue in
+                viewModel.loadDuplicates(minSizeBytes: newValue)
             }
 
             if viewModel.isLoadingDuplicates {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Executing 3-Tier Progressive Pipeline...")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("1. In-memory exact size filter → 2. 4KB prefix probes → 3. Multi-threaded SHA-256 verification")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Checking for duplicate files…")
             } else if filteredGroups.isEmpty {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentCyan.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentCyan)
-                    }
-                    Text("No Duplicates Detected")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("No byte-identical duplicate files found above \(formatBytes(minSizeFilter)).")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(
+                    title: summary?.groups.isEmpty == false ? "No matching duplicate groups" : "No duplicate groups found",
+                    message: "Try a smaller minimum size or clear the search.",
+                    icon: "doc.on.doc"
+                )
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredGroups) { group in
                         let groupFilePaths = Set(group.files.map { $0.path })
                         let groupStagedPaths = stagedPaths.intersection(groupFilePaths)
@@ -236,13 +171,10 @@ public struct DuplicateFinderView: View {
                             }
                         )
                         .equatable()
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(VeloraTheme.obsidianBase)
-                .listStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
             }
         }
         .background(VeloraTheme.obsidianBase)

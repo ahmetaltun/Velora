@@ -6,146 +6,73 @@ public struct UpdatePreferencesCardView: View {
     public init() {}
 
     private var formattedLastCheck: String {
-        guard let date = updateManager.lastUpdateCheckDate else {
-            return "Never"
-        }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        updateManager.lastUpdateCheckDate?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(VeloraTheme.accentViolet.opacity(0.18))
-                        .frame(width: 36, height: 36)
+            HStack(alignment: .center, spacing: 12) {
+                Label("Software Updates", systemImage: "arrow.clockwise.circle")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(VeloraTheme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
 
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(VeloraTheme.accentViolet)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text("Software Updates")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
-
-                        Text(updateManager.currentVersionString)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(VeloraTheme.accentCyan)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(VeloraTheme.accentCyan.opacity(0.16))
-                            )
-                    }
-
-                    Text("Secure in-place updates signed with Ed25519 and notarized by Apple.")
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                }
-
-                Spacer()
+                Spacer(minLength: 0)
 
                 Button {
                     updateManager.checkForUpdates()
                 } label: {
-                    HStack(spacing: 6) {
-                        if updateManager.isChecking {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-
+                    if updateManager.isChecking {
+                        ProgressView("Checking…").controlSize(.small)
+                    } else {
                         Text("Check Now")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(VeloraTheme.ctaGradient, in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
                 .disabled(!updateManager.canCheckForUpdates || updateManager.isChecking)
             }
 
-            Divider()
-                .overlay(VeloraTheme.cardBorder)
-
-            // Configuration Toggles & Status
             VStack(spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Automatically check for updates")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
-
-                        Text("Checks daily in the background and notifies you when new releases are available.")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(VeloraTheme.textMuted)
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: Binding(
-                        get: { updateManager.automaticallyChecksForUpdates },
-                        set: { updateManager.setAutomaticallyChecksForUpdates($0) }
-                    ))
-                    .toggleStyle(.switch)
-                    .tint(VeloraTheme.accentViolet)
+                Toggle(isOn: Binding(
+                    get: { updateManager.automaticallyChecksForUpdates },
+                    set: { updateManager.setAutomaticallyChecksForUpdates($0) }
+                )) {
+                    preferenceLabel("Check automatically", detail: "Check daily and notify me when an update is available.")
                 }
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Automatically download updates")
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
+                Divider().overlay(VeloraTheme.cardBorder)
 
-                        Text("Silently pre-downloads updates and prompts for a seamless relaunch when ready.")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundColor(VeloraTheme.textMuted)
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: Binding(
-                        get: { updateManager.automaticallyDownloadsUpdates },
-                        set: { updateManager.setAutomaticallyDownloadsUpdates($0) }
-                    ))
-                    .toggleStyle(.switch)
-                    .tint(VeloraTheme.accentViolet)
-                    .disabled(!updateManager.automaticallyChecksForUpdates)
+                Toggle(isOn: Binding(
+                    get: { updateManager.automaticallyDownloadsUpdates },
+                    set: { updateManager.setAutomaticallyDownloadsUpdates($0) }
+                )) {
+                    preferenceLabel("Download automatically", detail: "Download available updates and ask before relaunching.")
                 }
-
-                HStack {
-                    Text("Last checked:")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textMuted)
-
-                    Text(formattedLastCheck)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-
-                    Spacer()
-                }
+                .disabled(!updateManager.automaticallyChecksForUpdates)
             }
+            .toggleStyle(.switch)
+            .padding(14)
+            .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 10))
+
+            HStack {
+                Text(updateManager.currentVersionString)
+                Spacer()
+                Text("Last checked: \(formattedLastCheck)")
+            }
+            .font(.caption)
+            .foregroundStyle(VeloraTheme.textSecondary)
         }
         .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(VeloraTheme.obsidianElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(VeloraTheme.cardBorder, lineWidth: 1)
-        )
+        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(VeloraTheme.cardBorder))
+    }
+
+    private func preferenceLabel(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.callout.weight(.semibold))
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(VeloraTheme.textSecondary)
+        }
     }
 }

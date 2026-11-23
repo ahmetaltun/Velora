@@ -29,6 +29,9 @@ impl ArtifactHunter {
         let mut markers = vec![DirMarkers::default(); dir_count];
 
         for record in &volume.records {
+            if record.is_deleted() || record.is_dir() || record.is_symlink() {
+                continue;
+            }
             let p = record.parent_dir.0 as usize;
             if p >= dir_count {
                 continue;
@@ -64,7 +67,7 @@ impl ArtifactHunter {
 
         // Pass 2: Identify genuine build artifacts with verified parent markers
         for record in &volume.records {
-            if !record.is_dir() {
+            if !record.is_dir() || record.is_deleted() {
                 continue;
             }
 

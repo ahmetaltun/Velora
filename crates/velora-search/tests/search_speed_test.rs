@@ -12,6 +12,10 @@ fn test_query_parsing() {
     assert_eq!(q.size_constraints.len(), 1);
     assert_eq!(q.size_constraints[0].bytes, 5 * 1024 * 1024);
     assert_eq!(q.date_constraints.len(), 1);
+
+    let q = SearchQuery::parse("size:>1.5Gb dm:pastweek");
+    assert_eq!(q.size_constraints[0].bytes, 1_610_612_736);
+    assert_eq!(q.date_constraints.len(), 1);
 }
 
 #[test]
@@ -31,6 +35,10 @@ fn test_boolean_or_query_parsing() {
     assert_eq!(q3.terms, vec!["important"]);
     assert_eq!(q3.or_groups, vec![vec!["note", "memo"]]);
     assert_eq!(q3.negated_terms, vec!["archive"]);
+
+    let mixed = SearchQuery::parse("important note|memo | invoice ext:pdf");
+    assert_eq!(mixed.terms, vec!["important"]);
+    assert_eq!(mixed.or_groups, vec![vec!["note", "memo", "invoice"]]);
 }
 
 #[test]

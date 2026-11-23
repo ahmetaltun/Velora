@@ -84,11 +84,11 @@ public struct LargeOldFilesMatrixView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Large & Old Files Matrix",
-                subtitle: "Instant 2D Temporal × Size matrix computed in RAM from the indexed catalog",
+                title: "Large & Old Files",
+                subtitle: "Explore indexed files by size and age.",
                 systemImage: "calendar.badge.clock",
                 accentColor: VeloraTheme.accentPink
             ) {
@@ -148,139 +148,54 @@ public struct LargeOldFilesMatrixView: View {
             }
 
             if viewModel.isLoadingLargeOldMatrix {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Analyzing catalog records for large and dormant files...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Analyzing file sizes and ages…")
             } else if let summary = summary, summary.totalFiles > 0 {
-                // PINNED CONTROLS AREA (4x4 Grid & Filter Bar)
-                VStack(spacing: 10) {
-                    // 4x4 Heatmap Matrix Grid Card
-                    MatrixHeatmapGrid(
-                        cells: summary.cells,
-                        selectedCellId: $selectedCellId,
-                        formatBytes: formatBytes
-                    )
-
-                    // Filter Chips Bar
-                    HStack(spacing: 8) {
-                        ToolFilterChip(title: "All", isSelected: selectedCategory == "All", accentColor: VeloraTheme.accentPink) {
-                            selectedCategory = "All"
-                        }
-                        ToolFilterChip(title: "Media", isSelected: selectedCategory == "Media", accentColor: VeloraTheme.accentBlue) {
-                            selectedCategory = "Media"
-                        }
-                        ToolFilterChip(title: "Archives", isSelected: selectedCategory == "Archives", accentColor: VeloraTheme.accentViolet) {
-                            selectedCategory = "Archives"
-                        }
-                        ToolFilterChip(title: "Documents", isSelected: selectedCategory == "Documents", accentColor: VeloraTheme.accentEmerald) {
-                            selectedCategory = "Documents"
-                        }
-                        ToolFilterChip(title: "Developer", isSelected: selectedCategory == "Developer", accentColor: VeloraTheme.accentAmber) {
-                            selectedCategory = "Developer"
-                        }
-
-                        if selectedCellId != nil {
-                            Button("Reset Cell Filter") {
-                                selectedCellId = nil
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(VeloraTheme.accentCyan)
-                            .padding(.horizontal, 8)
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                            TextField("Filter files...", text: $searchFilter)
-                                .textFieldStyle(.plain)
-                                .foregroundColor(VeloraTheme.textPrimary)
-                                .frame(width: 140)
-                            if !searchFilter.isEmpty {
-                                Button(action: { searchFilter = "" }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(VeloraTheme.textSecondary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                    }
-                }
+                MatrixHeatmapGrid(
+                    cells: summary.cells,
+                    selectedCellId: $selectedCellId,
+                    formatBytes: formatBytes
+                )
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
-                .background(VeloraTheme.obsidianElevated.opacity(0.6))
-                .overlay(alignment: .bottom) {
-                    Divider().overlay(VeloraTheme.cardBorder)
+                .padding(.vertical, 14)
+
+                ToolFilterBar(prompt: "Search files", selection: $selectedCategory, query: $searchFilter) {
+                    Text("All categories").tag("All")
+                    Text("Media").tag("Media")
+                    Text("Archives").tag("Archives")
+                    Text("Documents").tag("Documents")
+                    Text("Developer").tag("Developer")
                 }
 
-                // DEDICATED SCROLLABLE VIRTUALIZED FILE LIST
+                if selectedCellId != nil {
+                    Button("Reset Cell Filter", systemImage: "xmark.circle") {
+                        selectedCellId = nil
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                }
+
                 if filteredFiles.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 36))
-                            .foregroundColor(VeloraTheme.textMuted)
-                        Text("No Files Match Selected Filter")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundColor(VeloraTheme.textPrimary)
-                        Text("Try selecting a different quadrant in the matrix or clearing the category filter.")
-                            .font(.system(size: 12))
-                            .foregroundColor(VeloraTheme.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(VeloraTheme.obsidianBase)
+                    ToolStatusView(title: "No matching files", message: "Try another cell or review your filters.", icon: "magnifyingglass")
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(filteredFiles) { file in
-                                LargeFileCard(
-                                    file: file,
-                                    categoryColor: categoryColor(for: file.categoryName),
-                                    formatBytes: formatBytes,
-                                    onCollect: {
-                                        viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
-                                    }
-                                )
-                            }
+                    LazyVStack(spacing: 6) {
+                        ForEach(filteredFiles) { file in
+                            LargeFileCard(
+                                file: file,
+                                categoryColor: categoryColor(for: file.categoryName),
+                                formatBytes: formatBytes,
+                                onCollect: {
+                                    viewModel.collect(path: file.path, size: file.sizeBytes, isDir: false)
+                                }
+                            )
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 14)
                     }
-                    .background(VeloraTheme.obsidianBase)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
                 }
             } else {
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentEmerald)
-                    }
-                    Text("No Large Files (> 50MB) Detected")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Your indexed storage has no files exceeding the 50MB threshold.")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "No large or old files found", message: "Scan your catalog to see files by size and age.", icon: "calendar")
             }
         }
         .background(VeloraTheme.obsidianBase)

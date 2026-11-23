@@ -9,7 +9,7 @@ public struct CollectorTrayView: View {
     }
 
     public var body: some View {
-        if !viewModel.collectorItems.isEmpty || viewModel.isCleaning {
+        if !viewModel.collectorItems.isEmpty || viewModel.isCleaning || viewModel.cleaningErrorMessage != nil {
             VStack(spacing: 0) {
                 Divider().overlay(VeloraTheme.cardBorder)
 
@@ -74,14 +74,15 @@ public struct CollectorTrayView: View {
                             .padding(.vertical, 3)
                             .background(VeloraTheme.accentAmber.opacity(0.15), in: Capsule())
 
-                            Text("\(formatBytes(viewModel.cleaningFreedBytes)) / \(formatBytes(viewModel.cleaningTotalBytes))")
+                            Text("\(formatBytes(viewModel.cleaningMovedBytes)) / \(formatBytes(viewModel.cleaningTotalBytes))")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(VeloraTheme.textSecondary)
                         }
 
-                        Button("Stop") {
+                        Button(viewModel.cancelCleaningRequested ? "Stopping…" : "Stop") {
                             viewModel.cancelCleaning()
                         }
+                        .disabled(viewModel.cancelCleaningRequested)
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(VeloraTheme.textSecondary)
@@ -93,7 +94,7 @@ public struct CollectorTrayView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .background(VeloraTheme.obsidianElevated)
-                } else {
+                } else if !viewModel.collectorItems.isEmpty {
                     // Standard Staging & Actions Bar
                     HStack(spacing: 16) {
                         // Collector Icon & Badge
@@ -111,7 +112,7 @@ public struct CollectorTrayView: View {
                                 Text("Cleanup basket")
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundColor(VeloraTheme.textPrimary)
-                                Text("\(viewModel.collectorItems.count) items staged (Free \(formatBytes(viewModel.collectorTotalSize)))")
+                                Text("\(viewModel.collectorItems.count) items staged · \(formatBytes(viewModel.collectorTotalSize))")
                                     .font(.system(size: 11))
                                     .foregroundColor(VeloraTheme.textSecondary)
                             }

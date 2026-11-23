@@ -4,6 +4,9 @@ pub fn contains_ignore_case_ascii(haystack: &str, needle_lower: &str) -> bool {
     if needle_lower.is_empty() {
         return true;
     }
+    if !haystack.is_ascii() {
+        return haystack.to_lowercase().contains(needle_lower);
+    }
     if haystack.len() < needle_lower.len() {
         return false;
     }

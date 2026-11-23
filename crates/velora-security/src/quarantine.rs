@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::ffi::CString;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::io::{self, Write};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -27,38 +30,74 @@ pub struct QuarantineManifest {
     pub items: Vec<QuarantinedItemEntry>,
 }
 
-/// Recursively copies a directory to the destination path.
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let entry_type = entry.file_type()?;
-        let target = dst.join(entry.file_name());
-        if entry_type.is_dir() {
-            copy_dir_recursive(&entry.path(), &target)?;
-        } else {
-            fs::copy(entry.path(), target)?;
-        }
-    }
-    Ok(())
+fn unique_suffix() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("{}-{}", std::process::id(), now.as_nanos())
 }
 
-/// Moves a file or directory, falling back to copy + delete on cross-device links (EXDEV).
-fn move_or_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
-    match fs::rename(src, dst) {
-        Ok(()) => Ok(()),
-        Err(err) if err.raw_os_error() == Some(libc::EXDEV) || err.kind() == std::io::ErrorKind::CrossesDevices => {
-            if src.is_dir() {
-                copy_dir_recursive(src, dst)?;
-                fs::remove_dir_all(src)?;
-            } else {
-                fs::copy(src, dst)?;
-                fs::remove_file(src)?;
-            }
-            Ok(())
-        }
-        Err(err) => Err(err),
+fn c_path(path: &Path) -> io::Result<CString> {
+    CString::new(path.as_os_str().as_bytes())
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))
+}
+
+fn rename_exclusive(src: &Path, dst: &Path) -> io::Result<()> {
+    let src = c_path(src)?;
+    let dst = c_path(dst)?;
+    // Both C strings remain valid for the duration of the call.
+    if unsafe { libc::renamex_np(src.as_ptr(), dst.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
+}
+
+/// Moves an item without replacing a file at the destination.
+fn move_or_copy(src: &Path, dst: &Path) -> io::Result<()> {
+    match rename_exclusive(src, dst) {
+        Err(err) if err.raw_os_error() == Some(libc::EXDEV) => {}
+        result => return result,
+    }
+
+    // Complete the copy before publishing it under the destination name.
+    let parent = dst.parent().ok_or(io::ErrorKind::InvalidInput)?;
+    let stage = parent.join(format!(".velora-copy-{}", unique_suffix()));
+    fs::DirBuilder::new().mode(0o700).create(&stage)?;
+    let staged_file = stage.join("item");
+    let result = (|| {
+        let src_c = c_path(src)?;
+        let stage_c = c_path(&staged_file)?;
+        let flags = libc::COPYFILE_ACL
+            | libc::COPYFILE_STAT
+            | libc::COPYFILE_XATTR
+            | libc::COPYFILE_DATA
+            | libc::COPYFILE_RECURSIVE
+            | libc::COPYFILE_NOFOLLOW;
+        if unsafe {
+            libc::copyfile(
+                src_c.as_ptr(),
+                stage_c.as_ptr(),
+                std::ptr::null_mut(),
+                flags,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        rename_exclusive(&staged_file, dst)?;
+        if fs::symlink_metadata(src)?.is_dir() {
+            fs::remove_dir_all(src)
+        } else {
+            fs::remove_file(src)
+        }
+    })();
+    let _ = fs::remove_dir_all(stage);
+    result
+}
+
+fn is_present(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
 }
 
 pub struct QuarantineVault {
@@ -75,149 +114,211 @@ impl QuarantineVault {
         self.vault_dir.join("manifest.json")
     }
 
-    fn load_manifest(&self) -> QuarantineManifest {
-        let path = self.manifest_path();
-        if path.exists() {
-            if let Ok(bytes) = fs::read(&path) {
-                if let Ok(manifest) = serde_json::from_slice(&bytes) {
-                    return manifest;
-                }
-            }
+    fn load_manifest(&self) -> io::Result<QuarantineManifest> {
+        match fs::read(self.manifest_path()) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(QuarantineManifest::default()),
+            Err(err) => Err(err),
         }
-        QuarantineManifest::default()
     }
 
-    fn save_manifest(&self, manifest: &QuarantineManifest) -> std::io::Result<()> {
-        let path = self.manifest_path();
-        let bytes = serde_json::to_vec_pretty(manifest)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        fs::write(path, bytes)
+    fn save_manifest(&self, manifest: &QuarantineManifest) -> io::Result<()> {
+        let temporary = self
+            .vault_dir
+            .join(format!(".manifest-{}.tmp", unique_suffix()));
+        let result = (|| {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            serde_json::to_writer_pretty(&mut file, manifest)?;
+            file.flush()?;
+            file.sync_all()?;
+            fs::rename(&temporary, self.manifest_path())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(temporary);
+        }
+        result
     }
 
-    /// Quarantines a malicious target path and any associated LaunchAgent plists.
+    fn has_vaulted_files(entry: &QuarantinedItemEntry) -> bool {
+        is_present(Path::new(&entry.quarantined_path))
+            || entry
+                .associated_paths
+                .iter()
+                .any(|path| is_present(Path::new(path)))
+    }
+
+    pub fn items(&self) -> io::Result<Vec<QuarantinedItemEntry>> {
+        let mut items = self.load_manifest()?.items;
+        items.retain(Self::has_vaulted_files);
+        items.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.quarantined_at_secs));
+        Ok(items)
+    }
+
+    /// Quarantines a target and its associated LaunchAgent plists.
     pub fn quarantine(
         &self,
         id: &str,
         target_path: &Path,
         associated_paths: &[String],
-    ) -> std::io::Result<QuarantinedItemEntry> {
+    ) -> io::Result<QuarantinedItemEntry> {
         fs::create_dir_all(&self.vault_dir)?;
-
-        let mut manifest = self.load_manifest();
-
-        // 1. If any associated path is a LaunchAgent, attempt to unload via launchctl
-        for assoc in associated_paths {
-            let assoc_path = Path::new(assoc);
-            if assoc.ends_with(".plist") && assoc_path.exists() {
-                // Attempt launchctl unload
-                let _ = Command::new("/bin/launchctl")
-                    .arg("unload")
-                    .arg(assoc_path)
-                    .output();
-            }
+        let mut manifest = self.load_manifest()?;
+        if manifest
+            .items
+            .iter()
+            .any(|entry| entry.id == id && Self::has_vaulted_files(entry))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Item is already in the vault",
+            ));
         }
+        manifest.items.retain(|entry| entry.id != id);
 
-        // 2. Quarantine the primary binary if it exists
-        let mut original_mode = 0o755;
-        let file_name = target_path
-            .file_name()
-            .map(|f| f.to_string_lossy().to_string())
-            .unwrap_or_else(|| "unknown_threat".to_string());
-
-        let quarantined_file_name = format!("{}_{}.quarantine", id, file_name);
-        let dest_path = self.vault_dir.join(quarantined_file_name);
-
-        if target_path.exists() {
-            if let Ok(meta) = fs::metadata(target_path) {
-                original_mode = meta.permissions().mode();
+        let target = match fs::symlink_metadata(target_path) {
+            Ok(meta) if meta.is_file() || meta.is_dir() => Some(meta),
+            Ok(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Quarantine requires a regular file or folder",
+                ))
             }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => None,
+            Err(err) => return Err(err),
+        };
 
-            // Move file into vault (falling back to copy + delete on EXDEV across volumes)
-            move_or_copy(target_path, &dest_path)?;
-
-            // Strip execution and write permissions (chmod 000) so it cannot be executed
-            let _ = fs::set_permissions(&dest_path, fs::Permissions::from_mode(0o000));
-        }
-
-        // 3. Move associated plists into vault
-        let mut quarantined_assocs = Vec::new();
+        let key = unique_suffix();
+        let dest_path = self.vault_dir.join(format!("{key}.quarantine"));
         let mut associated_entries = Vec::new();
         for assoc in associated_paths {
-            let p = Path::new(assoc);
-            if p.exists() {
-                let a_name = p
-                    .file_name()
-                    .map(|f| f.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "assoc".to_string());
-                let dest_assoc = self.vault_dir.join(format!("{}_{}.quarantine_meta", id, a_name));
-                if move_or_copy(p, &dest_assoc).is_ok() {
-                    let dest_str = dest_assoc.to_string_lossy().to_string();
-                    quarantined_assocs.push(dest_str.clone());
-                    associated_entries.push(AssociatedQuarantinedPath {
-                        original_path: assoc.clone(),
-                        quarantined_path: dest_str,
-                    });
-                }
+            let path = Path::new(assoc);
+            if path != target_path
+                && is_present(path)
+                && !associated_entries
+                    .iter()
+                    .any(|entry: &AssociatedQuarantinedPath| entry.original_path == *assoc)
+            {
+                let index = associated_entries.len();
+                associated_entries.push(AssociatedQuarantinedPath {
+                    original_path: assoc.clone(),
+                    quarantined_path: self
+                        .vault_dir
+                        .join(format!("{key}-{index}.quarantine_meta"))
+                        .to_string_lossy()
+                        .into_owned(),
+                });
             }
         }
-
+        if target.is_none() && associated_entries.is_empty() {
+            return Err(io::ErrorKind::NotFound.into());
+        }
         let entry = QuarantinedItemEntry {
             id: id.to_string(),
-            original_path: target_path.to_string_lossy().to_string(),
-            quarantined_path: dest_path.to_string_lossy().to_string(),
-            original_mode,
+            original_path: target_path.to_string_lossy().into_owned(),
+            quarantined_path: dest_path.to_string_lossy().into_owned(),
+            original_mode: target.as_ref().map_or(0, |meta| meta.permissions().mode()),
             quarantined_at_secs: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-            associated_paths: quarantined_assocs,
+                .unwrap_or_default()
+                .as_secs(),
+            associated_paths: associated_entries
+                .iter()
+                .map(|item| item.quarantined_path.clone())
+                .collect(),
             associated_entries,
         };
 
+        // Record the destinations first so interrupted moves remain discoverable and restorable.
         manifest.items.push(entry.clone());
-        let _ = self.save_manifest(&manifest);
+        self.save_manifest(&manifest)?;
 
+        // Ask launchctl to unload associated agents before moving their plists.
+        for assoc in associated_paths {
+            let path = Path::new(assoc);
+            if assoc.ends_with(".plist") && is_present(path) {
+                let _ = Command::new("/bin/launchctl")
+                    .arg("unload")
+                    .arg(path)
+                    .output();
+            }
+        }
+        if target.is_some() {
+            move_or_copy(target_path, &dest_path)?;
+            fs::set_permissions(&dest_path, fs::Permissions::from_mode(0o000))?;
+        }
+        for assoc in &entry.associated_entries {
+            move_or_copy(
+                Path::new(&assoc.original_path),
+                Path::new(&assoc.quarantined_path),
+            )?;
+        }
         Ok(entry)
     }
 
-    /// Restores a previously quarantined item to its original location and restores its permissions,
-    /// along with all associated launch agents or daemons.
-    pub fn restore(&self, id: &str) -> std::io::Result<bool> {
-        let mut manifest = self.load_manifest();
-        let idx = manifest.items.iter().position(|i| i.id == id);
-
-        if let Some(pos) = idx {
-            let entry = manifest.items.remove(pos);
-            let q_path = Path::new(&entry.quarantined_path);
-            let orig_path = Path::new(&entry.original_path);
-
-            if q_path.exists() {
-                // Restore original permissions first
-                let _ = fs::set_permissions(q_path, fs::Permissions::from_mode(entry.original_mode));
-
-                if let Some(parent) = orig_path.parent() {
-                    let _ = fs::create_dir_all(parent);
-                }
-
-                move_or_copy(q_path, orig_path)?;
-            }
-
-            // Restore all associated plists and metadata files
-            for assoc in &entry.associated_entries {
-                let assoc_q = Path::new(&assoc.quarantined_path);
-                let assoc_orig = Path::new(&assoc.original_path);
-                if assoc_q.exists() {
-                    if let Some(parent) = assoc_orig.parent() {
-                        let _ = fs::create_dir_all(parent);
-                    }
-                    let _ = move_or_copy(assoc_q, assoc_orig);
-                }
-            }
-
-            let _ = self.save_manifest(&manifest);
-            Ok(true)
-        } else {
-            Ok(false)
+    /// Restores vaulted files to their original locations without overwriting existing items.
+    pub fn restore(&self, id: &str) -> io::Result<bool> {
+        let mut manifest = self.load_manifest()?;
+        let Some(pos) = manifest.items.iter().position(|entry| entry.id == id) else {
+            return Ok(false);
+        };
+        let entry = &manifest.items[pos];
+        if !Self::has_vaulted_files(entry) {
+            return Ok(false);
         }
+        if entry.associated_entries.is_empty() && !entry.associated_paths.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Original paths for associated files are unavailable",
+            ));
+        }
+
+        let primary = (
+            entry.quarantined_path.as_str(),
+            entry.original_path.as_str(),
+            Some(entry.original_mode),
+        );
+        let files: Vec<_> = std::iter::once(primary)
+            .chain(entry.associated_entries.iter().map(|assoc| {
+                (
+                    assoc.quarantined_path.as_str(),
+                    assoc.original_path.as_str(),
+                    None,
+                )
+            }))
+            .filter(|(quarantined, _, _)| is_present(Path::new(quarantined)))
+            .collect();
+
+        for (_, original, _) in &files {
+            if is_present(Path::new(original)) {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("A file already exists at {original}"),
+                ));
+            }
+        }
+        for (quarantined, original, mode) in files {
+            let source = Path::new(quarantined);
+            let dest = Path::new(original);
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if let Some(mode) = mode {
+                fs::set_permissions(source, fs::Permissions::from_mode(mode))?;
+            }
+            if let Err(err) = move_or_copy(source, dest) {
+                if mode.is_some() {
+                    let _ = fs::set_permissions(source, fs::Permissions::from_mode(0o000));
+                }
+                return Err(err);
+            }
+        }
+
+        manifest.items.remove(pos);
+        self.save_manifest(&manifest)?;
+        Ok(true)
     }
 }

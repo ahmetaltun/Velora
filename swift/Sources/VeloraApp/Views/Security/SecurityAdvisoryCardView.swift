@@ -18,11 +18,7 @@ public struct SecurityAdvisoryCardView: View {
             }
 
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ],
+                columns: [GridItem(.adaptive(minimum: 175), spacing: 12)],
                 spacing: 12
             ) {
                 tipTile(

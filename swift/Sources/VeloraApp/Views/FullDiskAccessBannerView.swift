@@ -19,15 +19,15 @@ public struct FullDiskAccessBannerView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Full Disk Access Recommended")
+                Text("Full Disk Access")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.textPrimary)
 
-                Text("Velora requires Full Disk Access to scan protected system caches, snapshots, and orphaned residues.")
+                Text("Allow scans of protected files.")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundColor(VeloraTheme.textSecondary)
-                    .lineLimit(1)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 12)
 
@@ -37,7 +37,7 @@ public struct FullDiskAccessBannerView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 10, weight: .bold))
-                    Text("Grant Access")
+                    Text("Open Settings")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                 }
                 .foregroundColor(.white)
@@ -47,6 +47,7 @@ public struct FullDiskAccessBannerView: View {
                 .shadow(color: VeloraTheme.accentViolet.opacity(0.3), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
+            .fixedSize()
 
             Button(action: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {

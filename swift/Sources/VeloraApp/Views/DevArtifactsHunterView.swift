@@ -79,11 +79,11 @@ public struct DevArtifactsHunterView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Build Artifact Hunter",
-                subtitle: "Verified workspace build directories (target/, node_modules, .venv, .build)",
+                title: "Build Junk",
+                subtitle: "Build outputs and installed dependencies.",
                 systemImage: "hammer.fill",
                 accentColor: VeloraTheme.accentAmber
             ) {
@@ -139,140 +139,26 @@ public struct DevArtifactsHunterView: View {
                 }
             }
 
-            // Filter Chips Bar
-            HStack(spacing: 8) {
-                ToolFilterChip(
-                    title: "All (\(viewModel.devArtifacts.count))",
-                    isSelected: selectedFilter == "All",
-                    accentColor: VeloraTheme.accentAmber
-                ) {
-                    selectedFilter = "All"
-                }
-
-                let staleCount = viewModel.devArtifacts.filter { $0.inactivityLabel.contains("Stale") }.count
-                if staleCount > 0 {
-                    ToolFilterChip(
-                        title: "Stale >60d (\(staleCount))",
-                        isSelected: selectedFilter == "Stale",
-                        accentColor: VeloraTheme.accentPink
-                    ) {
-                        selectedFilter = "Stale"
-                    }
-                }
-
-                let rustCount = viewModel.devArtifacts.filter { $0.kindName.contains("Rust") }.count
-                if rustCount > 0 {
-                    ToolFilterChip(
-                        title: "Rust target/ (\(rustCount))",
-                        isSelected: selectedFilter == "Rust",
-                        accentColor: VeloraTheme.accentAmber
-                    ) {
-                        selectedFilter = "Rust"
-                    }
-                }
-
-                let nodeCount = viewModel.devArtifacts.filter { $0.kindName.contains("Node") }.count
-                if nodeCount > 0 {
-                    ToolFilterChip(
-                        title: "node_modules (\(nodeCount))",
-                        isSelected: selectedFilter == "Node",
-                        accentColor: VeloraTheme.accentEmerald
-                    ) {
-                        selectedFilter = "Node"
-                    }
-                }
-
-                let pythonCount = viewModel.devArtifacts.filter { $0.kindName.contains("Python") }.count
-                if pythonCount > 0 {
-                    ToolFilterChip(
-                        title: "Python .venv (\(pythonCount))",
-                        isSelected: selectedFilter == "Python",
-                        accentColor: VeloraTheme.accentBlue
-                    ) {
-                        selectedFilter = "Python"
-                    }
-                }
-
-                let swiftCount = viewModel.devArtifacts.filter { $0.kindName.contains("Swift") }.count
-                if swiftCount > 0 {
-                    ToolFilterChip(
-                        title: "Swift .build (\(swiftCount))",
-                        isSelected: selectedFilter == "Swift",
-                        accentColor: VeloraTheme.accentViolet
-                    ) {
-                        selectedFilter = "Swift"
-                    }
-                }
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Search build artifacts...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(VeloraTheme.textPrimary)
-                        .frame(width: 140)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-
-                Text("Total: \(formatBytes(totalFoundBytes))")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(VeloraTheme.textMuted)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(VeloraTheme.obsidianElevated.opacity(0.6))
-            .overlay(alignment: .bottom) {
-                Divider().overlay(VeloraTheme.cardBorder)
+            ToolFilterBar(prompt: "Search build artifacts", selection: $selectedFilter, query: $searchFilter, summary: formatBytes(totalFoundBytes) + " total") {
+                Text("All artifacts (\(viewModel.devArtifacts.count))").tag("All")
+                Text("Stale (over 60 days)").tag("Stale")
+                Text("Rust").tag("Rust")
+                Text("Node.js").tag("Node")
+                Text("Python").tag("Python")
+                Text("Swift").tag("Swift")
             }
 
             // Content Area
             if viewModel.isLoadingDevArtifacts {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Hunting build artifacts across indexed volume...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Looking for build artifacts…")
             } else if filteredArtifacts.isEmpty {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentEmerald)
-                    }
-                    Text("No Build Artifacts Found")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Your indexed workspaces are clean, or no artifacts match the active filter.")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(
+                    title: viewModel.devArtifacts.isEmpty ? "No build artifacts found" : "No matching artifacts",
+                    message: viewModel.hasIndexedData ? nil : "Scan your file catalog to look for build artifacts.",
+                    icon: "hammer"
+                )
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredArtifacts) { item in
                         let isStaged = stagedPaths.contains(item.path)
                         BuildArtifactCard(
@@ -288,13 +174,10 @@ public struct DevArtifactsHunterView: View {
                                 }
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(VeloraTheme.obsidianBase)
-                .listStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
             }
         }
         .background(VeloraTheme.obsidianBase)
@@ -448,11 +331,7 @@ private struct BuildArtifactCard: View {
             }
 
             Button("Open in Terminal") {
-                let script = "tell application \"Terminal\" to do script \"cd '\(item.path)'\""
-                if let appleScript = NSAppleScript(source: script) {
-                    var error: NSDictionary?
-                    appleScript.executeAndReturnError(&error)
-                }
+                TerminalActions.openDirectory(item.path)
             }
 
             Divider()

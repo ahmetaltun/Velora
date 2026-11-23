@@ -16,7 +16,7 @@ public struct ShredConfirmationSheet: View {
     }
 
     private var totalBytesFormatted: String {
-        ByteCountFormatter.string(fromByteCount: Int64(viewModel.shredQueueTotalSize), countStyle: .file)
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: viewModel.shredQueueTotalSize), countStyle: .file)
     }
 
     public var body: some View {
@@ -37,7 +37,7 @@ public struct ShredConfirmationSheet: View {
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(VeloraTheme.textPrimary)
 
-                    Text("This operation completely bypasses Trash and is mathematically irreversible.")
+                    Text("Velora overwrites the selected files and deletes them without using Trash. SSDs, snapshots, and backups can retain copies.")
                         .font(.system(size: 12))
                         .foregroundColor(VeloraTheme.textSecondary)
                 }
@@ -130,7 +130,7 @@ public struct ShredConfirmationSheet: View {
                         .toggleStyle(.checkbox)
                         .padding(.top, 1)
 
-                    Text("I acknowledge that these items will be permanently sanitized and can never be recovered.")
+                    Text("I understand that Velora will delete these items without moving them to Trash.")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundColor(VeloraTheme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)

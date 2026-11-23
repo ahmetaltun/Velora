@@ -45,11 +45,11 @@ public struct DockerStorageView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Docker Deep Inspection",
-                subtitle: "Dangling layers, unused volumes, BuildKit cache, and APFS VM sparse disk reclamation",
+                title: "Docker Storage",
+                subtitle: "Host disks, images, containers, and volumes.",
                 systemImage: "cylinder.split.1x2",
                 accentColor: VeloraTheme.accentBlue
             ) {
@@ -107,7 +107,7 @@ public struct DockerStorageView: View {
 
             // Metric Cards Row
             if let s = summary {
-                HStack(spacing: 12) {
+                ToolMetrics {
                     ToolMetricCardView(
                         title: "Host VM Disk",
                         value: formatBytes(s.totalHostAllocatedBytes),
@@ -200,195 +200,74 @@ public struct DockerStorageView: View {
                 }
             }
 
-            // Category Filter Bar & Action Strip
-            HStack(spacing: 8) {
-                ToolFilterChip(title: "All", isSelected: selectedFilter == "All", accentColor: VeloraTheme.accentBlue) { selectedFilter = "All" }
-                ToolFilterChip(title: "Dangling Layers", isSelected: selectedFilter == "Dangling Layers", accentColor: VeloraTheme.accentAmber) { selectedFilter = "Dangling Layers" }
-                ToolFilterChip(title: "Unused Images", isSelected: selectedFilter == "Unused Images", accentColor: VeloraTheme.accentViolet) { selectedFilter = "Unused Images" }
-                ToolFilterChip(title: "Anonymous Volumes", isSelected: selectedFilter == "Anonymous Volumes", accentColor: VeloraTheme.accentPink) { selectedFilter = "Anonymous Volumes" }
-                ToolFilterChip(title: "Named Volumes", isSelected: selectedFilter == "Named Volumes", accentColor: VeloraTheme.accentCyan) { selectedFilter = "Named Volumes" }
-                ToolFilterChip(title: "BuildKit Cache", isSelected: selectedFilter == "BuildKit Cache", accentColor: VeloraTheme.accentEmerald) { selectedFilter = "BuildKit Cache" }
-                ToolFilterChip(title: "Containers", isSelected: selectedFilter == "Containers", accentColor: VeloraTheme.accentBlue) { selectedFilter = "Containers" }
-
-                Spacer()
-
-                // Search Filter
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Filter items...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                .frame(width: 180)
+            ToolFilterBar(prompt: "Search Docker items", selection: $selectedFilter, query: $searchFilter) {
+                Text("All items").tag("All")
+                Text("Dangling Layers").tag("Dangling Layers")
+                Text("Unused Images").tag("Unused Images")
+                Text("Anonymous Volumes").tag("Anonymous Volumes")
+                Text("Named Volumes").tag("Named Volumes")
+                Text("BuildKit Cache").tag("BuildKit Cache")
+                Text("Containers").tag("Containers")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-
-            Divider().overlay(VeloraTheme.cardBorder)
 
             // Content List
             if viewModel.isLoadingDocker {
-                Spacer()
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Inspecting Docker host VM disks and daemon storage...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                }
-                Spacer()
+                ToolStatusView(title: "Reading Docker storage…")
             } else if let s = summary {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        // 1. Host VM Disks Section
-                        if selectedFilter == "All" {
-                            ForEach(s.vmDisks) { disk in
-                                DockerDiskRow(disk: disk, formatBytes: formatBytes, formatRelativeDate: formatRelativeDate)
-                            }
-                        }
-
-                        // 2. Images & Dangling Layers
-                        if selectedFilter == "All" || selectedFilter == "Dangling Layers" || selectedFilter == "Unused Images" {
-                            ForEach(filteredImages(s.images)) { img in
-                                DockerImageRow(image: img, formatBytes: formatBytes, formatRelativeDate: formatRelativeDate)
-                            }
-                        }
-
-                        // 3. Volumes
-                        if selectedFilter == "All" || selectedFilter == "Anonymous Volumes" || selectedFilter == "Named Volumes" {
-                            ForEach(filteredVolumes(s.volumes)) { vol in
-                                DockerVolumeRow(volume: vol, formatBytes: formatBytes)
-                            }
-                        }
-
-                        // 4. BuildKit Cache
-                        if selectedFilter == "All" || selectedFilter == "BuildKit Cache" {
-                            ForEach(filteredBuildCache(s.buildCache)) { bc in
-                                DockerBuildCacheRow(cache: bc, formatBytes: formatBytes)
-                            }
-                        }
-
-                        // 5. Containers
-                        if selectedFilter == "All" || selectedFilter == "Containers" {
-                            ForEach(filteredContainers(s.containers)) { cnt in
-                                DockerContainerRow(container: cnt, formatBytes: formatBytes)
-                            }
+                LazyVStack(spacing: 8) {
+                    // 1. Host VM Disks Section
+                    if selectedFilter == "All" {
+                        ForEach(s.vmDisks) { disk in
+                            DockerDiskRow(disk: disk, formatBytes: formatBytes, formatRelativeDate: formatRelativeDate)
                         }
                     }
-                    .padding(20)
+
+                    // 2. Images & Dangling Layers
+                    if selectedFilter == "All" || selectedFilter == "Dangling Layers" || selectedFilter == "Unused Images" {
+                        ForEach(filteredImages(s.images)) { img in
+                            DockerImageRow(image: img, formatBytes: formatBytes, formatRelativeDate: formatRelativeDate)
+                        }
+                    }
+
+                    // 3. Volumes
+                    if selectedFilter == "All" || selectedFilter == "Anonymous Volumes" || selectedFilter == "Named Volumes" {
+                        ForEach(filteredVolumes(s.volumes)) { vol in
+                            DockerVolumeRow(volume: vol, formatBytes: formatBytes)
+                        }
+                    }
+
+                    // 4. BuildKit Cache
+                    if selectedFilter == "All" || selectedFilter == "BuildKit Cache" {
+                        ForEach(filteredBuildCache(s.buildCache)) { bc in
+                            DockerBuildCacheRow(cache: bc, formatBytes: formatBytes)
+                        }
+                    }
+
+                    // 5. Containers
+                    if selectedFilter == "All" || selectedFilter == "Containers" {
+                        ForEach(filteredContainers(s.containers)) { cnt in
+                            DockerContainerRow(container: cnt, formatBytes: formatBytes)
+                        }
+                    }
                 }
+                .padding(20)
             } else {
-                Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "shippingbox.circle")
-                        .font(.system(size: 40))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Text("No Docker storage information loaded yet.")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Button("Scan Docker Now") {
-                        viewModel.loadDockerSummary()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                Spacer()
+                ToolStatusView(title: "No Docker storage information", message: "Use Refresh to inspect Docker storage.", icon: "shippingbox")
             }
 
-            Divider().overlay(VeloraTheme.cardBorder)
-
-            // Bottom Prune Actions Toolbar
-            HStack(spacing: 12) {
-                // Prune Dangling Layers Button (Safe)
-                Button(action: {
-                    viewModel.pruneDockerDanglingImages()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.stack.3d.down.right")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Prune Dangling Layers")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                    }
-                    .foregroundColor(VeloraTheme.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isPruningDockerAction)
-                .help("Safely prunes untagged intermediate image layers (<none>:<none>)")
-
-                // Prune Anonymous Volumes Button
-                Button(action: {
-                    viewModel.pruneDockerAnonymousVolumes()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "externaldrive.badge.xmark")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Prune Anonymous Volumes")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                    }
-                    .foregroundColor(VeloraTheme.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isPruningDockerAction)
-                .help("Prunes unattached 64-character hash anonymous volumes created implicitly by VOLUME directives")
-
-                // Prune BuildKit Cache
-                Button(action: {
-                    viewModel.pruneDockerBuildCache()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "hammer.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Prune BuildKit Cache")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                    }
-                    .foregroundColor(VeloraTheme.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isPruningDockerAction)
-                .help("Prunes intermediate build cache stages created during docker build")
-
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack {
                 Spacer()
-
-                // System Prune All
-                Button(action: {
-                    showSystemPruneConfirmation = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("System Prune All...")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(
-                        LinearGradient(
-                            colors: [VeloraTheme.accentPink, VeloraTheme.accentViolet],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: Capsule()
-                    )
-                    .shadow(color: VeloraTheme.accentPink.opacity(0.35), radius: 6, x: 0, y: 2)
+                Menu("Prune Actions", systemImage: "trash") {
+                    Button("Prune Dangling Layers") { viewModel.pruneDockerDanglingImages() }
+                    Button("Prune Anonymous Volumes") { viewModel.pruneDockerAnonymousVolumes() }
+                    Button("Prune BuildKit Cache") { viewModel.pruneDockerBuildCache() }
+                    Divider()
+                    Button("System Prune All…", role: .destructive) { showSystemPruneConfirmation = true }
                 }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isPruningDockerAction)
+                .fixedSize()
+                .disabled(viewModel.isPruningDockerAction || viewModel.isInteractionDisabled || viewModel.isLoadingDocker)
                 .confirmationDialog(
                     "Comprehensive Docker Prune",
                     isPresented: $showSystemPruneConfirmation,
@@ -399,14 +278,14 @@ public struct DockerStorageView: View {
                     }
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("This will remove all stopped containers, all unused networks, all dangling and unreferenced images, and unattached volumes via docker system prune -a --volumes.")
+                    Text("Removes stopped containers, unused networks and images, and unattached volumes via docker system prune -a --volumes.")
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(VeloraTheme.obsidianBase)
+            .padding(.vertical, 9)
+            .background(VeloraTheme.obsidianElevated)
+            .overlay(alignment: .top) { Divider().overlay(VeloraTheme.cardBorder) }
         }
-        .background(VeloraTheme.obsidianBase)
         .onAppear {
             if viewModel.dockerSummary == nil {
                 viewModel.loadDockerSummary()

@@ -155,6 +155,15 @@ impl VolumeIndex {
             if let Some(dir_id) = self.find_dir_by_path(path_obj) {
                 // Target is a directory in the index: tombstone dir and all recursive children
                 self.collect_descendant_dirs(dir_id, &mut target_dirs);
+                // The directory's own file record belongs to its parent.
+                if let Some(entry) = self.dirs.get(dir_id) {
+                    if let Some(parent_id) = entry.parent {
+                        target_files
+                            .entry(parent_id)
+                            .or_default()
+                            .insert(self.pool.get(entry.name_offset, entry.name_len).to_string());
+                    }
+                }
             } else if let Some(parent) = path_obj.parent() {
                 if let Some(parent_id) = self.find_dir_by_path(parent) {
                     if let Some(file_name) = path_obj.file_name().and_then(|f| f.to_str()) {

@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct CleanScanBannerView: View {
     @Bindable public var viewModel: VeloraViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(viewModel: VeloraViewModel) {
         self.viewModel = viewModel
@@ -10,12 +11,13 @@ public struct CleanScanBannerView: View {
     public var body: some View {
         HStack(spacing: 12) {
             // Heartbeat Radar Orb
-            PulsingOrbView(isScanning: viewModel.isScanning, size: 16)
+            PulsingOrbView(isScanning: viewModel.isScanning && !reduceMotion, size: 16)
+                .accessibilityHidden(true)
 
             // Middle Section: Path Ticker & Shimmer Laser
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text("Scanning")
+                    Text(viewModel.cancelScanRequested ? "Stopping scan…" : "Scanning")
                         .font(.system(.caption, design: .rounded, weight: .bold))
                         .foregroundColor(VeloraTheme.mint)
 
@@ -26,7 +28,8 @@ public struct CleanScanBannerView: View {
                         .truncationMode(.middle)
                 }
 
-                LaserTrackView(isScanning: viewModel.isScanning, height: 3)
+                LaserTrackView(isScanning: viewModel.isScanning && !reduceMotion, height: 3)
+                    .accessibilityHidden(true)
             }
 
             Spacer(minLength: 16)
@@ -52,12 +55,13 @@ public struct CleanScanBannerView: View {
                 Button(action: {
                     viewModel.cancelScan()
                 }) {
-                    Image(systemName: "xmark.circle.fill")
+                    Label("Stop Scanning", systemImage: "xmark.circle.fill").labelStyle(.iconOnly)
                         .font(.system(size: 16))
                         .foregroundColor(.secondary.opacity(0.8))
                 }
                 .buttonStyle(.plain)
                 .help("Stop scanning")
+                .disabled(viewModel.cancelScanRequested)
             }
         }
         .padding(.horizontal, 14)

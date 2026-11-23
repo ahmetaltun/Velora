@@ -102,8 +102,8 @@ public struct SecureShredderView: View {
         VStack(spacing: 0) {
             // Header Bar
             BloomToolHeaderView(
-                title: "Cryptographic Secure Shredder",
-                subtitle: "Multi-pass physical block sanitization, POSIX F_FULLFSYNC hardware flush & directory inode scrubbing",
+                title: "Secure Shredder",
+                subtitle: "Overwrite and remove selected files or folders.",
                 systemImage: "lock.shield.fill",
                 accentColor: VeloraTheme.accentPink
             ) {
@@ -188,7 +188,7 @@ public struct SecureShredderView: View {
 
             // Main Content Area
             if viewModel.isShredding {
-                shreddingActiveView
+                ScrollView { shreddingActiveView }
             } else {
                 standardQueueView
             }
@@ -204,31 +204,23 @@ public struct SecureShredderView: View {
 
     private var standardQueueView: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Side-by-side Drop Zone and Staged Targets cards
-                HStack(alignment: .top, spacing: 16) {
-                    dropZoneCard
-                        .frame(maxWidth: .infinity)
+            VStack(spacing: 16) {
+                // Drop area and staged targets remain reachable in the same scroll view.
+                dropZoneCard
 
-                    if !viewModel.shredQueue.isEmpty {
-                        queuedItemsCard
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        emptyQueuedCard
-                            .frame(maxWidth: .infinity)
-                    }
+                if !viewModel.shredQueue.isEmpty {
+                    queuedItemsCard
+                } else {
+                    emptyQueuedCard
                 }
-                .fixedSize(horizontal: false, vertical: true)
 
-                // APFS Snapshot Advisory if detected
                 if activeSnapshotsCount > 0 {
                     apfsAdvisoryCard
                 }
 
-                // Algorithm Selection Cards
                 algorithmSelectorCard
             }
-            .padding(24)
+            .padding(20)
         }
     }
 
@@ -401,7 +393,7 @@ public struct SecureShredderView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.accentAmber)
 
-                Text("\(activeSnapshotsCount) active APFS local snapshot(s) exist on this container. Velora guarantees low-level hardware overwrite via F_FULLFSYNC on active file blocks; however, historic data versions preserved in existing APFS snapshots will persist until those snapshots are pruned or expire.")
+                Text("\(activeSnapshotsCount) active APFS local snapshot(s) exist on this container. APFS snapshots can retain earlier versions of files after overwriting.")
                     .font(.system(size: 11))
                     .foregroundColor(VeloraTheme.textSecondary)
                     .lineSpacing(2)
@@ -416,18 +408,15 @@ public struct SecureShredderView: View {
     private var algorithmSelectorCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Sanitization Specification")
+                Text("Overwrite Method")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(VeloraTheme.textPrimary)
                 Spacer()
-                Text("Enforces hardware write sync")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(VeloraTheme.textMuted)
             }
 
             let algorithms: [ShredAlgorithm] = [.zero, .randomNist80088, .dod522022M, .dod522022MEce]
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 10)], spacing: 10) {
                 ForEach(algorithms) { algo in
                     let isSelected = viewModel.selectedShredAlgorithm == algo
                     Button(action: {
@@ -449,7 +438,6 @@ public struct SecureShredderView: View {
                             Text(algo.description)
                                 .font(.system(size: 11))
                                 .foregroundColor(VeloraTheme.textMuted)
-                                .lineLimit(2)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -538,6 +526,7 @@ public struct SecureShredderView: View {
                                 Text(formatBytes(item.sizeBytes))
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(VeloraTheme.textSecondary)
+                                    .fixedSize()
 
                                 Button(action: {
                                     viewModel.removeFromShredQueue(id: item.id)
@@ -555,7 +544,7 @@ public struct SecureShredderView: View {
                         }
                     }
                 }
-                .frame(maxHeight: .infinity)
+                .frame(maxHeight: 260)
 
                 Divider().overlay(VeloraTheme.cardBorder)
 

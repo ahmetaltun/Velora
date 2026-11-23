@@ -15,6 +15,7 @@ extension AppPartRecord: Identifiable {
 public struct AppUninstallerDashboardView: View {
     @Bindable public var viewModel: VeloraViewModel
     @State private var selectedAppId: String?
+    @State private var showsCompactDetails = false
     @State private var searchFilter: String = ""
     @State private var filterMode: String = "User" // "All", "User", "Large"
     @State private var selectedPartPaths = Set<String>()
@@ -90,7 +91,7 @@ public struct AppUninstallerDashboardView: View {
             // Header Bar
             BloomToolHeaderView(
                 title: "App Uninstaller",
-                subtitle: "Deep footprint analysis: Bundle, Application Support, Containers, Caches & Preferences",
+                subtitle: "Review installed apps and their files before cleanup.",
                 systemImage: "app.badge.checkmark",
                 accentColor: VeloraTheme.accentBlue
             ) {
@@ -157,79 +158,26 @@ public struct AppUninstallerDashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(VeloraTheme.obsidianBase)
             } else {
-                HSplitView {
-                    // Left Column: App List & Filter
-                    VStack(spacing: 0) {
-                        // Filters & Search
-                        VStack(spacing: 8) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundColor(VeloraTheme.textSecondary)
-                                TextField("Filter apps...", text: $searchFilter)
-                                    .textFieldStyle(.plain)
-                                    .foregroundColor(VeloraTheme.textPrimary)
-                                if !searchFilter.isEmpty {
-                                    Button(action: { searchFilter = "" }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(VeloraTheme.textSecondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-
-                            Picker("", selection: $filterMode) {
-                                Text("User Apps").tag("User")
-                                Text("All").tag("All")
-                                Text("Large (>1GB)").tag("Large")
-                            }
-                            .pickerStyle(.segmented)
+                GeometryReader { geometry in
+                    if geometry.size.width >= 720 {
+                        HSplitView {
+                            appList(compact: false)
+                                .frame(minWidth: 240, idealWidth: 280, maxWidth: 340)
+                            appDetails
+                                .frame(minWidth: 370)
                         }
-                        .padding(12)
-                        .background(VeloraTheme.obsidianSidebar)
-
-                        Divider().overlay(VeloraTheme.cardBorder)
-
-                        List(filteredApps, selection: $selectedAppId) { app in
-                            AppRow(
-                                app: app,
-                                isRunning: isAppRunning(bundleId: app.bundleId),
-                                icon: appIcon(for: app.appPath),
-                                isSelected: (selectedAppId ?? filteredApps.first?.id) == app.id
-                            )
-                            .tag(app.id)
+                    } else if showsCompactDetails, selectedApp != nil {
+                        VStack(spacing: 0) {
+                            Button("All Applications", systemImage: "chevron.left") {
+                                showsCompactDetails = false
+                            }
+                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            appDetails
                         }
-                        .scrollContentBackground(.hidden)
-                        .background(VeloraTheme.obsidianSidebar)
-                    }
-                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
-
-                    // Right Column: Categorized Breakdown Inspector
-                    if let app = selectedApp {
-                        AppDetailView(
-                            app: app,
-                            isRunning: isAppRunning(bundleId: app.bundleId),
-                            icon: appIcon(for: app.appPath),
-                            viewModel: viewModel,
-                            selectedPartPaths: $selectedPartPaths,
-                            parseColor: parseColor,
-                            formatBytes: formatBytes
-                        )
-                        .frame(minWidth: 420)
                     } else {
-                        VStack(spacing: 12) {
-                            Image(systemName: "sidebar.right")
-                                .font(.system(size: 36))
-                                .foregroundColor(VeloraTheme.textMuted)
-                            Text("Select an application to inspect its full footprint")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(VeloraTheme.obsidianBase)
+                        appList(compact: true)
                     }
                 }
             }
@@ -238,6 +186,86 @@ public struct AppUninstallerDashboardView: View {
         .onAppear {
             if viewModel.installedApps.isEmpty {
                 viewModel.loadInstalledApps()
+            }
+        }
+    }
+
+    private func appList(compact: Bool) -> some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                ToolSearchField(prompt: "Search applications", query: $searchFilter)
+
+                Picker("Application category", selection: $filterMode) {
+                    Text("User Apps").tag("User")
+                    Text("All").tag("All")
+                    Text("Large (>1 GB)").tag("Large")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            .padding(12)
+            .background(VeloraTheme.obsidianSidebar)
+
+            Divider().overlay(VeloraTheme.cardBorder)
+
+            if filteredApps.isEmpty {
+                ToolStatusView(title: "No matching applications", icon: "magnifyingglass")
+                Spacer(minLength: 0)
+            } else {
+                List(filteredApps, selection: compact ? nil : $selectedAppId) { app in
+                    if compact {
+                        Button {
+                            selectedAppId = app.id
+                            showsCompactDetails = true
+                        } label: {
+                            HStack {
+                                appRow(app)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(VeloraTheme.textMuted)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        appRow(app)
+                            .tag(app.id)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(VeloraTheme.obsidianSidebar)
+            }
+        }
+        .onChange(of: selectedAppId) { _, id in
+            if !compact { showsCompactDetails = id != nil }
+        }
+    }
+
+    private func appRow(_ app: InstalledAppRecord) -> some View {
+        AppRow(
+            app: app,
+            isRunning: isAppRunning(bundleId: app.bundleId),
+            icon: appIcon(for: app.appPath),
+            isSelected: (selectedAppId ?? filteredApps.first?.id) == app.id
+        )
+    }
+
+    @ViewBuilder
+    private var appDetails: some View {
+        if let app = selectedApp {
+            AppDetailView(
+                app: app,
+                isRunning: isAppRunning(bundleId: app.bundleId),
+                icon: appIcon(for: app.appPath),
+                viewModel: viewModel,
+                selectedPartPaths: $selectedPartPaths,
+                parseColor: parseColor,
+                formatBytes: formatBytes
+            )
+        } else {
+            VStack {
+                ToolStatusView(title: "Select an application", icon: "sidebar.right")
+                Spacer(minLength: 0)
             }
         }
     }
@@ -363,6 +391,9 @@ private struct AppDetailView: View {
                         Text(app.bundleId)
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(VeloraTheme.textMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(app.bundleId)
 
                         if !app.version.isEmpty {
                             Text("• Version \(app.version)")
@@ -421,11 +452,11 @@ private struct AppDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Text("Categorized Storage Breakdown")
+                        Text("Storage Breakdown")
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(VeloraTheme.textPrimary)
                         Spacer()
-                        Text("\(app.parts.count) components found")
+                        Text("\(app.parts.count) items")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(VeloraTheme.textMuted)
                     }

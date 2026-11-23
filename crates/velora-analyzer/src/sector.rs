@@ -1,6 +1,7 @@
 use crate::category::CategoryKind;
 use crate::rollup::SizeRollup;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use velora_index::{DirId, VolumeIndex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,15 +28,12 @@ impl SectorBuilder {
         max_depth: u32,
         min_angle_deg: f32,
     ) -> Option<SunburstSector> {
+        let entry = volume.dirs.get(root_dir)?;
         let total_size = rollup.get_size(root_dir);
         let mut path = String::new();
         volume.dirs.build_full_path(root_dir, &volume.pool, &mut path);
 
-        let root_name = if let Some(entry) = volume.dirs.get(root_dir) {
-            volume.pool.get(entry.name_offset, entry.name_len).to_string()
-        } else {
-            "Root".to_string()
-        };
+        let root_name = volume.pool.get(entry.name_offset, entry.name_len).to_string();
 
         let mut root_sector = SunburstSector {
             name: root_name,
@@ -90,6 +88,8 @@ impl SectorBuilder {
         }
 
         let mut candidates = Vec::new();
+        let directories: HashMap<_, _> = volume.get_child_dirs(dir_id)
+            .into_iter().map(|(id, name)| (name, id)).collect();
 
         // 1. Collect direct child files and subdirectories
         for record in &volume.records {
@@ -99,20 +99,7 @@ impl SectorBuilder {
             if record.parent_dir == dir_id {
                 let name = volume.get_file_name(record);
                 if record.is_dir() {
-                    let mut matched_id = None;
-                    for i in 0..volume.dirs.len() {
-                        let cid = DirId(i as u32);
-                        if let Some(entry) = volume.dirs.get(cid) {
-                            if entry.parent == Some(dir_id) {
-                                let dname = volume.pool.get(entry.name_offset, entry.name_len);
-                                if dname == name {
-                                    matched_id = Some(cid);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if let Some(cid) = matched_id {
+                    if let Some(&cid) = directories.get(name) {
                         let dir_size = rollup.get_size(cid);
                         candidates.push(ChildCandidate {
                             name,

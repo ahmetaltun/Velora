@@ -112,9 +112,6 @@ pub fn scan_directories_with_progress_and_cancel(
 ) -> std::io::Result<()> {
     let context = ScanContext::new(listener, cancel_token);
     for &root_path in roots {
-        if !root_path.exists() {
-            continue;
-        }
         let root_str = root_path.to_string_lossy();
         let (offset, len) = volume.pool.push(&root_str);
         let root_dir_id = volume.dirs.insert(offset, len, None);
@@ -161,10 +158,7 @@ fn scan_single_root(
         ));
     }
 
-    let entries = match fs::read_dir(root_path) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
-    };
+    let entries = fs::read_dir(root_path)?;
 
     let mut direct_subdirs = Vec::new();
 
@@ -215,7 +209,7 @@ fn scan_single_root(
             let (name_offset, name_len) = volume.pool.push(&file_name);
             let dir_id = volume.dirs.insert(name_offset, name_len, Some(root_dir_id));
 
-            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime().max(0) as u64).unwrap_or(0);
 
             volume.add_file(FileRecord::new(
                 name_offset,
@@ -230,7 +224,7 @@ fn scan_single_root(
             direct_subdirs.push((entry_path, dir_id));
         } else {
             let size = meta.as_ref().map(|m| m.size()).unwrap_or(0);
-            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime().max(0) as u64).unwrap_or(0);
 
             if is_symlink {
                 flags.insert(FileFlags::IS_SYMLINK);
@@ -352,7 +346,7 @@ fn scan_dir_recursive(
             let (name_offset, name_len) = volume.pool.push(&file_name);
             let dir_id = volume.dirs.insert(name_offset, name_len, Some(current_dir));
 
-            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime().max(0) as u64).unwrap_or(0);
 
             volume.add_file(FileRecord::new(
                 name_offset,
@@ -367,7 +361,7 @@ fn scan_dir_recursive(
             subdirs.push((entry_path, dir_id));
         } else {
             let size = meta.as_ref().map(|m| m.size()).unwrap_or(0);
-            let modified = meta.as_ref().map(|m| m.mtime() as u64).unwrap_or(0);
+            let modified = meta.as_ref().map(|m| m.mtime().max(0) as u64).unwrap_or(0);
 
             if is_symlink {
                 flags.insert(FileFlags::IS_SYMLINK);

@@ -43,11 +43,7 @@ public struct SecurityAsepInspectorView: View {
 
             // 3 Scopes Grid
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ],
+                columns: [GridItem(.adaptive(minimum: 174), spacing: 12)],
                 spacing: 12
             ) {
                 scopeCard(

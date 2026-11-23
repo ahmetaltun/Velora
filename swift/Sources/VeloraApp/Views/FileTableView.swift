@@ -18,6 +18,7 @@ public struct FileTableView: View {
 
     private func updateSortedItems() {
         sortedItems = viewModel.displayedItems.sorted(using: sortOrder)
+        selectedItemIds.formIntersection(sortedItems.map(\.id))
     }
 
     public var body: some View {
@@ -28,7 +29,7 @@ public struct FileTableView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(VeloraTheme.accentCyan)
 
-                    Text("Search results for")
+                    Text("Results for")
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .foregroundColor(VeloraTheme.textSecondary)
 
@@ -39,13 +40,8 @@ public struct FileTableView: View {
 
                     Spacer()
 
-                    // Special Search Queries & Filter Guide
-                    SearchSyntaxChipsView(viewModel: viewModel)
-
-                    Spacer()
-
                     if !sortedItems.isEmpty {
-                        let isCapped = viewModel.isSearchCapped || sortedItems.count >= Int(VeloraViewModel.maxSearchResults)
+                        let isCapped = viewModel.isSearchCapped
                         HStack(spacing: 5) {
                             if isCapped {
                                 Image(systemName: "exclamationmark.circle.fill")
@@ -65,7 +61,7 @@ public struct FileTableView: View {
                         )
                         .help(isCapped ? "Showing the top 1,000 highest-relevance results. Use filters (size:, ext:, etc.) to narrow your search." : "\(sortedItems.count) total matches found.")
 
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(viewModel.currentFolderTotalSize), countStyle: .file))
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(clamping: viewModel.searchResultBytes), countStyle: .file))
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .foregroundColor(VeloraTheme.textSecondary)
                     }
@@ -85,6 +81,15 @@ public struct FileTableView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .background(VeloraTheme.obsidianElevated)
+
+                // Special Search Queries & Filter Guide
+                ScrollView(.horizontal) {
+                    SearchSyntaxChipsView(viewModel: viewModel)
+                        .disabled(viewModel.isInteractionDisabled)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
                 .background(VeloraTheme.obsidianElevated)
                 .overlay(
                     Rectangle()
@@ -106,56 +111,19 @@ public struct FileTableView: View {
                         Text(item.name)
                             .font(.system(.body, design: .rounded, weight: item.isDir ? .medium : .regular))
                             .lineLimit(1)
+                            .help(item.name)
                     }
                 }
-                .width(min: 180, ideal: 260)
+                .width(min: 135, ideal: 260)
 
                 // MARK: Size & Proportion Column
                 TableColumn("Size", value: \.sizeBytes) { item in
-                    HStack(spacing: 8) {
-                        Text(formatBytes(item.sizeBytes))
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(VeloraTheme.textPrimary)
-                            .frame(minWidth: 72, alignment: .trailing)
-
-                        if viewModel.currentFolderTotalSize > 0 {
-                            let ratio = min(1.0, max(0.02, Double(item.sizeBytes) / Double(viewModel.currentFolderTotalSize)))
-                            let barWidth: CGFloat = 50
-
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(VeloraTheme.textSecondary.opacity(0.16))
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: item.colorHex), Color(hex: item.colorHex).opacity(0.65)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: max(4, barWidth * ratio))
-                            }
-                            .frame(width: barWidth, height: 5)
-
-                            Text(String(format: "%4.1f%%", (Double(item.sizeBytes) / Double(viewModel.currentFolderTotalSize)) * 100))
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(VeloraTheme.textSecondary)
-                                .frame(width: 44, alignment: .trailing)
-                        }
-                    }
+                    Text(formatBytes(item.sizeBytes))
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(VeloraTheme.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .width(min: 170, ideal: 200)
-
-                // MARK: Kind Column
-                TableColumn("Kind", value: \.colorHex) { item in
-                    Text(kindDescription(for: item))
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(VeloraTheme.textSecondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
-                }
-                .width(min: 80, ideal: 100)
+                .width(min: 72, ideal: 105)
 
                 // MARK: Modified Date Column
                 TableColumn("Modified", value: \.modifiedSecs) { item in
@@ -163,7 +131,7 @@ public struct FileTableView: View {
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(VeloraTheme.textSecondary)
                 }
-                .width(min: 110, ideal: 140)
+                .width(min: 92, ideal: 140)
 
                 // MARK: Path Column
                 TableColumn("Path", value: \.path) { item in
@@ -172,18 +140,21 @@ public struct FileTableView: View {
                         .foregroundColor(VeloraTheme.textMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(item.path)
                 }
-                .width(min: 150, ideal: 260)
+                .width(min: 88, ideal: 230)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
             .scrollContentBackground(.hidden)
             .background(VeloraTheme.obsidianBase)
+            .disabled(viewModel.isInteractionDisabled)
             .contextMenu(forSelectionType: String.self) { selectedIds in
-                if let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                if !viewModel.isInteractionDisabled, let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
                     itemContextMenu(for: item, selectedIds: selectedIds)
                 }
             } primaryAction: { selectedIds in
-                if let firstId = selectedIds.first, let item = sortedItems.first(where: { $0.id == firstId }) {
+                if selectedIds.count == 1, let firstId = selectedIds.first,
+                   let item = sortedItems.first(where: { $0.id == firstId }) {
                     handleItemDoubleClick(item)
                 }
             }
@@ -238,8 +209,10 @@ public struct FileTableView: View {
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                 )
+            } else if !viewModel.isSearchActive && viewModel.isLoadingFolder {
+                ProgressView("Loading folder…")
             } else if sortedItems.isEmpty {
-                if !viewModel.searchQuery.isEmpty {
+                if viewModel.isSearchActive {
                     ContentUnavailableView {
                         Label("No Matches Found", systemImage: "magnifyingglass")
                     } description: {
@@ -250,19 +223,16 @@ public struct FileTableView: View {
                             .foregroundColor(.secondary)
                             .padding(.top, 4)
                     }
-                } else {
+                } else if let error = viewModel.folderErrorMessage {
                     ContentUnavailableView {
-                        Label("Folder Empty or Not Indexed", systemImage: "folder")
+                        Label("Can’t Open Folder", systemImage: "folder.badge.questionmark")
                     } description: {
-                        Text("No files found in \(viewModel.currentPath)")
+                        Text(error)
                     } actions: {
-                        Button("Scan This Folder") {
-                            viewModel.scanCurrentPath()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(viewModel.isInteractionDisabled)
-                        .padding(.top, 6)
+                        Button("Try Again") { viewModel.refreshTableItems() }
                     }
+                } else {
+                    ContentUnavailableView("Empty Folder", systemImage: "folder")
                 }
             }
         }
@@ -307,6 +277,7 @@ public struct FileTableView: View {
             }
             Button("Secure Shred...") {
                 viewModel.queueForShredding(paths: [item.path])
+                viewModel.clearSearch()
                 viewModel.activeSidebarId = "tool_shredder"
             }
         } else {
@@ -320,6 +291,7 @@ public struct FileTableView: View {
             Button("Secure Shred \(selectedIds.count) Items...") {
                 let paths = selectedIds.compactMap { id in sortedItems.first(where: { $0.id == id })?.path }
                 viewModel.queueForShredding(paths: paths)
+                viewModel.clearSearch()
                 viewModel.activeSidebarId = "tool_shredder"
             }
             Divider()
@@ -343,11 +315,7 @@ public struct FileTableView: View {
 
     private func openInTerminal(path: String, isDir: Bool) {
         let folder = isDir ? path : (path as NSString).deletingLastPathComponent
-        let script = "tell application \"Terminal\" to do script \"cd '\(folder)'\""
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
+        TerminalActions.openDirectory(folder)
     }
 
     private func formatTimestamp(_ secs: UInt64) -> String {
@@ -359,25 +327,6 @@ public struct FileTableView: View {
         return formatter.string(from: date)
     }
 
-    private func kindDescription(for item: SearchResultItem) -> String {
-        if item.isDir {
-            switch item.colorHex.uppercased() {
-            case "#F59E0B": return "Dev Cache"
-            case "#EF4444": return "System Cache"
-            default: return "Folder"
-            }
-        }
-        switch item.colorHex.uppercased() {
-        case "#3B82F6": return "Media"
-        case "#10B981": return "Document"
-        case "#8B5CF6": return "Archive"
-        case "#F59E0B": return "Source Code"
-        case "#EF4444": return "System Cache"
-        default:
-            let ext = (item.name as NSString).pathExtension.uppercased()
-            return ext.isEmpty ? "File" : ext
-        }
-    }
 
     private func fileIconName(for name: String) -> String {
         let ext = (name as NSString).pathExtension.lowercased()

@@ -28,9 +28,15 @@ impl CollectorTray {
     }
 
     pub fn add(&mut self, item: CollectedItem) {
-        if !self.items.iter().any(|i| i.path == item.path) {
-            self.items.push(item);
+        if self.items.iter().any(|existing| {
+            existing.path == item.path || (existing.is_dir && item.path.starts_with(&existing.path))
+        }) {
+            return;
         }
+        if item.is_dir {
+            self.items.retain(|existing| !existing.path.starts_with(&item.path));
+        }
+        self.items.push(item);
     }
 
     pub fn remove(&mut self, path: &std::path::Path) {

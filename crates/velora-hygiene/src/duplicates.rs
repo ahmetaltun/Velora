@@ -356,6 +356,9 @@ impl DuplicateFinder {
         // Fast pre-check: Never open or read cloud-evicted dataless files (iCloud Drive / OneDrive)
         // to avoid triggering an on-demand background network download of the file.
         let sym_meta = std::fs::symlink_metadata(path).ok()?;
+        if !sym_meta.is_file() || sym_meta.len() != file_size {
+            return None;
+        }
         #[cfg(target_os = "macos")]
         {
             use std::os::macos::fs::MetadataExt as MacMetadataExt;
@@ -382,10 +385,8 @@ impl DuplicateFinder {
         let mut buffer = [0u8; 4096];
 
         // 1. Prefix probe (first 4KB)
-        let bytes_read = file.read(&mut buffer).ok()?;
-        if bytes_read == 0 {
-            return None;
-        }
+        let bytes_read = file_size.min(buffer.len() as u64) as usize;
+        file.read_exact(&mut buffer[..bytes_read]).ok()?;
         hasher.update(&buffer[..bytes_read]);
 
         if file_size <= 4096 {

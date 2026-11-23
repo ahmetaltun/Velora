@@ -64,11 +64,11 @@ public struct XcodeStorageView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ToolPage {
             // Header Bar
             BloomToolHeaderView(
-                title: "Xcode Storage Inspector",
-                subtitle: "DerivedData, build archives, device symbol caches, and simulator runtimes",
+                title: "Xcode Storage",
+                subtitle: "Build data, archives, device support, and simulators.",
                 systemImage: "wrench.and.screwdriver.fill",
                 accentColor: VeloraTheme.accentEmerald
             ) {
@@ -146,7 +146,7 @@ public struct XcodeStorageView: View {
 
             // Metric Cards Row
             if let s = summary {
-                HStack(spacing: 12) {
+                ToolMetrics {
                     ToolMetricCardView(title: "Total Xcode", value: formatBytes(s.totalBytes), accentColor: VeloraTheme.textPrimary)
                     ToolMetricCardView(title: "DerivedData", value: formatBytes(s.derivedDataBytes), accentColor: VeloraTheme.accentBlue)
                     ToolMetricCardView(title: "Archives", value: formatBytes(s.archivesBytes), accentColor: VeloraTheme.accentViolet)
@@ -185,79 +185,25 @@ public struct XcodeStorageView: View {
                 }
             }
 
-            // Category Filter Bar
-            HStack(spacing: 8) {
-                ToolFilterChip(title: "All", isSelected: selectedCategory == "All", accentColor: VeloraTheme.accentEmerald) { selectedCategory = "All" }
-                ToolFilterChip(title: "DerivedData", isSelected: selectedCategory == "DerivedData", accentColor: VeloraTheme.accentBlue) { selectedCategory = "DerivedData" }
-                ToolFilterChip(title: "Archives", isSelected: selectedCategory == "Archives", accentColor: VeloraTheme.accentViolet) { selectedCategory = "Archives" }
-                ToolFilterChip(title: "Device Support", isSelected: selectedCategory == "Device", accentColor: VeloraTheme.accentAmber) { selectedCategory = "Device" }
-                ToolFilterChip(title: "Simulators", isSelected: selectedCategory == "Simulator", accentColor: VeloraTheme.accentEmerald) { selectedCategory = "Simulator" }
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    TextField("Search Xcode items...", text: $searchFilter)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(VeloraTheme.textPrimary)
-                        .frame(width: 140)
-                    if !searchFilter.isEmpty {
-                        Button(action: { searchFilter = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(VeloraTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(VeloraTheme.cardBorder, lineWidth: 1))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(VeloraTheme.obsidianElevated.opacity(0.6))
-            .overlay(alignment: .bottom) {
-                Divider().overlay(VeloraTheme.cardBorder)
+            ToolFilterBar(prompt: "Search Xcode storage", selection: $selectedCategory, query: $searchFilter) {
+                Text("All categories").tag("All")
+                Text("DerivedData").tag("DerivedData")
+                Text("Archives").tag("Archives")
+                Text("Device Support").tag("Device")
+                Text("Simulators").tag("Simulator")
             }
 
             // Content Area
             if viewModel.isLoadingXcode {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.regular)
-                    Text("Analyzing Xcode storage directories...")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(title: "Reading Xcode storage…")
             } else if filteredItems.isEmpty {
-                VStack(spacing: 14) {
-                    Spacer()
-                    ZStack {
-                        Circle()
-                            .fill(VeloraTheme.accentEmerald.opacity(0.15))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 32))
-                            .foregroundColor(VeloraTheme.accentEmerald)
-                    }
-                    Text("No Items in This Category")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(VeloraTheme.textPrimary)
-                    Text("Xcode developer directory has zero caches here, or no items match the search query.")
-                        .font(.system(size: 12))
-                        .foregroundColor(VeloraTheme.textSecondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(VeloraTheme.obsidianBase)
+                ToolStatusView(
+                    title: summary?.items.isEmpty == false ? "No matching Xcode items" : "No Xcode storage found",
+                    message: summary?.items.isEmpty == false ? "Try another category or clear the search." : nil,
+                    icon: "hammer"
+                )
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredItems) { item in
                         let isStaged = stagedPaths.contains(item.path)
                         XcodeItemCard(
@@ -273,13 +219,10 @@ public struct XcodeStorageView: View {
                                 }
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(VeloraTheme.obsidianBase)
-                .listStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
             }
         }
         .background(VeloraTheme.obsidianBase)

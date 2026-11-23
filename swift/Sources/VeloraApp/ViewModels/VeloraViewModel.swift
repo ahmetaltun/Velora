@@ -9,13 +9,13 @@ public final class VeloraViewModel {
     public static let maxSearchResults: UInt32 = 1000
     public var searchQuery: String = ""
     public var isSearchCapped: Bool = false
-    public var searchResults: [SearchResultItem] = []
     public var displayedItems: [SearchResultItem] = []
     public var currentPath: String = ""
-    public var currentSunburst: SunburstSectorItem?
+    private var indexedRoot: String?
+    public var isLoadingFolder = false
+    public var folderErrorMessage: String?
     public var pathStack: [String] = []
-    public var sectorStack: [SunburstSectorItem] = []
-    public var currentFolderTotalSize: UInt64 = 0
+    public var searchResultBytes: UInt64 = 0
     public var collectorItems: [CollectedFile] = []
     public var collectorTotalSize: UInt64 = 0
     public var activeSidebarId: String = "volume_root"
@@ -26,7 +26,7 @@ public final class VeloraViewModel {
     public var scannedCount: UInt64 = 0
     public var scanThroughput: Double = 0
     public var cancelScanRequested: Bool = false
-    public var scanStatusMessage: String = "Ready"
+    public var catalogNotice: String?
     public var storageReconciliation: StorageReconciliationItem?
     public var isReconcilingStorage: Bool = false
     public var devArtifacts: [DevArtifactRecord] = []
@@ -54,11 +54,17 @@ public final class VeloraViewModel {
     public var isLoadingDuplicates: Bool = false
     public var securitySummary: SecuritySummaryRecord?
     public var isLoadingSecurity: Bool = false
-    public var quarantinedThreatIds: Set<String> = []
+    public var quarantinedItems: [QuarantinedItemRecord] = []
+    public var isUpdatingQuarantine = false
+    public var quarantineNotice: String?
+
+    public var quarantinedPaths: Set<String> {
+        Set(quarantinedItems.map(\.originalPath))
+    }
     public var isCleaning: Bool = false
     public var cleaningCurrentIndex: Int = 0
     public var cleaningTotalCount: Int = 0
-    public var cleaningFreedBytes: UInt64 = 0
+    public var cleaningMovedBytes: UInt64 = 0
     public var cleaningTotalBytes: UInt64 = 0
     public var cleaningCurrentFileName: String = ""
     public var cleaningEstimatedSecondsRemaining: Double? = nil
@@ -103,21 +109,22 @@ public final class VeloraViewModel {
         return min(cleaningCurrentIndex + 1, cleaningTotalCount)
     }
 
-    private var activeCleaningQueue: OperationQueue?
+    private var cleaningTask: Task<Void, Never>?
 
     public func cancelCleaning() {
         cancelCleaningRequested = true
-        activeCleaningQueue?.cancelAllOperations()
+        cleaningTask?.cancel()
     }
     private var pendingSearchWorkItem: DispatchWorkItem?
-    private var lastExecutedQuery: String?
+    private var searchRequest = UUID()
+    private var folderRequest = UUID()
     private var isSnapshotLoadingInProgress: Bool = false
     private var hasLoadedSnapshot: Bool = false
 
     /// Indicates whether global interaction (sidebar tools, search, navigation) is disabled
-    /// because catalog.bin is loading into memory or a volume scan is active.
+    /// while the catalog loads, a scan runs, or a file operation is active.
     public var isInteractionDisabled: Bool {
-        isScanning || isLoadingSnapshot || isShredding
+        isScanning || isLoadingSnapshot || isShredding || isCleaning || isUpdatingQuarantine
     }
 
     public init() {
@@ -125,14 +132,8 @@ public final class VeloraViewModel {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.currentPath = home
         self.pathStack = [home]
-        let hasIndex = SnapshotManager.shared.hasAnyBinaryIndexFile
-        self.isLoadingSnapshot = hasIndex
+        self.isLoadingSnapshot = SnapshotManager.shared.snapshotExists
         self.refreshStorageReconciliation()
-    }
-
-    /// Indicates whether a valid binary index snapshot file exists on disk.
-    public var hasBinaryIndex: Bool {
-        SnapshotManager.shared.hasAnyBinaryIndexFile
     }
 
     /// Formatted file size of the cached catalog.bin on disk if present.
@@ -142,65 +143,52 @@ public final class VeloraViewModel {
 
     /// Indicates whether the engine currently holds indexed volume data in memory.
     public var hasIndexedData: Bool {
-        scannedCount > 0 || currentSunburst != nil || engine.totalFiles() > 0
-    }
-
-    /// Determines if the initial scan hero UI should be presented when no binary index file exists.
-    public var shouldShowScanUI: Bool {
-        !hasBinaryIndex && !hasIndexedData
+        indexedRoot != nil
     }
 
     /// Indicates whether a global search query is currently entered and active.
     public var isSearchActive: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Clears the active search query and resets search results.
     public func clearSearch() {
-        searchQuery = ""
-        isSearchCapped = false
         performSearch(query: "")
     }
 
     public func cancelScan() {
+        guard isScanning, !cancelScanRequested else { return }
         cancelScanRequested = true
         engine.cancelScan()
-        isScanning = false
-        scanStatusMessage = "Scan cancelled"
     }
 
     /// Asynchronously deserializes and loads the offline snapshot on a background thread.
     /// This prevents blocking window presentation on app launch.
     public func loadCachedSnapshotIfAvailable() {
-        guard !hasLoadedSnapshot && !isSnapshotLoadingInProgress else { return }
-        guard SnapshotManager.shared.hasAnyBinaryIndexFile else {
+        guard !hasLoadedSnapshot, !isSnapshotLoadingInProgress, !isScanning, !isCleaning, !isShredding else { return }
+        guard SnapshotManager.shared.snapshotExists else {
             isLoadingSnapshot = false
-            scanStatusMessage = "Ready for initial scan"
             return
         }
 
         isSnapshotLoadingInProgress = true
         isLoadingSnapshot = true
-        scanStatusMessage = "Loading indexed catalog in background..."
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
             let success = SnapshotManager.shared.loadSnapshot(engine: self.engine)
-            if success {
-                let total = self.engine.totalFiles()
-                let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+            if success, let root = self.engine.indexedRoot() {
+                let total = self.engine.activeFiles()
 
                 DispatchQueue.main.async {
                     self.hasLoadedSnapshot = true
                     self.isSnapshotLoadingInProgress = false
                     self.scannedCount = total
-                    self.currentSunburst = sunburst
-                    if let root = sunburst {
-                        self.sectorStack = [root]
-                    }
+                    self.indexedRoot = root
+                    self.currentPath = root
+                    self.pathStack = [root]
                     self.isLoadingSnapshot = false
-                    self.scanStatusMessage = "Loaded \(total) indexed items from cache"
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
                 }
@@ -209,7 +197,7 @@ public final class VeloraViewModel {
                     self.hasLoadedSnapshot = false
                     self.isSnapshotLoadingInProgress = false
                     self.isLoadingSnapshot = false
-                    self.scanStatusMessage = "Failed to load cached snapshot; please perform a clean scan"
+                    self.catalogNotice = "The saved catalog could not be opened. Scan a folder to rebuild it."
                     self.refreshTableItems()
                     self.refreshStorageReconciliation()
                 }
@@ -496,12 +484,16 @@ public final class VeloraViewModel {
     }
 
     public func loadSecurityScan() {
+        guard !isUpdatingQuarantine, !isLoadingSecurity else { return }
         isLoadingSecurity = true
+        quarantineNotice = nil
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self else { return }
+            let vault = Result { try self.engine.quarantinedItems(homePath: home) }
             let summary = self.engine.scanSecurity(homePath: home)
             DispatchQueue.main.async {
+                self.applyVaultInventory(vault)
                 self.securitySummary = summary
                 self.isLoadingSecurity = false
             }
@@ -509,24 +501,82 @@ public final class VeloraViewModel {
     }
 
     public func quarantineThreat(_ threat: SecurityThreatRecord) {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let success = self.engine.quarantineThreat(
-            homePath: home,
-            id: threat.id,
-            targetPath: threat.targetPath,
-            associatedPaths: threat.associatedPaths
-        )
-        if success {
-            self.quarantinedThreatIds.insert(threat.id)
+        quarantineThreats([threat])
+    }
+
+    public func quarantineThreats(_ threats: [SecurityThreatRecord]) {
+        let existing = quarantinedPaths
+        var targets = Set<String>()
+        let candidates = threats.filter {
+            $0.canQuarantine && !existing.contains($0.targetPath) && targets.insert($0.targetPath).inserted
+        }
+        guard !candidates.isEmpty else { return }
+        updateQuarantine { engine, home in
+            var failures: [String] = []
+            for threat in candidates {
+                do {
+                    try engine.quarantineThreat(
+                        homePath: home, id: threat.id, targetPath: threat.targetPath,
+                        associatedPaths: threat.associatedPaths
+                    )
+                } catch {
+                    failures.append("\(threat.name). \(Self.quarantineErrorText(error))")
+                }
+            }
+            if let first = failures.first {
+                return "\(failures.count) quarantine operations reported an error. \(first)"
+            }
+            return nil
         }
     }
 
     public func restoreThreat(_ threat: SecurityThreatRecord) {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let success = self.engine.restoreQuarantinedThreat(homePath: home, id: threat.id)
-        if success {
-            self.quarantinedThreatIds.remove(threat.id)
+        guard let item = quarantinedItems.first(where: { $0.originalPath == threat.targetPath }) else { return }
+        restoreQuarantinedItem(item)
+    }
+
+    public func restoreQuarantinedItem(_ item: QuarantinedItemRecord) {
+        updateQuarantine { engine, home in
+            do {
+                try engine.restoreQuarantinedThreat(homePath: home, id: item.id)
+                return nil
+            } catch {
+                return "Could not restore item. \(Self.quarantineErrorText(error))"
+            }
         }
+    }
+
+    private func updateQuarantine(_ operation: @escaping (VeloraEngine, String) -> String?) {
+        guard !isInteractionDisabled, !isLoadingSecurity else { return }
+        isUpdatingQuarantine = true
+        quarantineNotice = nil
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let message = operation(self.engine, home)
+            let vault = Result { try self.engine.quarantinedItems(homePath: home) }
+            DispatchQueue.main.async {
+                self.quarantineNotice = message
+                self.applyVaultInventory(vault)
+                self.isUpdatingQuarantine = false
+            }
+        }
+    }
+
+    private func applyVaultInventory(_ inventory: Result<[QuarantinedItemRecord], Error>) {
+        switch inventory {
+        case .success(let items):
+            quarantinedItems = items
+        case .failure(let error):
+            quarantineNotice = "Could not read the quarantine vault. \(Self.quarantineErrorText(error))"
+        }
+    }
+
+    private static func quarantineErrorText(_ error: Error) -> String {
+        if case QuarantineError.OperationFailed(let reason) = error {
+            return reason
+        }
+        return error.localizedDescription
     }
 
     /// Triggers parallel background calculation of all hygiene scanners once catalog.bin is in memory or after a scan completes.
@@ -545,25 +595,25 @@ public final class VeloraViewModel {
 
     public var devArtifactsBytes: UInt64? {
         if isLoadingDevArtifacts || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && devArtifacts.isEmpty { return nil }
+        if !hasIndexedData && devArtifacts.isEmpty { return nil }
         return devArtifacts.reduce(UInt64(0)) { $0 + $1.sizeBytes }
     }
 
     public var appLeftoversBytes: UInt64? {
         if isLoadingOrphans || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && orphanedResidues.isEmpty { return nil }
+        if !hasIndexedData && orphanedResidues.isEmpty { return nil }
         return orphanedResidues.reduce(UInt64(0)) { $0 + $1.sizeBytes }
     }
 
     public var xcodeStorageBytes: UInt64? {
         if isLoadingXcode || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && xcodeSummary == nil { return nil }
+        if !hasIndexedData && xcodeSummary == nil { return nil }
         return xcodeSummary?.totalBytes
     }
 
     public var packageCachesBytes: UInt64? {
         if isLoadingPackageCaches || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && packageCacheSummary == nil { return nil }
+        if !hasIndexedData && packageCacheSummary == nil { return nil }
         return packageCacheSummary?.totalBytes
     }
 
@@ -575,86 +625,74 @@ public final class VeloraViewModel {
 
     public var aiModelsBytes: UInt64? {
         if isLoadingAiModels || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && aiModelSummary == nil { return nil }
+        if !hasIndexedData && aiModelSummary == nil { return nil }
         return aiModelSummary?.totalBytes
     }
 
     public var duplicatesBytes: UInt64? {
         if isLoadingDuplicates || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && duplicateSummary == nil { return nil }
+        if !hasIndexedData && duplicateSummary == nil { return nil }
         return duplicateSummary?.totalWastedBytes
     }
 
     public var largeOldMatrixBytes: UInt64? {
         if isLoadingLargeOldMatrix || isLoadingSnapshot || isScanning { return nil }
-        if !hasBinaryIndex && !hasIndexedData && largeOldMatrix == nil { return nil }
+        if !hasIndexedData && largeOldMatrix == nil { return nil }
         return largeOldMatrix?.totalBytes
     }
 
     public var securityThreatsCount: Int? {
         if isLoadingSecurity || isLoadingSnapshot || isScanning { return nil }
         guard let summary = securitySummary else { return nil }
-        let active = summary.threats.filter { !quarantinedThreatIds.contains($0.id) }
+        let paths = quarantinedPaths
+        let active = summary.threats.filter { !paths.contains($0.targetPath) }
         return active.count
     }
 
-    public func scanCurrentPath() {
+    public func scanCatalog() {
+        scanCurrentPath(at: indexedRoot ?? FileManager.default.homeDirectoryForCurrentUser.path)
+    }
+
+    public func scanCurrentPath(at requestedPath: String? = nil) {
+        guard !isInteractionDisabled else { return }
         if isSearchActive {
             clearSearch()
         }
-        let path = currentPath
+        let path = requestedPath ?? currentPath
+        catalogNotice = nil
+        let volumeName = path == "/" ? "Macintosh HD" : (path as NSString).lastPathComponent
+        engine.resetScanCancellation()
         isScanning = true
         cancelScanRequested = false
         scannedCount = 0
         scanThroughput = 0
         currentScanPath = path
-        scanStatusMessage = "Scanning \(path)..."
 
         let progressBridge = ScanProgressBridge(viewModel: self)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let success = self.engine.scanVolume(
-                mountPoint: path,
-                volumeName: (path as NSString).lastPathComponent,
-                callback: progressBridge
-            )
-
-            if self.cancelScanRequested {
-                DispatchQueue.main.async {
-                    self.isScanning = false
-                    self.scanStatusMessage = "Scan cancelled"
-                }
-                return
-            }
-
-            let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
-            let total = self.engine.totalFiles()
-
-            if success {
-                SnapshotManager.shared.saveSnapshot(engine: self.engine)
-            }
+            guard let self else { return }
+            let success = self.engine.scanVolume(mountPoint: path, volumeName: volumeName, callback: progressBridge)
+            let total = self.engine.activeFiles()
+            let saved = success && SnapshotManager.shared.saveSnapshot(engine: self.engine)
 
             DispatchQueue.main.async {
                 self.scannedCount = total
                 self.scanThroughput = 0
-                self.currentScanPath = "Completed: \((path as NSString).lastPathComponent)"
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    self.isScanning = false
-                    if success {
-                        self.hasLoadedSnapshot = true
-                        self.currentSunburst = sunburst
-                        if let root = sunburst {
-                            self.sectorStack = [root]
-                        }
-                        self.scanStatusMessage = "\(total) items indexed"
-                        self.refreshTableItems()
-                        self.refreshStorageReconciliation()
-                    } else {
-                        self.scanStatusMessage = "Scan failed or permission denied: Unable to access \(path)"
-                    }
+                self.isScanning = false
+                if success {
+                    self.hasLoadedSnapshot = true
+                    self.indexedRoot = path
+                    self.currentPath = path
+                    self.pathStack = [path]
+                    self.catalogNotice = saved ? nil : "The scan finished. The catalog could not be saved."
+                    self.refreshTableItems()
+                    self.refreshStorageReconciliation()
+                    self.refreshLoadedTools()
+                } else if self.cancelScanRequested {
+                    self.catalogNotice = "Scan cancelled"
+                } else {
+                    self.catalogNotice = "Could not scan \(path). Check that the folder exists and Velora has access."
                 }
             }
         }
@@ -662,245 +700,127 @@ public final class VeloraViewModel {
 
     public func performSearch(query: String, debounce: Bool = false) {
         pendingSearchWorkItem?.cancel()
-
-        if self.searchQuery != query {
-            self.searchQuery = query
+        let request = UUID()
+        searchRequest = request
+        if searchQuery != query {
+            searchQuery = query
         }
 
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            self.lastExecutedQuery = ""
-            self.searchResults = []
-            self.isSearching = false
-            self.isSearchCapped = false
-            self.refreshTableItems()
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        isSearchCapped = false
+        guard !trimmed.isEmpty else {
+            isSearching = false
+            refreshTableItems()
             return
         }
-
-        if lastExecutedQuery == trimmed && !searchResults.isEmpty {
+        displayedItems = []
+        searchResultBytes = 0
+        guard !isInteractionDisabled else {
+            isSearching = false
             return
         }
-
-        self.isSearching = true
+        isSearching = true
 
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            let hits = self.engine.search(queryStr: trimmed, maxResults: VeloraViewModel.maxSearchResults)
+            guard let self else { return }
+            let hits = self.engine.search(queryStr: trimmed, maxResults: Self.maxSearchResults + 1)
+            let shown = Array(hits.prefix(Int(Self.maxSearchResults)))
+            let bytes = shown.reduce(0) { $0 + $1.sizeBytes }
             DispatchQueue.main.async {
-                guard self.searchQuery.trimmingCharacters(in: .whitespaces) == trimmed else { return }
-                self.lastExecutedQuery = trimmed
-                self.searchResults = hits
-                self.displayedItems = hits
-                self.isSearchCapped = hits.count >= Int(VeloraViewModel.maxSearchResults)
-                self.currentFolderTotalSize = hits.reduce(0) { $0 + $1.sizeBytes }
+                guard self.searchRequest == request,
+                      self.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+                self.displayedItems = shown
+                self.isSearchCapped = hits.count > Int(Self.maxSearchResults)
+                self.searchResultBytes = bytes
                 self.isSearching = false
             }
         }
 
-        self.pendingSearchWorkItem = workItem
-
-        if debounce {
-            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.15, execute: workItem)
-        } else {
-            DispatchQueue.global(qos: .userInteractive).async(execute: workItem)
-        }
+        pendingSearchWorkItem = workItem
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(
+            deadline: .now() + (debounce ? 0.15 : 0), execute: workItem
+        )
     }
 
     // MARK: - Navigation
 
     public func navigateToRoot() {
-        searchQuery = ""
-        activeSidebarId = "volume_root"
-        if let root = sectorStack.first {
-            currentSunburst = root
-            sectorStack = [root]
-            currentPath = root.path
-            pathStack = [root.path]
-        } else {
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
-            currentPath = home
-            pathStack = [home]
-            currentSunburst = nil
-            sectorStack = []
-        }
-        refreshTableItems()
+        guard !isInteractionDisabled else { return }
+        activeSidebarId = "tool_files"
+        currentPath = indexedRoot ?? FileManager.default.homeDirectoryForCurrentUser.path
+        pathStack = [currentPath]
+        clearSearch()
     }
 
     public func drillDownPath(_ path: String) {
-        if let child = currentSunburst?.children.first(where: { $0.path == path }) {
-            drillDown(sector: child)
-        } else if let subSunburst = engine.computeSunburstForPath(path: path, maxDepth: 3, minAngleDeg: 1.5) {
-            pathStack.append(path)
-            sectorStack.append(subSunburst)
-            currentPath = path
-            currentSunburst = subSunburst
-            refreshTableItems()
-        } else {
-            pathStack.append(path)
-            currentPath = path
-            currentSunburst = nil
-            refreshTableItems()
-        }
-    }
-
-    public func drillDown(sector: SunburstSectorItem) {
-        if sector.isDir && !sector.isGrouped {
-            pathStack.append(sector.path)
-            currentPath = sector.path
-
-            // If the sector was at the outer depth limit and has no precomputed children,
-            // recompute a fresh sub-tree sunburst rooted at this folder from the volume index.
-            if sector.children.isEmpty,
-               let subSunburst = engine.computeSunburstForPath(path: sector.path, maxDepth: 3, minAngleDeg: 1.5) {
-                sectorStack.append(subSunburst)
-                currentSunburst = subSunburst
-            } else {
-                sectorStack.append(sector)
-                currentSunburst = sector
+        guard !isInteractionDisabled else { return }
+        if isSearchActive {
+            let root = indexedRoot ?? FileManager.default.homeDirectoryForCurrentUser.path
+            var ancestors = [path]
+            while let last = ancestors.last, last != root, last != "/" {
+                ancestors.append((last as NSString).deletingLastPathComponent)
             }
-            refreshTableItems()
+            pathStack = Array(ancestors.reversed())
+        } else if path != currentPath {
+            pathStack.append(path)
         }
+        activeSidebarId = "tool_files"
+        currentPath = path
+        clearSearch()
     }
 
     public func navigateUp() {
-        if pathStack.count > 1 {
-            pathStack.removeLast()
-        }
-        if sectorStack.count > 1 {
-            sectorStack.removeLast()
-            currentSunburst = sectorStack.last
-        } else if let parentPath = pathStack.last {
-            currentSunburst = engine.computeSunburstForPath(path: parentPath, maxDepth: 3, minAngleDeg: 1.5)
-            if let root = currentSunburst {
-                sectorStack = [root]
-            } else {
-                sectorStack = []
-            }
-        } else {
-            currentSunburst = nil
-            sectorStack = []
-        }
-        currentPath = pathStack.last ?? FileManager.default.homeDirectoryForCurrentUser.path
-        refreshTableItems()
+        guard !isInteractionDisabled, pathStack.count > 1 else { return }
+        pathStack.removeLast()
+        currentPath = pathStack[pathStack.count - 1]
+        activeSidebarId = "tool_files"
+        clearSearch()
     }
 
     public func refreshTableItems() {
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty {
-            self.displayedItems = self.searchResults
-            self.currentFolderTotalSize = self.searchResults.reduce(0) { $0 + $1.sizeBytes }
-            return
-        }
+        guard !isSearchActive else { return }
+        let request = UUID()
+        folderRequest = request
+        let path = currentPath
+        isLoadingFolder = true
+        folderErrorMessage = nil
+        displayedItems = []
 
-        if let currentSunburst = currentSunburst, !currentSunburst.children.isEmpty {
-            let items: [SearchResultItem] = currentSunburst.children.map { child in
-                SearchResultItem(
-                    name: child.name,
-                    path: child.path,
-                    sizeBytes: child.sizeBytes,
-                    modifiedSecs: 0,
-                    isDir: child.isDir,
-                    colorHex: child.colorHex
-                )
-            }
-            self.displayedItems = items
-            self.currentFolderTotalSize = max(currentSunburst.sizeBytes, items.reduce(0) { $0 + $1.sizeBytes })
-
-            // Asynchronously resolve modification dates in background without blocking main thread
-            let targetPath = self.currentPath
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                guard let self = self else { return }
-                var updated = items
-                var didChange = false
-                for i in 0..<updated.count {
-                    let m = self.lookupModificationDate(atPath: updated[i].path)
-                    if m > 0 {
-                        updated[i].modifiedSecs = m
-                        didChange = true
-                    }
-                }
-                if didChange {
-                    DispatchQueue.main.async {
-                        if self.currentPath == targetPath {
-                            self.displayedItems = updated
-                        }
-                    }
-                }
-            }
-        } else {
-            loadDirectoryItems(for: currentPath)
-        }
-    }
-
-    private func findSector(byPath targetPath: String, in root: SunburstSectorItem) -> SunburstSectorItem? {
-        if root.path == targetPath { return root }
-        for child in root.children {
-            if child.path == targetPath { return child }
-            if targetPath.hasPrefix(child.path) {
-                if let found = findSector(byPath: targetPath, in: child) {
-                    return found
-                }
-            }
-        }
-        return nil
-    }
-
-    private func loadDirectoryItems(for path: String) {
-        let targetPath = path
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let url = URL(fileURLWithPath: targetPath)
-            let fileManager = FileManager.default
-            guard let contents = try? fileManager.contentsOfDirectory(
-                at: url,
-                includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            ) else {
-                DispatchQueue.main.async {
-                    if self.currentPath == targetPath {
-                        self.displayedItems = []
-                        self.currentFolderTotalSize = 0
-                    }
-                }
-                return
-            }
-
-            var items: [SearchResultItem] = []
-            for fileURL in contents {
-                let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey])
-                let isDir = resourceValues?.isDirectory ?? false
-                let size = UInt64(resourceValues?.fileSize ?? 0)
-                let modDate = resourceValues?.contentModificationDate?.timeIntervalSince1970 ?? 0
-
-                let name = fileURL.lastPathComponent
-                let ext = fileURL.pathExtension.lowercased()
-                let colorHex = self.colorHexForExtension(ext, isDir: isDir)
-
-                items.append(SearchResultItem(
-                    name: name,
-                    path: fileURL.path,
-                    sizeBytes: size,
-                    modifiedSecs: UInt64(modDate),
-                    isDir: isDir,
-                    colorHex: colorHex
-                ))
-            }
-
+            guard let self else { return }
+            let result = Result { try self.engine.indexedChildren(path: path) ?? self.readDirectory(at: path) }
             DispatchQueue.main.async {
-                if self.currentPath == targetPath {
+                guard self.folderRequest == request, self.currentPath == path else { return }
+                self.isLoadingFolder = false
+                guard !self.isSearchActive else { return }
+                switch result {
+                case .success(let items):
                     self.displayedItems = items
-                    self.currentFolderTotalSize = items.reduce(0) { $0 + $1.sizeBytes }
+                case .failure(let error):
+                    self.folderErrorMessage = error.localizedDescription
                 }
             }
         }
     }
 
-    private func lookupModificationDate(atPath path: String) -> UInt64 {
-        let attr = try? FileManager.default.attributesOfItem(atPath: path)
-        if let date = attr?[.modificationDate] as? Date {
-            return UInt64(date.timeIntervalSince1970)
+    private func readDirectory(at path: String) throws -> [SearchResultItem] {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey]
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: URL(fileURLWithPath: path), includingPropertiesForKeys: Array(keys)
+        )
+        return contents.map { url in
+            let values = try? url.resourceValues(forKeys: keys)
+            let isDir = values?.isDirectory ?? false
+            let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            return SearchResultItem(
+                name: url.lastPathComponent,
+                path: url.path,
+                sizeBytes: isDir ? 0 : UInt64(max(0, values?.fileSize ?? 0)),
+                modifiedSecs: UInt64(max(0, modified)),
+                isDir: isDir,
+                colorHex: colorHexForExtension(isDir ? url.lastPathComponent.lowercased() : url.pathExtension.lowercased(), isDir: isDir)
+            )
         }
-        return 0
     }
 
     private func colorHexForExtension(_ ext: String, isDir: Bool) -> String {
@@ -927,16 +847,19 @@ public final class VeloraViewModel {
     // MARK: - Collector
 
     public func collect(path: String, size: UInt64, isDir: Bool) {
+        guard !isInteractionDisabled else { return }
         engine.collectItem(path: path, sizeBytes: size, isDir: isDir)
         syncCollectorState()
     }
 
     public func removeCollected(path: String) {
+        guard !isInteractionDisabled else { return }
         engine.removeCollected(path: path)
         syncCollectorState()
     }
 
     public func clearCollector() {
+        guard !isInteractionDisabled else { return }
         engine.clearCollector()
         syncCollectorState()
     }
@@ -947,191 +870,113 @@ public final class VeloraViewModel {
     }
 
     public func cleanStagedItems() {
-        guard !isCleaning, !collectorItems.isEmpty else { return }
+        guard !isInteractionDisabled, !collectorItems.isEmpty else { return }
 
-        let itemsToClean = collectorItems
-        let totalCount = itemsToClean.count
-        let totalBytes = collectorTotalSize
-
+        let items = collectorItems
+        let total = items.count
         isCleaning = true
         cleaningCurrentIndex = 0
-        cleaningTotalCount = totalCount
-        cleaningFreedBytes = 0
-        cleaningTotalBytes = totalBytes
-        cleaningCurrentFileName = (itemsToClean.first?.path as NSString?)?.lastPathComponent ?? ""
+        cleaningTotalCount = total
+        cleaningMovedBytes = 0
+        cleaningTotalBytes = collectorTotalSize
+        cleaningCurrentFileName = (items[0].path as NSString).lastPathComponent
         cleaningEstimatedSecondsRemaining = nil
         cleaningErrorMessage = nil
         cancelCleaningRequested = false
 
-        let queue = OperationQueue()
-        queue.name = "com.velora.concurrentTrashQueue"
-        queue.maxConcurrentOperationCount = min(8, max(4, ProcessInfo.processInfo.activeProcessorCount * 2))
-        queue.qualityOfService = .userInitiated
-        self.activeCleaningQueue = queue
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var trashedPaths: [String] = []
-            var trashedBytes: UInt64 = 0
+        cleaningTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            var completedPaths: [String] = []
+            var movedBytes: UInt64 = 0
             var errors: [String] = []
             let startTime = Date()
-            var lastUiUpdate = Date()
-            let lock = NSLock()
-            var completedCount = 0
+            var lastUpdate = startTime
 
-            for item in itemsToClean {
-                queue.addOperation { [weak self] in
-                    guard let self = self, !self.cancelCleaningRequested else { return }
-
-                    let url = URL(fileURLWithPath: item.path)
-                    let fileName = url.lastPathComponent
-                    var trashedSuccess = false
-                    var errorMsg: String? = nil
-
-                    do {
-                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-                        trashedSuccess = true
-                    } catch let nsErr as NSError {
-                        // If file was already deleted (e.g. parent folder was trashed), treat as success
-                        if nsErr.domain == NSCocoaErrorDomain && nsErr.code == NSFileNoSuchFileError {
-                            trashedSuccess = true
-                        } else {
-                            errorMsg = "Failed to trash '\(fileName)': \(nsErr.localizedDescription)"
-                        }
+            for (index, item) in items.enumerated() {
+                guard !Task.isCancelled else { break }
+                let url = URL(fileURLWithPath: item.path)
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    completedPaths.append(item.path)
+                    movedBytes += item.sizeBytes
+                } catch let error as NSError {
+                    if error.domain == NSCocoaErrorDomain,
+                       [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code),
+                       !FileManager.default.fileExists(atPath: item.path) {
+                        completedPaths.append(item.path)
+                    } else {
+                        errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
                     }
+                }
 
-                    lock.lock()
-                    completedCount += 1
-                    let currentCompleted = completedCount
-                    if trashedSuccess {
-                        trashedPaths.append(item.path)
-                        trashedBytes += item.sizeBytes
-                    } else if let errorMsg = errorMsg {
-                        errors.append(errorMsg)
-                    }
-                    let currentFreed = trashedBytes
-                    let isCanceled = self.cancelCleaningRequested
-                    let now = Date()
-                    let shouldUpdate = currentCompleted == totalCount || isCanceled || now.timeIntervalSince(lastUiUpdate) >= 0.05
-                    if shouldUpdate {
-                        lastUiUpdate = now
-                    }
-                    lock.unlock()
-
-                    if shouldUpdate {
-                        let elapsed = max(0.01, now.timeIntervalSince(startTime))
-                        let itemsPerSec = Double(currentCompleted) / elapsed
-                        let remaining = totalCount - currentCompleted
-                        let eta = itemsPerSec > 0.2 ? Double(remaining) / itemsPerSec : nil
-
-                        DispatchQueue.main.async {
-                            self.cleaningCurrentIndex = currentCompleted
-                            self.cleaningFreedBytes = currentFreed
-                            self.cleaningCurrentFileName = fileName
-                            self.cleaningEstimatedSecondsRemaining = eta
-                        }
+                let now = Date()
+                let completed = index + 1
+                if completed == total || now.timeIntervalSince(lastUpdate) >= 0.05 {
+                    lastUpdate = now
+                    let bytes = movedBytes
+                    let nextName = completed < total ? (items[completed].path as NSString).lastPathComponent : ""
+                    let eta = now.timeIntervalSince(startTime) / Double(completed) * Double(total - completed)
+                    await MainActor.run {
+                        self.cleaningCurrentIndex = completed
+                        self.cleaningMovedBytes = bytes
+                        self.cleaningCurrentFileName = nextName
+                        self.cleaningEstimatedSecondsRemaining = eta
                     }
                 }
             }
 
-            queue.waitUntilAllOperationsAreFinished()
-            self.activeCleaningQueue = nil
-
-            // Batch tombstone successfully trashed items in the Rust index with a single write lock
-            let deletedPaths = Set(trashedPaths)
-            if !trashedPaths.isEmpty {
-                _ = self.engine.markDeletedBatch(paths: trashedPaths)
+            let changed = !completedPaths.isEmpty
+            var saved = true
+            if changed {
+                _ = self.engine.markDeletedBatch(paths: completedPaths)
+                for path in completedPaths {
+                    self.engine.removeCollected(path: path)
+                }
+                if self.engine.indexedRoot() != nil {
+                    saved = SnapshotManager.shared.saveSnapshot(engine: self.engine)
+                }
             }
 
-            // Remove successfully trashed items from the Collector Tray in Rust and memory
-            for path in trashedPaths {
-                self.engine.removeCollected(path: path)
+            let activeCount = self.engine.activeFiles()
+            var notices: [String] = []
+            if let firstError = errors.first {
+                notices.append("\(errors.count) items could not be moved to Trash. \(firstError)")
             }
-
-            // Asynchronously persist the updated index with tombstoned files to catalog.bin
-            SnapshotManager.shared.saveSnapshot(engine: self.engine)
-
-            DispatchQueue.main.async {
-                self.syncCollectorState()
-
-                // Instant in-memory refresh without scanning physical disk
-                self.scannedCount = self.engine.activeFiles()
-                self.currentSunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
-                if let root = self.currentSunburst {
-                    self.sectorStack = [root]
-                }
-                self.refreshTableItems()
-                self.refreshStorageReconciliation()
-
-                // Also update apps and leftovers cache if loaded
-                if !self.installedApps.isEmpty {
-                    self.loadInstalledApps()
-                }
-                // Prune deleted leftovers in-memory without initiating a disk rescan
-                if !self.orphanedResidues.isEmpty {
-                    self.orphanedResidues.removeAll { deletedPaths.contains($0.path) }
-                }
-
-                // Optimistically update duplicateSummary and re-sync with engine
-                if let currentSummary = self.duplicateSummary {
-                    var updatedGroups: [DuplicateGroupRecord] = []
-                    var newTotalFiles: UInt32 = 0
-                    var newTotalWasted: UInt64 = 0
-
-                    for group in currentSummary.groups {
-                        var remaining = group.files.filter { !deletedPaths.contains($0.path) }
-                        if remaining.count >= 2 {
-                            // Ensure the oldest remaining file is marked as original if original was deleted
-                            remaining.sort(by: { $0.modifiedSecs < $1.modifiedSecs })
-                            for i in 0..<remaining.count {
-                                remaining[i].isOriginal = (i == 0)
-                            }
-
-                            let groupWasted = group.sizeBytes * UInt64(remaining.count - 1)
-                            let updatedGroup = DuplicateGroupRecord(
-                                groupId: group.groupId,
-                                hashHex: group.hashHex,
-                                sizeBytes: group.sizeBytes,
-                                totalWastedBytes: groupWasted,
-                                fileCount: UInt32(remaining.count),
-                                files: remaining
-                            )
-                            updatedGroups.append(updatedGroup)
-                            newTotalFiles += UInt32(remaining.count)
-                            newTotalWasted += groupWasted
-                        }
-                    }
-
-                    self.duplicateSummary = DuplicateSummaryRecord(
-                        totalDuplicateFiles: newTotalFiles,
-                        totalDuplicateGroups: UInt32(updatedGroups.count),
-                        totalWastedBytes: newTotalWasted,
-                        groups: updatedGroups
-                    )
-                }
-
-                // Refresh developer artifacts and large old matrix if loaded
-                if !self.devArtifacts.isEmpty {
-                    self.loadDevArtifacts()
-                }
-                if self.largeOldMatrix != nil {
-                    self.loadLargeOldMatrix()
-                }
-                if self.packageCacheSummary != nil {
-                    self.loadPackageCaches()
-                }
-                if self.aiModelSummary != nil {
-                    self.loadAiModels()
-                }
-
-                if !errors.isEmpty {
-                    self.cleaningErrorMessage = "\(errors.count) items could not be moved to Trash. \(errors.first ?? "")"
-                }
-
+            if Task.isCancelled {
+                notices.append("Cleanup stopped. Unprocessed items are still staged.")
+            }
+            if !saved {
+                notices.append("The updated catalog could not be saved.")
+            }
+            let message = notices.isEmpty ? nil : notices.joined(separator: "\n")
+            await MainActor.run {
+                self.cleaningTask = nil
                 self.isCleaning = false
+                self.cleaningErrorMessage = message
+                self.syncCollectorState()
+                if changed {
+                    self.scannedCount = activeCount
+                    if self.isSearchActive {
+                        self.performSearch(query: self.searchQuery)
+                    } else {
+                        self.refreshTableItems()
+                    }
+                    self.refreshStorageReconciliation()
+                    self.refreshLoadedTools()
+                }
             }
         }
+    }
+
+    private func refreshLoadedTools() {
+        if !devArtifacts.isEmpty { loadDevArtifacts() }
+        if xcodeSummary != nil { loadXcodeSummary() }
+        if packageCacheSummary != nil { loadPackageCaches() }
+        if aiModelSummary != nil { loadAiModels() }
+        if !installedApps.isEmpty { loadInstalledApps() }
+        if !orphanedResidues.isEmpty { loadOrphanedResidues() }
+        if largeOldMatrix != nil { loadLargeOldMatrix() }
+        if duplicateSummary != nil { loadDuplicates() }
     }
 
     // MARK: - Cryptographic Secure Shredder Actions
@@ -1192,7 +1037,7 @@ public final class VeloraViewModel {
     }
 
     public func startShredding() {
-        guard !isShredding, !shredQueue.isEmpty else { return }
+        guard !isInteractionDisabled, !shredQueue.isEmpty else { return }
 
         let itemsToShred = shredQueue
         let totalItems = itemsToShred.count
@@ -1256,17 +1101,18 @@ public final class VeloraViewModel {
             guard let self = self else { return }
             let result = self.engine.shredPaths(paths: paths, algorithm: algo, callback: bridge)
 
-            // Pre-calculate active files count and sunburst on background thread (never stall Main Thread)
             let activeCount = self.engine.activeFiles()
-            let sunburst = self.engine.computeSunburst(maxDepth: 3, minAngleDeg: 1.5)
+            let successfulPaths = Set(paths.filter { !FileManager.default.fileExists(atPath: $0) })
+            if self.engine.indexedRoot() != nil {
+                SnapshotManager.shared.saveSnapshot(engine: self.engine)
+            }
 
             DispatchQueue.main.async {
                 self.isShredding = false
                 if result.success || result.filesShredded > 0 {
-                    let successfulPaths = Set(paths.filter { !FileManager.default.fileExists(atPath: $0) })
                     self.shredQueue.removeAll { successfulPaths.contains($0.path) }
                     let itemWord = result.filesShredded == 1 ? "item" : "items"
-                    self.shredSuccessMessage = "Successfully sanitized and shredded \(result.filesShredded) \(itemWord)."
+                    self.shredSuccessMessage = "Overwrote and deleted \(result.filesShredded) \(itemWord)."
                 }
 
                 if !result.errors.isEmpty {
@@ -1275,10 +1121,6 @@ public final class VeloraViewModel {
 
                 self.syncCollectorState()
                 self.scannedCount = activeCount
-                self.currentSunburst = sunburst
-                if let root = sunburst {
-                    self.sectorStack = [root]
-                }
                 self.refreshTableItems()
                 self.refreshStorageReconciliation()
 
@@ -1288,12 +1130,6 @@ public final class VeloraViewModel {
                 if !self.orphanedResidues.isEmpty {
                     self.loadOrphanedResidues()
                 }
-            }
-
-            // Persist the updated index with tombstoned files to catalog.bin asynchronously
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                guard let self = self else { return }
-                SnapshotManager.shared.saveSnapshot(engine: self.engine)
             }
         }
     }
@@ -1387,7 +1223,7 @@ extension ShredAlgorithm: Identifiable {
         case .dod522022M:
             return "U.S. DoD 3-pass standard: 0x00 zeros, 0xFF complement, followed by CSPRNG random bytes."
         case .dod522022MEce:
-            return "High-security 7-pass military sanitization with alternating bit patterns and cryptographic random passes."
+            return "Seven overwrite passes using alternating bit patterns and random data."
         }
     }
 }
@@ -1407,7 +1243,7 @@ final class ScanProgressBridge: ScanProgressCallback {
         let throughput = Double(scannedCount) / elapsed
 
         DispatchQueue.main.async { [weak self] in
-            guard let viewModel = self?.viewModel, viewModel.isScanning else { return }
+            guard let viewModel = self?.viewModel, viewModel.isScanning, !viewModel.cancelScanRequested else { return }
             viewModel.scannedCount = scannedCount
             viewModel.scanThroughput = throughput
             viewModel.currentScanPath = currentPath

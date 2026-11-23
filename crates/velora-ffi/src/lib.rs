@@ -44,11 +44,11 @@ fn verify_runtime_platform() {
     }
 }
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use velora_analyzer::{Analyzer, CategoryKind, SunburstSector};
+use velora_analyzer::{Analyzer, CategoryKind, SizeRollup, SunburstSector};
 use velora_index::{DirId, VolumeIndex};
 use velora_ops::{CollectedItem, CollectorTray};
 use velora_search::{SearchEngine, SearchQuery};
@@ -502,6 +502,7 @@ pub struct VeloraEngine {
     collector: RwLock<CollectorTray>,
     cancel_token: Arc<AtomicBool>,
     cancel_shred_token: Arc<AtomicBool>,
+    quarantine_lock: Mutex<()>,
 }
 
 #[uniffi::export]
@@ -516,6 +517,7 @@ impl VeloraEngine {
             collector: RwLock::new(CollectorTray::new()),
             cancel_token: Arc::new(AtomicBool::new(false)),
             cancel_shred_token: Arc::new(AtomicBool::new(false)),
+            quarantine_lock: Mutex::new(()),
         })
     }
 
@@ -525,7 +527,6 @@ impl VeloraEngine {
         volume_name: String,
         callback: Option<Box<dyn ScanProgressCallback>>,
     ) -> bool {
-        self.cancel_token.store(false, Ordering::SeqCst);
         let mut vol = VolumeIndex::new(volume_name, &mount_point);
         let path = Path::new(&mount_point);
         let roots: Vec<&Path> = vec![path];
@@ -551,11 +552,20 @@ impl VeloraEngine {
 
         if res.is_ok() {
             velora_apps::AppManager::index_apps_into_volume(&mut vol, path);
+            if cancel.swap(false, Ordering::SeqCst) {
+                return false;
+            }
             *self.volume.write() = vol;
             true
         } else {
+            cancel.store(false, Ordering::SeqCst);
             false
         }
+    }
+
+    /// Call before dispatching a new scan so an early cancellation is retained.
+    pub fn reset_scan_cancellation(&self) {
+        self.cancel_token.store(false, Ordering::SeqCst);
     }
 
     pub fn cancel_scan(&self) {
@@ -606,9 +616,49 @@ impl VeloraEngine {
     ) -> Option<SunburstSectorItem> {
         let vol = self.volume.read();
         let target = Path::new(&path);
-        let dir_id = vol.find_dir_by_path(target).unwrap_or(DirId(0));
+        let dir_id = vol.find_dir_by_path(target)?;
         let sector = Analyzer::analyze(&vol, dir_id, max_depth, min_angle_deg)?;
         Some(sector.into())
+    }
+
+    pub fn indexed_root(&self) -> Option<String> {
+        let vol = self.volume.read();
+        vol.dirs.get(DirId(0))?;
+        Some(vol.mount_point.clone())
+    }
+
+    pub fn indexed_children(&self, path: String) -> Option<Vec<SearchResultItem>> {
+        let vol = self.volume.read();
+        let dir_id = vol.find_dir_by_path(Path::new(&path))?;
+        let rollup = SizeRollup::compute(&vol);
+        let directories: std::collections::HashMap<_, _> = vol
+            .get_child_dirs(dir_id)
+            .into_iter()
+            .map(|(id, name)| (name, id))
+            .collect();
+        let base = path.trim_end_matches('/');
+
+        let children = vol.records.iter()
+            .filter(|record| record.parent_dir == dir_id && !record.is_deleted())
+            .map(|record| {
+                let name = vol.get_file_name(record);
+                let is_dir = record.is_dir();
+                let size_bytes = if is_dir {
+                    directories.get(name).map_or(0, |id| rollup.get_size(*id))
+                } else {
+                    record.size
+                };
+                SearchResultItem {
+                    name: name.to_string(),
+                    path: format!("{base}/{name}"),
+                    size_bytes,
+                    modified_secs: record.modified_secs,
+                    is_dir,
+                    color_hex: CategoryKind::classify(name, is_dir).color_hex().to_string(),
+                }
+            })
+            .collect();
+        Some(children)
     }
 
     pub fn collect_item(&self, path: String, size_bytes: u64, is_dir: bool) {
@@ -1133,7 +1183,7 @@ impl VeloraEngine {
                 .threats
                 .into_iter()
                 .map(|t| SecurityThreatRecord {
-                    id: t.id,
+                    id: format!("{}:{}", t.id, t.target_path),
                     name: t.name,
                     category_name: t.category.display_name().to_string(),
                     severity_name: t.severity.display_name().to_string(),
@@ -1152,22 +1202,37 @@ impl VeloraEngine {
         }
     }
 
+    pub fn quarantined_items(&self, home_path: String) -> Result<Vec<QuarantinedItemRecord>, QuarantineError> {
+        let _guard = self.quarantine_lock.lock();
+        let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
+        Ok(vault.items()?.into_iter().map(|item| QuarantinedItemRecord {
+            id: item.id,
+            original_path: item.original_path,
+            quarantined_at_secs: item.quarantined_at_secs,
+        }).collect())
+    }
+
     pub fn quarantine_threat(
         &self,
         home_path: String,
         id: String,
         target_path: String,
         associated_paths: Vec<String>,
-    ) -> bool {
+    ) -> Result<(), QuarantineError> {
+        let _guard = self.quarantine_lock.lock();
         let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
-        vault
-            .quarantine(&id, Path::new(&target_path), &associated_paths)
-            .is_ok()
+        vault.quarantine(&id, Path::new(&target_path), &associated_paths)?;
+        Ok(())
     }
 
-    pub fn restore_quarantined_threat(&self, home_path: String, id: String) -> bool {
+    pub fn restore_quarantined_threat(&self, home_path: String, id: String) -> Result<(), QuarantineError> {
+        let _guard = self.quarantine_lock.lock();
         let vault = velora_security::QuarantineVault::new(Path::new(&home_path));
-        vault.restore(&id).unwrap_or(false)
+        if vault.restore(&id)? {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "The item is no longer in the vault").into())
+        }
     }
 
     pub fn shred_paths(
@@ -1217,5 +1282,83 @@ impl VeloraEngine {
 
     pub fn cancel_shred(&self) {
         self.cancel_shred_token.store(true, Ordering::SeqCst);
+    }
+}
+
+#[derive(Debug, uniffi::Record)]
+pub struct QuarantinedItemRecord {
+    pub id: String,
+    pub original_path: String,
+    pub quarantined_at_secs: u64,
+}
+
+#[derive(Debug, uniffi::Error)]
+pub enum QuarantineError {
+    OperationFailed { reason: String },
+}
+
+impl std::fmt::Display for QuarantineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OperationFailed { reason } => f.write_str(reason),
+        }
+    }
+}
+
+impl std::error::Error for QuarantineError {}
+
+impl From<std::io::Error> for QuarantineError {
+    fn from(error: std::io::Error) -> Self {
+        Self::OperationFailed { reason: error.to_string() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use velora_index::{FileFlags, FileRecord};
+
+    #[test]
+    fn catalog_browse_preserves_real_entries_and_previous_scan() {
+        let engine = VeloraEngine::new();
+        {
+            let mut volume = engine.volume.write();
+            volume.mount_point = "/fixture".into();
+            let (name, len) = volume.pool.push("/fixture");
+            let root = volume.dirs.insert(name, len, None);
+            let (name, len) = volume.pool.push("folder");
+            let folder = volume.dirs.insert(name, len, Some(root));
+            volume.add_file(FileRecord::new(name, len, FileFlags::IS_DIRECTORY, root, 0, 123));
+            let (name, len) = volume.pool.push(".hidden");
+            volume.add_file(FileRecord::new(name, len, FileFlags::IS_HIDDEN, folder, 36, 456));
+            let (name, len) = volume.pool.push("empty");
+            volume.add_file(FileRecord::new(name, len, FileFlags::empty(), root, 0, 0));
+        }
+
+        assert!(!engine.scan_volume("/dev/null".into(), "Invalid root".into(), None));
+        engine.reset_scan_cancellation();
+        engine.cancel_scan();
+        assert!(!engine.scan_volume("/".into(), "Cancelled".into(), None));
+        assert_eq!(engine.indexed_root().as_deref(), Some("/fixture"));
+        assert!(engine.indexed_children("/missing".into()).is_none());
+
+        let children = engine.indexed_children("/fixture".into()).unwrap();
+        assert_eq!(children.len(), 2);
+        assert_eq!(children[0].path, "/fixture/folder");
+        assert_eq!(children[0].size_bytes, 36);
+        assert_eq!(children[0].modified_secs, 123);
+        assert_eq!(children[1].size_bytes, 0);
+        assert_eq!(engine.indexed_children("/fixture/folder".into()).unwrap()[0].name, ".hidden");
+
+        engine.collect_item("/fixture/folder/.hidden".into(), 36, false);
+        engine.collect_item("/fixture/folder".into(), 36, true);
+        engine.collect_item("/fixture/folder/.hidden".into(), 36, false);
+        assert_eq!(engine.collector_items().len(), 1);
+        assert_eq!(engine.collector_total_size(), 36);
+
+        assert_eq!(engine.mark_deleted_by_path("/fixture/folder".into()), 36);
+        let children = engine.indexed_children("/fixture".into()).unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "empty");
     }
 }

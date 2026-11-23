@@ -49,6 +49,7 @@ public struct ToolMetricCardView: View {
             Text(title)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundColor(VeloraTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(value)
                 .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -56,10 +57,10 @@ public struct ToolMetricCardView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 13)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(VeloraTheme.obsidianSurface, in: RoundedRectangle(cornerRadius: 12))
+        .frame(minWidth: 130, maxWidth: .infinity, minHeight: 70, alignment: .leading)
+        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(VeloraTheme.cardBorder, lineWidth: 1)
@@ -103,5 +104,160 @@ public struct ToolFilterChip: View {
                 .shadow(color: isSelected ? accentColor.opacity(0.25) : Color.clear, radius: 4)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ToolPage<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                content
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 16)
+        }
+        .background(VeloraTheme.obsidianBase)
+    }
+}
+
+struct ToolMetrics<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 10) {
+                content
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
+                content
+            }
+        }
+    }
+}
+
+struct ToolSearchField: View {
+    let prompt: String
+    @Binding var query: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(VeloraTheme.textSecondary)
+                .accessibilityHidden(true)
+
+            TextField(prompt, text: $query)
+                .textFieldStyle(.plain)
+                .accessibilityLabel(prompt)
+
+            if !query.isEmpty {
+                Button("Clear Filter", systemImage: "xmark.circle.fill") { query = "" }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(VeloraTheme.textSecondary)
+            }
+        }
+        .font(.callout)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(VeloraTheme.cardBorder))
+    }
+}
+
+struct ToolFilterBar<Selection: Hashable, Options: View>: View {
+    var title = "Category"
+    let prompt: String
+    @Binding var selection: Selection
+    @Binding var query: String
+    var summary: String? = nil
+    @ViewBuilder var options: Options
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                picker
+                search.frame(minWidth: 120, idealWidth: 200, maxWidth: .infinity)
+                if let summary {
+                    summaryLabel(summary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    picker
+                    Spacer(minLength: 0)
+                    if let summary {
+                        summaryLabel(summary)
+                    }
+                }
+                search
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(VeloraTheme.obsidianElevated.opacity(0.5))
+        .overlay(alignment: .bottom) { Divider().overlay(VeloraTheme.cardBorder) }
+    }
+
+    private var picker: some View {
+        Picker(title, selection: $selection) { options }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .accessibilityLabel(title)
+    }
+
+    private var search: some View {
+        ToolSearchField(prompt: prompt, query: $query)
+    }
+
+    private func summaryLabel(_ summary: String) -> some View {
+        Text(summary)
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(VeloraTheme.textSecondary)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+struct ToolStatusView: View {
+    let title: String
+    var message: String? = nil
+    var icon: String? = nil
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(VeloraTheme.accentViolet)
+                    .frame(width: 34, height: 34)
+                    .background(VeloraTheme.accentViolet.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityHidden(true)
+            } else {
+                ProgressView().controlSize(.small)
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(VeloraTheme.textPrimary)
+                if let message {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(VeloraTheme.textSecondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(VeloraTheme.obsidianElevated, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(VeloraTheme.cardBorder))
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
     }
 }

@@ -125,13 +125,23 @@ fn test_quarantine_and_restore_cycle() {
         "Quarantined item must have 000 permissions"
     );
 
+    let reopened = QuarantineVault::new(&temp_dir);
+    assert_eq!(reopened.items().unwrap()[0].id, entry.id);
+    fs::write(&assoc_plist, b"replacement").unwrap();
+    assert_eq!(reopened.restore(&entry.id).unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(fs::read(&assoc_plist).unwrap(), b"replacement");
+    assert!(!target_bin.exists());
+    assert_eq!(reopened.items().unwrap().len(), 1);
+    fs::remove_file(&assoc_plist).unwrap();
+
     // Test restore
-    let restored = vault.restore(&entry.id).expect("Restore should succeed");
+    let restored = reopened.restore(&entry.id).expect("Restore should succeed");
     assert!(restored, "Expected restore to return true");
 
     // Verify both items are restored
     assert!(target_bin.exists(), "Target binary must be restored to original path");
     assert!(assoc_plist.exists(), "Associated plist must be restored to original path");
+    assert!(reopened.items().unwrap().is_empty());
 
     let restored_meta = fs::metadata(&target_bin).unwrap();
     assert_eq!(

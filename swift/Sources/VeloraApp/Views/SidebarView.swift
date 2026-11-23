@@ -77,7 +77,7 @@ public struct SidebarView: View {
                 HStack(spacing: 7) {
                     ProgressView()
                         .controlSize(.mini)
-                    Text("Loading catalog.bin...")
+                    Text("Loading catalog…")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(VeloraTheme.accentCyan)
                     Spacer()
@@ -92,7 +92,7 @@ public struct SidebarView: View {
                 HStack(spacing: 7) {
                     ProgressView()
                         .controlSize(.mini)
-                    Text("Scanning volume...")
+                    Text(viewModel.cancelScanRequested ? "Stopping scan…" : "Scanning files…")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(VeloraTheme.mint)
                     Spacer()
@@ -115,6 +115,17 @@ public struct SidebarView: View {
                 isDisabled: viewModel.isInteractionDisabled
             ) {
                 selectSidebarTool("tool_smart_scan")
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            SidebarRowItem(
+                title: "Browse Files",
+                systemImage: "folder",
+                isSelected: viewModel.activeSidebarId == "tool_files" && !viewModel.isSearchActive,
+                isDisabled: isBusy
+            ) {
+                viewModel.navigateToRoot()
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
@@ -347,5 +358,6 @@ private struct SidebarRowItem: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

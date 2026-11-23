@@ -560,6 +560,10 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func getRecordsBufferDescriptor()  -> RecordsBufferDescriptor
     
+    func indexedChildren(path: String)  -> [SearchResultItem]?
+
+    func indexedRoot()  -> String?
+
     func inspectAiModels(homePath: String)  -> AiModelSummaryRecord
     
     func inspectDocker(homePath: String)  -> DockerStorageSummaryRecord
@@ -598,15 +602,22 @@ public protocol VeloraEngineProtocol : AnyObject {
     
     func pruneUnavailableSimulators()  -> Bool
     
-    func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String])  -> Bool
+    func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String]) throws
+
+    func quarantinedItems(homePath: String) throws  -> [QuarantinedItemRecord]
     
     func reconcileStorage(mountPoint: String)  -> StorageReconciliationItem
     
     func removeCollected(path: String) 
     
+    /**
+     * Call before dispatching a new scan so an early cancellation is retained.
+     */
+    func resetScanCancellation()
+
     func resolveLargeOldCandidates(candidateIndices: [UInt32], maxResults: UInt32)  -> [LargeOldFileRecord]
     
-    func restoreQuarantinedThreat(homePath: String, id: String)  -> Bool
+    func restoreQuarantinedThreat(homePath: String, id: String) throws
     
     func saveSnapshot(destPath: String)  -> Bool
     
@@ -791,6 +802,21 @@ open func getRecordsBufferDescriptor() -> RecordsBufferDescriptor {
 })
 }
     
+open func indexedChildren(path: String) -> [SearchResultItem]? {
+    return try!  FfiConverterOptionSequenceTypeSearchResultItem.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_indexed_children(self.uniffiClonePointer(),
+        FfiConverterString.lower(path),$0
+    )
+})
+}
+
+open func indexedRoot() -> String? {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_indexed_root(self.uniffiClonePointer(),$0
+    )
+})
+}
+
 open func inspectAiModels(homePath: String) -> AiModelSummaryRecord {
     return try!  FfiConverterTypeAiModelSummaryRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_inspect_ai_models(self.uniffiClonePointer(),
@@ -940,13 +966,20 @@ open func pruneUnavailableSimulators() -> Bool {
 })
 }
     
-open func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String]) -> Bool {
-    return try!  FfiConverterBool.lift(try! rustCall() {
+open func quarantineThreat(homePath: String, id: String, targetPath: String, associatedPaths: [String])throws  {try rustCallWithError(FfiConverterTypeQuarantineError.lift) {
     uniffi_velora_ffi_fn_method_veloraengine_quarantine_threat(self.uniffiClonePointer(),
         FfiConverterString.lower(homePath),
         FfiConverterString.lower(id),
         FfiConverterString.lower(targetPath),
         FfiConverterSequenceString.lower(associatedPaths),$0
+    )
+}
+}
+
+open func quarantinedItems(homePath: String)throws  -> [QuarantinedItemRecord] {
+    return try  FfiConverterSequenceTypeQuarantinedItemRecord.lift(try rustCallWithError(FfiConverterTypeQuarantineError.lift) {
+    uniffi_velora_ffi_fn_method_veloraengine_quarantined_items(self.uniffiClonePointer(),
+        FfiConverterString.lower(homePath),$0
     )
 })
 }
@@ -966,6 +999,15 @@ open func removeCollected(path: String) {try! rustCall() {
 }
 }
     
+    /**
+     * Call before dispatching a new scan so an early cancellation is retained.
+     */
+open func resetScanCancellation() {try! rustCall() {
+    uniffi_velora_ffi_fn_method_veloraengine_reset_scan_cancellation(self.uniffiClonePointer(),$0
+    )
+}
+}
+
 open func resolveLargeOldCandidates(candidateIndices: [UInt32], maxResults: UInt32) -> [LargeOldFileRecord] {
     return try!  FfiConverterSequenceTypeLargeOldFileRecord.lift(try! rustCall() {
     uniffi_velora_ffi_fn_method_veloraengine_resolve_large_old_candidates(self.uniffiClonePointer(),
@@ -975,13 +1017,12 @@ open func resolveLargeOldCandidates(candidateIndices: [UInt32], maxResults: UInt
 })
 }
     
-open func restoreQuarantinedThreat(homePath: String, id: String) -> Bool {
-    return try!  FfiConverterBool.lift(try! rustCall() {
+open func restoreQuarantinedThreat(homePath: String, id: String)throws  {try rustCallWithError(FfiConverterTypeQuarantineError.lift) {
     uniffi_velora_ffi_fn_method_veloraengine_restore_quarantined_threat(self.uniffiClonePointer(),
         FfiConverterString.lower(homePath),
         FfiConverterString.lower(id),$0
     )
-})
+}
 }
     
 open func saveSnapshot(destPath: String) -> Bool {
@@ -3375,6 +3416,80 @@ public func FfiConverterTypePackageCacheSummaryRecord_lower(_ value: PackageCach
 }
 
 
+public struct QuarantinedItemRecord {
+    public var id: String
+    public var originalPath: String
+    public var quarantinedAtSecs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, originalPath: String, quarantinedAtSecs: UInt64) {
+        self.id = id
+        self.originalPath = originalPath
+        self.quarantinedAtSecs = quarantinedAtSecs
+    }
+}
+
+
+
+extension QuarantinedItemRecord: Equatable, Hashable {
+    public static func ==(lhs: QuarantinedItemRecord, rhs: QuarantinedItemRecord) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.originalPath != rhs.originalPath {
+            return false
+        }
+        if lhs.quarantinedAtSecs != rhs.quarantinedAtSecs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(originalPath)
+        hasher.combine(quarantinedAtSecs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeQuarantinedItemRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> QuarantinedItemRecord {
+        return
+            try QuarantinedItemRecord(
+                id: FfiConverterString.read(from: &buf),
+                originalPath: FfiConverterString.read(from: &buf),
+                quarantinedAtSecs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: QuarantinedItemRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.originalPath, into: &buf)
+        FfiConverterUInt64.write(value.quarantinedAtSecs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeQuarantinedItemRecord_lift(_ buf: RustBuffer) throws -> QuarantinedItemRecord {
+    return try FfiConverterTypeQuarantinedItemRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeQuarantinedItemRecord_lower(_ value: QuarantinedItemRecord) -> RustBuffer {
+    return FfiConverterTypeQuarantinedItemRecord.lower(value)
+}
+
+
 public struct RecordsBufferDescriptor {
     public var pointer: UInt64
     public var count: UInt64
@@ -4386,6 +4501,61 @@ public func FfiConverterTypeXcodeSummaryRecord_lower(_ value: XcodeSummaryRecord
     return FfiConverterTypeXcodeSummaryRecord.lower(value)
 }
 
+
+public enum QuarantineError {
+
+
+
+    case OperationFailed(reason: String
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeQuarantineError: FfiConverterRustBuffer {
+    typealias SwiftType = QuarantineError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> QuarantineError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+
+
+
+        case 1: return .OperationFailed(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: QuarantineError, into buf: inout [UInt8]) {
+        switch value {
+
+
+
+
+
+        case let .OperationFailed(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(reason, into: &buf)
+
+        }
+    }
+}
+
+
+extension QuarantineError: Equatable, Hashable {}
+
+extension QuarantineError: Foundation.LocalizedError {
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
@@ -4805,6 +4975,30 @@ fileprivate struct FfiConverterOptionCallbackInterfaceShredProgressCallback: Ffi
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterCallbackInterfaceShredProgressCallback.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceTypeSearchResultItem: FfiConverterRustBuffer {
+    typealias SwiftType = [SearchResultItem]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceTypeSearchResultItem.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceTypeSearchResultItem.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -5263,6 +5457,31 @@ fileprivate struct FfiConverterSequenceTypePackageCacheRecord: FfiConverterRustB
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeQuarantinedItemRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [QuarantinedItemRecord]
+
+    public static func write(_ value: [QuarantinedItemRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeQuarantinedItemRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [QuarantinedItemRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [QuarantinedItemRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeQuarantinedItemRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSearchResultItem: FfiConverterRustBuffer {
     typealias SwiftType = [SearchResultItem]
 
@@ -5445,6 +5664,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_get_records_buffer_descriptor() != 34644) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_indexed_children() != 9535) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_indexed_root() != 11759) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_inspect_ai_models() != 50264) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -5502,7 +5727,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_prune_unavailable_simulators() != 15692) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_velora_ffi_checksum_method_veloraengine_quarantine_threat() != 19129) {
+    if (uniffi_velora_ffi_checksum_method_veloraengine_quarantine_threat() != 62438) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_quarantined_items() != 46760) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_reconcile_storage() != 38095) {
@@ -5511,10 +5739,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_velora_ffi_checksum_method_veloraengine_remove_collected() != 54207) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_velora_ffi_checksum_method_veloraengine_reset_scan_cancellation() != 24978) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_velora_ffi_checksum_method_veloraengine_resolve_large_old_candidates() != 5559) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_velora_ffi_checksum_method_veloraengine_restore_quarantined_threat() != 43062) {
+    if (uniffi_velora_ffi_checksum_method_veloraengine_restore_quarantined_threat() != 49613) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_velora_ffi_checksum_method_veloraengine_save_snapshot() != 347) {
